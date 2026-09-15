@@ -1,0 +1,286 @@
+{
+  "entities": {
+    "users": {
+      "title": "Users",
+      "description": "Registered user accounts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "referralCode": { "type": "string" },
+        "balance": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "balance"]
+    },
+    "transactions": {
+      "title": "Transactions",
+      "description": "Financial deposits and withdrawals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["deposit", "withdrawal"] },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["approved", "pending", "rejected"] },
+        "paymentMethod": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "type", "amount", "status"]
+    },
+    "affiliates": {
+      "title": "Affiliate Info",
+      "description": "Affiliate metrics and referral tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "referralCode": { "type": "string" },
+        "status": { "type": "string" },
+        "commissionTotal": { "type": "number" },
+        "affiliateBalance": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "referralCode"]
+    },
+    "referrals": {
+      "title": "Referrals",
+      "description": "Referred users history",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "affiliateId": { "type": "string" },
+        "referredUserId": { "type": "string" },
+        "referralCode": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "affiliateId", "referredUserId"]
+    },
+    "games": {
+      "title": "Games",
+      "description": "Catalog of platform games",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "provider": { "type": "string" },
+        "status": { "type": "string" },
+        "minBet": { "type": "number" }
+      },
+      "required": ["id", "name", "category"]
+    },
+    "gameStats": {
+      "title": "Game Stats",
+      "description": "User game statistics and records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "highScore": { "type": "number" },
+        "gamesPlayed": { "type": "number" },
+        "linesCleared": { "type": "number" },
+        "maxCombo": { "type": "number" },
+        "level": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "highScore"]
+    },
+    "gameSessions": {
+      "title": "Game Sessions",
+      "description": "History of played game sessions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "score": { "type": "number" },
+        "lines": { "type": "number" },
+        "maxCombo": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "score"]
+    },
+    "affiliateCommissions": {
+      "title": "Affiliate Commissions",
+      "description": "Commercial event commissions for affiliates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "affiliateId": { "type": "string" },
+        "referrerUserId": { "type": "string" },
+        "buyerUserId": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "amount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "affiliateId", "transactionId", "amount"]
+    },
+    "gameConfigs": {
+      "title": "Game Configurations",
+      "description": "RTP and difficulty parameters for games",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string" },
+        "rtpPercent": { "type": "number" },
+        "difficulty": { "type": "string" },
+        "minBet": { "type": "number" },
+        "maxBet": { "type": "number" }
+      },
+      "required": ["id", "name", "rtpPercent"]
+    },
+    "gameBets": {
+      "title": "Game Bets",
+      "description": "Player bets and outcomes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "gameId": { "type": "string" },
+        "betAmount": { "type": "number" },
+        "multiplier": { "type": "number" },
+        "payoutAmount": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "gameId", "betAmount", "status"]
+    },
+    "pushSubscriptions": {
+      "title": "Push Subscriptions",
+      "description": "PWA Web Push subscriptions and preferences",
+      "type": "object",
+      "properties": {
+        "endpoint": { "type": "string" },
+        "userId": { "type": "string" },
+        "isAffiliate": { "type": "boolean" },
+        "preferences": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["endpoint", "userId"]
+    },
+    "charges": {
+      "title": "Charges",
+      "description": "PIX charges generated via Dotfy",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "chargeId": { "type": "string" },
+        "correlationID": { "type": "string" },
+        "userId": { "type": "string" },
+        "value": { "type": "number" },
+        "valueInReais": { "type": "number" },
+        "status": { "type": "string" },
+        "credited": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["correlationID", "value", "status"]
+    },
+    "adminNotificationLogs": {
+      "title": "Admin Notification Logs",
+      "description": "Historical logs of broadcast notifications sent by administrators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "target": { "type": "string" },
+        "sentCount": { "type": "number" },
+        "totalEligibleAffiliates": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "sentBy": { "type": "string" }
+      },
+      "required": ["id", "title", "body", "createdAt"]
+    },
+    "affiliateNotificationsFeed": {
+      "title": "Affiliate Notifications Feed",
+      "description": "In-app feed notifications for affiliates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "url": { "type": "string" },
+        "target": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "sentBy": { "type": "string" }
+      },
+      "required": ["id", "title", "body", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "User profile data"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "transactions",
+      "description": "Financial transaction history"
+    },
+    "/affiliates/{affiliateId}": {
+      "schema": "affiliates",
+      "description": "Affiliate accounts and metrics"
+    },
+    "/referrals/{referralId}": {
+      "schema": "referrals",
+      "description": "Referral links between affiliates and users"
+    },
+    "/games/{gameId}": {
+      "schema": "games",
+      "description": "Available platform games"
+    },
+    "/gameStats/{userId}": {
+      "schema": "gameStats",
+      "description": "User game statistics and records"
+    },
+    "/gameSessions/{sessionId}": {
+      "schema": "gameSessions",
+      "description": "Historical game session scores"
+    },
+    "/affiliateCommissions/{commissionId}": {
+      "schema": "affiliateCommissions",
+      "description": "Commercial sales commissions history"
+    },
+    "/gameConfigs/{gameId}": {
+      "schema": "gameConfigs",
+      "description": "Game house edge and configuration"
+    },
+    "/gameBets/{betId}": {
+      "schema": "gameBets",
+      "description": "Bets and outcomes history"
+    },
+    "/push_subscriptions/{subId}": {
+      "schema": "pushSubscriptions",
+      "description": "PWA Web Push device subscriptions"
+    },
+    "/pushSubscriptions/{subId}": {
+      "schema": "pushSubscriptions",
+      "description": "PWA Web Push device subscriptions (camelCase)"
+    },
+    "/charges/{chargeId}": {
+      "schema": "charges",
+      "description": "PIX payment charges and statuses"
+    },
+    "/admin_notification_logs/{logId}": {
+      "schema": "adminNotificationLogs",
+      "description": "Admin push notification dispatch logs"
+    },
+    "/adminNotificationLogs/{logId}": {
+      "schema": "adminNotificationLogs",
+      "description": "Admin push notification dispatch logs (camelCase)"
+    },
+    "/affiliate_notifications_feed/{feedId}": {
+      "schema": "affiliateNotificationsFeed",
+      "description": "In-app affiliate notification feed"
+    },
+    "/affiliateNotificationsFeed/{feedId}": {
+      "schema": "affiliateNotificationsFeed",
+      "description": "In-app affiliate notification feed (camelCase)"
+    }
+  }
+}

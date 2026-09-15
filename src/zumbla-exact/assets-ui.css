@@ -1,0 +1,18 @@
+/* Final production artwork supplied for the Zumbla mobile interface. */
+.jungle-auth,.system-shell{background-color:#020806;background-image:linear-gradient(#03110bc7,#020805d9),url("/zumbla/jungle-mobile.webp");background-size:cover;background-position:center top;background-attachment:scroll}
+.jungle-auth:before,.jungle-auth:after{display:none}
+.game-logo-type{width:min(300px,86%);aspect-ratio:1624/969;margin:0 auto 8px;background:url("/zumbla/zumbla-logo.webp") center/contain no-repeat;filter:drop-shadow(0 8px 12px #000)}
+.game-logo-type b,.game-logo-type em{visibility:hidden}
+.jungle-brand{width:94px;height:53px;background:url("/zumbla/zumbla-logo.webp") center/contain no-repeat!important;transform:none!important}
+.jungle-brand span,.jungle-brand strong{display:none!important}
+.auth-submit,.auth-submit.gold,.hero-play,.gaming-launch{position:relative;border:0!important;background-color:transparent!important;background-repeat:no-repeat!important;background-position:center!important;background-size:contain!important;box-shadow:none!important;text-shadow:none!important;color:transparent!important}
+.auth-submit{width:100%;height:auto;aspect-ratio:417/132;background-image:url("/zumbla/button-enter.webp")!important}
+.auth-submit.gold{aspect-ratio:409/122;background-image:url("/zumbla/button-continue.webp")!important}
+.hero-play{width:235px;height:auto;aspect-ratio:390/125;background-image:url("/zumbla/button-play.webp")!important;margin-left:-10px}
+.gaming-launch{width:100%;height:auto;min-height:0;aspect-ratio:390/125;background-image:url("/zumbla/button-play.webp")!important;display:block!important;padding:0!important}
+.auth-submit>*,.hero-play>*,.gaming-launch>*{visibility:hidden}
+.auth-submit:hover,.hero-play:hover,.gaming-launch:hover{filter:brightness(1.08) drop-shadow(0 8px 14px #4ed41930)}
+.auth-submit:active,.hero-play:active,.gaming-launch:active{transform:translateY(3px) scale(.985)}
+.auth-card{background:linear-gradient(#05120ede,#020a07ed);backdrop-filter:blur(2px)}
+.system-shell:before{content:"";position:fixed;z-index:-1;inset:0;background:url("/zumbla/jungle-mobile.webp") center top/cover no-repeat}
+@media(min-width:700px){body{background:#020604 url("/zumbla/jungle-mobile.webp") center/cover fixed}.system-shell{background-size:cover}.jungle-auth{background-size:cover}}

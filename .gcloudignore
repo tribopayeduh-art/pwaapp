@@ -1,0 +1,14 @@
+.gcloudignore
+.git
+.git/**
+node_modules
+node_modules/**
+dist
+dist/**
+.data
+.data/**
+*.zip
+*.tar
+*.tar.gz
+npm-debug.log*
+.DS_Store
