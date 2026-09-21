@@ -663,6 +663,359 @@ body.arcade-mode #game-engine .runner-container, body.arcade-mode #game-engine .
   #app-shell { height: min(900px, 100dvh); border: 1px solid rgba(255,255,255,.12); border-radius: 31px; }
 }
 
+/* =========================================================
+   GEN DINO - MODO INFLUENCIADOR (INFLUENCER MODE) STYLES
+   ========================================================= */
+
+.profile-mode-selector-card {
+    margin-top: 14px;
+    margin-bottom: 6px;
+}
+
+.profile-mode-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 5px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 18px;
+    background: rgba(4, 11, 28, .6);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, .3);
+}
+
+.profile-mode-tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    background: transparent;
+    color: #9cb1d4;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .2px;
+    cursor: pointer;
+    transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.profile-mode-tab .ui-icon {
+    width: 15px;
+    height: 15px;
+}
+
+.profile-mode-tab:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, .05);
+}
+
+.profile-mode-tab.is-active {
+    border-color: rgba(91, 244, 217, .35);
+    background: linear-gradient(135deg, rgba(91, 244, 217, .18), rgba(25, 45, 82, .9));
+    color: #8ff7e8;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .2);
+}
+
+.profile-mode-tab#btn-mode-influencer.is-active {
+    border-color: rgba(255, 215, 64, .45);
+    background: linear-gradient(135deg, rgba(255, 202, 64, .22), rgba(38, 30, 15, .85));
+    color: #ffe875;
+}
+
+.mode-tab-badge {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(255, 196, 61, .25);
+    border: 1px solid rgba(255, 215, 64, .4);
+    color: #ffe778;
+    font-size: 8px;
+    font-weight: 1000;
+    line-height: 1;
+}
+
+.influencer-sponsor-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 215, 64, .25);
+    border-radius: 16px;
+    background: rgba(255, 196, 61, .07);
+    margin-top: 13px;
+}
+
+.influencer-sponsor-info small {
+    display: block;
+    color: #c9ba82;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+}
+
+.influencer-sponsor-info strong {
+    display: block;
+    color: #fff4bf;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.influencer-sponsor-badge {
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: rgba(91, 244, 217, .12);
+    border: 1px solid rgba(91, 244, 217, .3);
+    color: #8ff7e8;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.influencer-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 13px;
+}
+
+.influencer-metric-box {
+    padding: 14px 12px;
+    border: 1px solid rgba(255, 255, 255, .09);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, .045);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.influencer-metric-box.highlight {
+    border-color: rgba(255, 215, 64, .3);
+    background: linear-gradient(135deg, rgba(255, 202, 64, .12), rgba(15, 24, 45, .8));
+}
+
+.influencer-metric-box.featured {
+    border-color: rgba(91, 244, 217, .3);
+    background: linear-gradient(135deg, rgba(91, 244, 217, .12), rgba(15, 24, 45, .8));
+}
+
+.influencer-metric-box span {
+    color: #92a4c2;
+    font-size: 8px;
+    font-weight: 1000;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.influencer-metric-box strong {
+    margin: 6px 0 2px;
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -.5px;
+}
+
+.influencer-metric-box small {
+    color: #7284a3;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.influencer-withdraw-cta-box {
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid rgba(255, 215, 64, .35);
+    border-radius: 20px;
+    background: radial-gradient(circle at 95% 10%, rgba(255, 215, 64, .2), transparent 45%), linear-gradient(135deg, rgba(31, 38, 56, .95), rgba(14, 20, 36, .95));
+    box-shadow: 0 16px 36px rgba(0, 0, 0, .28);
+}
+
+.influencer-withdraw-cta-box h3 {
+    margin: 0 0 4px;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.influencer-withdraw-cta-box p {
+    margin: 0 0 13px;
+    color: #9db2d2;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.btn-withdraw-influencer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 48px;
+    border: 0;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #ffd740, #ffab00);
+    color: #1a1200;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: -.2px;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(255, 171, 0, .35);
+    transition: transform .15s ease, filter .15s ease;
+}
+
+.btn-withdraw-influencer:hover {
+    filter: brightness(1.06);
+}
+
+.btn-withdraw-influencer:active {
+    transform: scale(0.98);
+}
+
+.influencer-withdraw-drawer {
+    margin-top: 14px;
+    padding: 16px;
+    border: 1px solid rgba(255, 215, 64, .3);
+    border-radius: 20px;
+    background: rgba(3, 8, 20, .85);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, .4);
+}
+
+.influencer-withdraw-drawer h4 {
+    margin: 0 0 4px;
+    color: #ffe778;
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.influencer-withdraw-drawer p.notice {
+    margin: 0 0 12px;
+    color: #97acd0;
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.influencer-field {
+    margin-bottom: 11px;
+}
+
+.influencer-field label {
+    display: block;
+    margin-bottom: 5px;
+    color: #ccd9ee;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.influencer-field select,
+.influencer-field input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid rgba(255, 255, 255, .15);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .05);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    outline: 0;
+}
+
+.influencer-field select:focus,
+.influencer-field input:focus {
+    border-color: #ffd740;
+    background: rgba(0, 0, 0, .6);
+}
+
+.influencer-field select option {
+    background: #0d162a;
+    color: #ffffff;
+}
+
+.influencer-approval-notice {
+    padding: 10px 12px;
+    border: 1px dashed rgba(255, 215, 64, .35);
+    border-radius: 12px;
+    background: rgba(255, 215, 64, .08);
+    margin-bottom: 12px;
+}
+
+.influencer-approval-notice p {
+    margin: 0;
+    color: #ffe778;
+    font-size: 10px;
+    line-height: 1.45;
+}
+
+.influencer-requests-history {
+    margin-top: 18px;
+}
+
+.influencer-requests-history h4 {
+    margin: 0 0 9px;
+    color: #c4d4ee;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+}
+
+.influencer-req-item {
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, .03);
+    margin-bottom: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.influencer-req-item-left strong {
+    display: block;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.influencer-req-item-left small {
+    color: #8496b4;
+    font-size: 9px;
+}
+
+.influencer-status-pill {
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.influencer-status-pill.pending {
+    background: rgba(255, 196, 61, .15);
+    border: 1px solid rgba(255, 196, 61, .4);
+    color: #ffe778;
+}
+
+.influencer-status-pill.approved {
+    background: rgba(16, 185, 129, .15);
+    border: 1px solid rgba(16, 185, 129, .4);
+    color: #6ee7b7;
+}
+
+.influencer-status-pill.rejected {
+    background: rgba(244, 63, 94, .15);
+    border: 1px solid rgba(244, 63, 94, .4);
+    color: #fda4af;
+}
+
+
 @media (max-height: 670px) {
   .auth-scroll { padding-top: 31px; }
   .brand-auth { width: min(190px, 54vw); margin-bottom: 10px; }

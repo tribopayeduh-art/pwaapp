@@ -1,18 +1,15 @@
-FROM node:20-slim AS build
+FROM node:20-slim
 
 WORKDIR /app
+
 COPY package.json package-lock.json ./
 RUN npm ci
+
 COPY . .
 RUN npm run build
 
-FROM node:20-slim AS runtime
-
-ENV NODE_ENV=production
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=build /app/dist ./dist
-
+ENV PORT=8080
 EXPOSE 8080
-CMD ["npm", "start"]
+
+CMD ["node", "dist/server.cjs"]
+

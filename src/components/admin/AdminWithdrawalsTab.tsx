@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -21,6 +21,7 @@ import {
   IOSBadge,
   IOSButton
 } from './IOSComponents';
+import { Pagination } from '../Pagination';
 
 interface AdminWithdrawalsTabProps {
   withdrawals: AdminWithdrawalItem[];
@@ -60,6 +61,20 @@ export const AdminWithdrawalsTab: React.FC<AdminWithdrawalsTabProps> = ({
     if (filter === 'all') return withdrawals;
     return withdrawals.filter((w) => w.status === filter);
   }, [withdrawals, filter]);
+
+  // 40 withdrawals per page pagination
+  const PAGE_SIZE = 40;
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter]);
+
+  const paginatedWithdrawals = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredWithdrawals.slice(start, start + PAGE_SIZE);
+  }, [filteredWithdrawals, currentPage, PAGE_SIZE]);
 
   // Handle batch approve all pending
   const handleApproveAllPending = async () => {
@@ -161,8 +176,9 @@ export const AdminWithdrawalsTab: React.FC<AdminWithdrawalsTabProps> = ({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
               <thead className="bg-[#F2F2F7] text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-black/[0.04]">
                 <tr>
                   <th className="py-3 px-4">Solicitante</th>
@@ -175,7 +191,7 @@ export const AdminWithdrawalsTab: React.FC<AdminWithdrawalsTabProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/[0.04]">
-                {filteredWithdrawals.map((item) => {
+                {paginatedWithdrawals.map((item) => {
                   const isPending = item.status === 'pending';
                   const isApproved = item.status === 'approved';
                   const isRejected = item.status === 'rejected';
@@ -301,7 +317,21 @@ export const AdminWithdrawalsTab: React.FC<AdminWithdrawalsTabProps> = ({
               </tbody>
             </table>
           </div>
-        )}
+
+          {/* 40 per page Pagination */}
+          {filteredWithdrawals.length > 0 && (
+            <div className="p-4 border-t border-black/[0.05] bg-slate-50/50">
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filteredWithdrawals.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setCurrentPage}
+                itemLabel="saques"
+              />
+            </div>
+          )}
+        </>
+      )}
       </IOSCard>
     </div>
   );

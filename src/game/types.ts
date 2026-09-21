@@ -5,6 +5,8 @@ export interface GameUser {
   phone: string;
   referralCode?: string;
   affiliateId?: string;
+  isInfluencer?: boolean;
+  role?: string;
 }
 
 export interface GameStats {

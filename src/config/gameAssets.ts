@@ -14,22 +14,28 @@ export const GAME_ASSETS = {
     cover: publicAsset('assets/games/block-win/cover.webp'),
     logo: publicAsset('blocklogo.png'),
   },
+  subwayPay: {
+    cover: publicAsset('subwaypay.png'),
+    app: publicAsset('subwaypay/index.html?v=1'),
+    runner: publicAsset('subwaypay/jogar/index.html?v=1'),
+  },
   zumbla: {
     cover: publicAsset('assets/games/zumbla/cover.webp'),
-    app: publicAsset('zumbla/app/index.html?v=15'),
+    app: publicAsset('subwaypay/index.html?v=1'),
   },
   genDino: {
     cover: publicAsset('assets/games/gen-dino/cover.webp'),
     app: publicAsset('gen-dino/index.html?embedded=1&v=16'),
   },
   raspaFortuna: {
-    cover: publicAsset('RASPAAFORTUNA.PNG'),
-    app: publicAsset('raspafortuna/index.html?embedded=1&v=1'),
+    cover: publicAsset('raspa-fortuna.png'),
+    app: publicAsset('raspafortuna/index.html?embedded=1&v=2'),
   },
 } as const;
 
 export function getGameCover(gameId: string): string {
   const id = String(gameId || '').toLowerCase();
+  if (id.includes('subway')) return GAME_ASSETS.subwayPay.cover;
   if (id.includes('raspa') || id.includes('fortuna')) return GAME_ASSETS.raspaFortuna.cover;
   if (id.includes('dino')) return GAME_ASSETS.genDino.cover;
   if (id.includes('zumbla')) return GAME_ASSETS.zumbla.cover;

@@ -1,4 +1,4 @@
-// Service Worker para PayGateway - PWA & Notificações de Venda e Depósito em Segundo Plano
+// Service Worker para Alliance Hub / PayGateway - PWA & Notificações em Segundo Plano (com app fechado)
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
@@ -7,14 +7,14 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-// Listener para evento 'push' enviado do servidor backend (Web Push APNs / FCM)
+// Listener para evento 'push' enviado do servidor backend (Web Push APNs / FCM) mesmo com APP FECHADO
 self.addEventListener('push', (event) => {
   let data = { title: 'Você vendeu! 💰', body: 'Sua comissão foi creditada no seu saldo!' };
   if (event.data) {
     try {
       data = event.data.json();
     } catch (e) {
-      data = { title: 'PayGateway', body: event.data.text() };
+      data = { title: 'Alliance Hub', body: event.data.text() };
     }
   }
 
@@ -24,17 +24,28 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: body,
-    icon: '/allifavicon.png',
-    badge: '/allifavicon.png',
+    icon: data.icon || '/icon-192.png',
+    badge: data.badge || '/icon-192.png',
     vibrate: [200, 100, 200, 100, 200],
-    tag: 'push-notif-' + Date.now(),
+    tag: data.tag || ('push-notif-' + Date.now()),
     renotify: true,
-    requireInteraction: true,
-    data: { url: url },
+    data: { url: url, timestamp: Date.now(), ...data },
   };
 
   event.waitUntil(
-    self.registration.showNotification(title, options)
+    self.registration.showNotification(title, options).then(() => {
+      return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        clientList.forEach((client) => {
+          client.postMessage({
+            type: 'PUSH_RECEIVED',
+            title,
+            body,
+            url,
+            data
+          });
+        });
+      });
+    })
   );
 });
 
@@ -69,17 +80,14 @@ self.addEventListener('message', (event) => {
 
     const options = {
       body: body,
-      icon: '/allifavicon.png',
-      badge: '/allifavicon.png',
+      icon: data.icon || '/icon-192.png',
+      badge: data.badge || '/icon-192.png',
       vibrate: [200, 100, 200, 100, 200],
       tag: 'app-notif-' + Date.now(),
       renotify: true,
-      requireInteraction: true,
-      data: { url: url }
+      data: { url: url, ...data }
     };
 
-    // A vida do Service Worker é curta. Vincular a Promise ao evento evita que
-    // Safari/Chrome encerrem o worker antes de a notificação ser exibida.
     event.waitUntil(self.registration.showNotification(title, options));
   }
 });
@@ -94,7 +102,7 @@ self.addEventListener('notificationclick', (event) => {
       for (let client of clientList) {
         if (client.url && 'focus' in client) {
           if ('navigate' in client) {
-            client.navigate(targetUrl);
+            client.navigate(targetUrl).catch(() => {});
           }
           return client.focus();
         }

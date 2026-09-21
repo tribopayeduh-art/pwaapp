@@ -26,7 +26,8 @@ import {
   Unlock,
   Radio,
   Clock,
-  Sparkle
+  Sparkle,
+  Globe
 } from 'lucide-react';
 
 export interface AdminGameItem {
@@ -124,6 +125,12 @@ interface AdminGamesRetentionManagerProps {
   lastGamesUpdated: string;
   fetchGames: (manual?: boolean) => Promise<void>;
   handleSaveGame: (game: AdminGameItem) => Promise<void>;
+  handleSaveUniversalRtp?: (payload: {
+    universalRtp: number;
+    smartRtpGlobal?: boolean;
+    targetGameIds?: string[];
+    difficultyRules?: any;
+  }) => Promise<void>;
   handleToggleGameStatus: (gameId: string) => Promise<void>;
   setGameTestingModal: (modal: { isOpen: boolean; gameUrl: string; gameTitle: string } | null) => void;
   getGameCover: (gameId: string) => string;
@@ -138,6 +145,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
   lastGamesUpdated,
   fetchGames,
   handleSaveGame,
+  handleSaveUniversalRtp,
   handleToggleGameStatus,
   setGameTestingModal,
   getGameCover,
@@ -147,6 +155,76 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
   const [activeSubTab, setActiveSubTab] = useState<
     'difficulty' | 'smart_rtp' | 'physics' | 'retention' | 'popups' | 'bets'
   >('difficulty');
+
+  // Estado do RTP Geral & Controle Universal
+  const [universalRtp, setUniversalRtp] = useState<number>(() => {
+    const saved = localStorage.getItem('admin_universal_rtp_fixed');
+    if (saved && !isNaN(Number(saved))) return Number(saved);
+    if (games && games.length > 0) {
+      return Number(games[0].rtpPercent) || 88;
+    }
+    return 88;
+  });
+  const [smartRtpGlobal, setSmartRtpGlobal] = useState<boolean>(true);
+  const [selectedUniversalGames, setSelectedUniversalGames] = useState<Record<string, boolean>>({
+    g_gen_dino: true,
+    g_block_puzzle: true,
+    g_zumbla: true,
+    g_raspa_fortuna: true,
+    g_subway_pay: true
+  });
+  const [difficultyRules, setDifficultyRules] = useState({
+    antiStreak: true,
+    highBetResistance: true,
+    heavyObstacles: true,
+    dynamicRetention: true,
+    forceLossCap: true
+  });
+  const [savingUniversal, setSavingUniversal] = useState<boolean>(false);
+
+  const handleApplyUniversalRtp = async () => {
+    setSavingUniversal(true);
+    try {
+      const targetGameIds = Object.keys(selectedUniversalGames).filter(
+        (id) => selectedUniversalGames[id]
+      );
+      if (targetGameIds.length === 0) {
+        onShowToast('Selecione ao menos um jogo para aplicar o RTP Geral.', 'error');
+        setSavingUniversal(false);
+        return;
+      }
+
+      // Salva permanentemente no localStorage
+      localStorage.setItem('admin_universal_rtp_fixed', String(universalRtp));
+
+      if (handleSaveUniversalRtp) {
+        await handleSaveUniversalRtp({
+          universalRtp,
+          smartRtpGlobal,
+          targetGameIds,
+          difficultyRules
+        });
+      } else {
+        const res = await fetch('/api/admin/games/universal-rtp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            universalRtp,
+            smartRtpGlobal,
+            targetGameIds,
+            difficultyRules
+          })
+        });
+        if (!res.ok) throw new Error('Falha ao salvar');
+        await fetchGames(true);
+      }
+      onShowToast(`RTP Geral de ${universalRtp.toFixed(1)}% e Dificuldades FIXADOS no banco de dados! Ele NÃO voltará para fácil sozinho.`, 'success');
+    } catch (e) {
+      onShowToast('Erro ao sincronizar RTP Geral com o banco de dados.', 'error');
+    } finally {
+      setSavingUniversal(false);
+    }
+  };
 
   const selectedGame = games.find((g) => g.id === selectedGameId) || games[0] || {
     id: 'g_gen_dino',
@@ -325,6 +403,8 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
   const getGameUrl = (gameId: string) => {
     if (gameId === 'g_gen_dino') return '/gen-dino/index.html?test=admin';
     if (gameId === 'g_zumbla') return '/zumbla/app/index.html?test=admin';
+    if (gameId === 'g_raspa_fortuna') return '/raspafortuna/index.html?test=admin';
+    if (gameId === 'g_subway_pay') return '/subwaypay/jogar/index.html?test=admin';
     return '/blockwin';
   };
 
@@ -572,13 +652,474 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
         </div>
       </div>
 
+      {/* PAINEL DE RTP GERAL & CONTROLE UNIVERSAL (TODOS OS JOGOS) */}
+      <div className="bg-white rounded-3xl border-2 border-indigo-200/80 shadow-md p-5 lg:p-7 space-y-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-indigo-500/10 via-purple-500/5 to-transparent rounded-full pointer-events-none -mr-20 -mt-20" />
+
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30 shrink-0">
+              <Globe className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h3 className="text-lg font-black font-heading text-slate-900 tracking-tight">
+                  RTP Geral & Controle Universal (Todos os Jogos)
+                </h3>
+                <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                  Banco de Dados Fixado
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Configure o RTP padrão da banca através da scroll bar. O valor fica <strong>FIXO no banco de dados</strong> e não volta para fácil sozinho até o admin alterar novamente.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleApplyUniversalRtp}
+            disabled={savingUniversal}
+            className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs transition-all shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 shrink-0"
+          >
+            {savingUniversal ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            <span>{savingUniversal ? 'Gravando no Banco...' : 'Salvar e Fixar RTP Geral no Banco'}</span>
+          </button>
+        </div>
+
+        {/* Universal RTP Scroll Bar / Slider */}
+        <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-black text-slate-900 flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
+                <span>Scroll Bar de RTP Geral ({universalRtp.toFixed(1)}%)</span>
+              </label>
+              <p className="text-xs text-slate-500">
+                Ajuste fino da porcentagem teórica de retorno para todos os jogos selecionados.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs text-center">
+                <span className="text-[10px] text-slate-400 block font-bold uppercase">RTP Jogador</span>
+                <strong className="text-lg font-black text-indigo-600 font-heading">
+                  {universalRtp.toFixed(1)}%
+                </strong>
+              </div>
+              <div className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs text-center">
+                <span className="text-[10px] text-slate-400 block font-bold uppercase">Margem Casa</span>
+                <strong className="text-lg font-black text-amber-600 font-heading">
+                  {(100 - universalRtp).toFixed(1)}%
+                </strong>
+              </div>
+              <div className="hidden sm:block">
+                <span
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase inline-block border ${
+                    universalRtp >= 95
+                      ? 'bg-purple-100 text-purple-800 border-purple-200'
+                      : universalRtp >= 85
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                      : universalRtp >= 65
+                      ? 'bg-blue-100 text-blue-800 border-blue-200'
+                      : universalRtp >= 35
+                      ? 'bg-amber-100 text-amber-800 border-amber-200'
+                      : 'bg-rose-100 text-rose-800 border-rose-200'
+                  }`}
+                >
+                  {universalRtp >= 95
+                    ? '🎁 Promoção / VIP'
+                    : universalRtp >= 85
+                    ? '✅ Padrão iGaming'
+                    : universalRtp >= 65
+                    ? '⚖️ Equilibrado'
+                    : universalRtp >= 35
+                    ? '⚠️ Retenção Pesada'
+                    : '🚨 Modo Dreno Total'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <input
+            type="range"
+            min="0.1"
+            max="99.9"
+            step="0.1"
+            value={universalRtp}
+            onChange={(e) => setUniversalRtp(parseFloat(e.target.value))}
+            className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+          />
+
+          <div className="flex justify-between text-[10px] font-bold text-slate-400">
+            <span>0.1% (Dreno Extremo)</span>
+            <span>25% (Pesado)</span>
+            <span>50% (50/50)</span>
+            <span>75% (Equilibrado)</span>
+            <span>88% (Padrão Oficial)</span>
+            <span>99.9% (Ultra Fácil)</span>
+          </div>
+
+          {/* Presets Rápidos */}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="text-xs font-bold text-slate-500 mr-1">Presets Rápidos:</span>
+            {[
+              { label: '15% (Dreno)', val: 15.0 },
+              { label: '35% (Pesado)', val: 35.0 },
+              { label: '50% (50/50)', val: 50.0 },
+              { label: '75% (Equilibrado)', val: 75.0 },
+              { label: '88% (Padrão iGaming)', val: 88.0 },
+              { label: '95% (Promoção)', val: 95.0 },
+              { label: '98.5% (Influencer VIP)', val: 98.5 }
+            ].map((p) => (
+              <button
+                key={p.val}
+                type="button"
+                onClick={() => setUniversalRtp(p.val)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all border cursor-pointer ${
+                  Math.abs(universalRtp - p.val) < 0.1
+                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Global Smart RTP Button & Targets */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Botão de RTP Inteligente Geral */}
+          <div
+            onClick={() => setSmartRtpGlobal(!smartRtpGlobal)}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between gap-4 ${
+              smartRtpGlobal
+                ? 'bg-emerald-50/70 border-emerald-300 ring-2 ring-emerald-500/20'
+                : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  smartRtpGlobal ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
+                }`}
+              >
+                <Zap className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-slate-900">
+                    ⚡ Botão de RTP Inteligente Geral
+                  </span>
+                  <span
+                    className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                      smartRtpGlobal
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {smartRtpGlobal ? 'ATIVADO' : 'DESATIVADO'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Aplica rampas anti-saque automáticas para todos os jogos conforme o saldo do jogador evolui.
+                </p>
+              </div>
+            </div>
+
+            <div
+              className={`w-11 h-6 rounded-full p-1 transition-colors shrink-0 ${
+                smartRtpGlobal ? 'bg-emerald-500' : 'bg-slate-300'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                  smartRtpGlobal ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </div>
+          </div>
+
+          {/* Seleção de Jogos Participantes */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+            <span className="text-xs font-black text-slate-800 block">
+              🎮 Jogos que Recebem o RTP Geral:
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {[
+                { id: 'g_gen_dino', label: 'Gen Dino (Runner PIX)' },
+                { id: 'g_block_puzzle', label: 'Block Win (Puzzle)' },
+                { id: 'g_zumbla', label: 'Zumbla Win (Shooter)' },
+                { id: 'g_raspa_fortuna', label: 'Raspa Fortuna (Raspadinha)' },
+                { id: 'g_subway_pay', label: 'Subway Pay (Subway Surfers PIX)' }
+              ].map((g) => (
+                <label
+                  key={g.id}
+                  className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 cursor-pointer hover:bg-slate-50 select-none"
+                >
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedUniversalGames[g.id])}
+                    onChange={(e) =>
+                      setSelectedUniversalGames((prev) => ({
+                        ...prev,
+                        [g.id]: e.target.checked
+                      }))
+                    }
+                    className="w-4 h-4 rounded text-indigo-600 accent-indigo-600 cursor-pointer"
+                  />
+                  <span className="truncate">{g.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Marcar e Desmarcar as Dificuldades Globais */}
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-indigo-600" />
+              <span>Opções de Dificuldade Global (Marcar / Desmarcar Regras):</span>
+            </span>
+            <span className="text-[10px] text-slate-400">Personalize as travas operacionais ativas</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+            {[
+              {
+                key: 'antiStreak' as const,
+                label: 'Trava Win Streak',
+                desc: 'Corta odds após 2-3 vitórias'
+              },
+              {
+                key: 'highBetResistance' as const,
+                label: 'Resistência Aposta Alta',
+                desc: 'Aperta em apostas elevadas'
+              },
+              {
+                key: 'heavyObstacles' as const,
+                label: 'Peças Pesadas / Cactos',
+                desc: 'Aumenta pressão e densidade'
+              },
+              {
+                key: 'dynamicRetention' as const,
+                label: 'Retenção Dinâmica',
+                desc: 'Acelera com saldo alto'
+              },
+              {
+                key: 'forceLossCap' as const,
+                label: 'Forçar Derrota no Teto',
+                desc: 'Trava máxima antes de sacar'
+              }
+            ].map((rule) => {
+              const isChecked = Boolean(difficultyRules[rule.key]);
+              return (
+                <label
+                  key={rule.key}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2 select-none ${
+                    isChecked
+                      ? 'bg-indigo-50/70 border-indigo-300 text-indigo-950 ring-1 ring-indigo-400/30'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-xs font-black truncate">{rule.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={(e) =>
+                        setDifficultyRules((prev) => ({
+                          ...prev,
+                          [rule.key]: e.target.checked
+                        }))
+                      }
+                      className="w-4 h-4 rounded text-indigo-600 accent-indigo-600 cursor-pointer shrink-0"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-snug">{rule.desc}</p>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Painel Dinâmico: O que tem atualmente de difícil naquele % de RTP */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-600" />
+              <span>O que tem atualmente de difícil em {universalRtp.toFixed(1)}% de RTP (Adaptado por Jogo):</span>
+            </h4>
+            <span className="text-[10px] font-bold text-slate-400">Cálculo algorítmico em tempo real</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            {/* Gen Dino */}
+            <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                <span className="text-xs font-black text-slate-900">🦖 Gen Dino</span>
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                  {universalRtp >= 90 ? 'Suave' : universalRtp >= 75 ? 'Médio' : universalRtp >= 45 ? 'Difícil' : 'Extremo'}
+                </span>
+              </div>
+              <div className="space-y-1 text-[11px]">
+                <div className="flex justify-between text-slate-600">
+                  <span>Velocidade Base:</span>
+                  <strong className="text-slate-900 font-mono">{(4.5 + (100 - universalRtp) * 0.08).toFixed(1)}x</strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Cactos Agrupados:</span>
+                  <strong className="text-slate-900 font-mono">{(0.5 + (100 - universalRtp) * 0.03).toFixed(2)}x</strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Janela de Reação:</span>
+                  <strong className="text-indigo-600 font-mono">{Math.round(Math.max(450, 1300 - (100 - universalRtp) * 7))}ms</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Block Win */}
+            <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                <span className="text-xs font-black text-slate-900">🧱 Block Win</span>
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                  {universalRtp >= 85 ? 'Comum' : 'Apertado'}
+                </span>
+              </div>
+              <div className="space-y-1 text-[11px]">
+                <div className="flex justify-between text-slate-600">
+                  <span>Peças Gigantes (3x3):</span>
+                  <strong className="text-slate-900 font-mono">
+                    {Math.round(Math.min(85, Math.max(10, 15 + (100 - universalRtp) * 0.6)))}%
+                  </strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Corte em Tabuleiro Cheio:</span>
+                  <strong className={universalRtp < 85 ? 'text-rose-600' : 'text-emerald-600'}>
+                    {universalRtp < 85 ? 'Ativo (Sem Brecha)' : 'Desativado'}
+                  </strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Resistência Aposta Alta:</span>
+                  <strong className={difficultyRules.highBetResistance ? 'text-amber-600' : 'text-slate-400'}>
+                    {difficultyRules.highBetResistance ? 'Ativa' : 'Desativada'}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Zumbla Win */}
+            <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                <span className="text-xs font-black text-slate-900">🐸 Zumbla Win</span>
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                  {universalRtp >= 85 ? 'Padrão' : 'Rápido'}
+                </span>
+              </div>
+              <div className="space-y-1 text-[11px]">
+                <div className="flex justify-between text-slate-600">
+                  <span>Velocidade da Fila:</span>
+                  <strong className="text-slate-900 font-mono">{(4.5 + (100 - universalRtp) * 0.08).toFixed(1)}x</strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Tolerância a Erros:</span>
+                  <strong className="text-indigo-600 font-mono">
+                    {universalRtp >= 85 ? '2 erros' : universalRtp >= 50 ? '1 erro' : '0 erros (eliminatório)'}
+                  </strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Janela de Mira Combo:</span>
+                  <strong className="text-slate-900 font-mono">{Math.round(Math.max(500, 1500 - (100 - universalRtp) * 8))}ms</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Raspa Fortuna */}
+            <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                <span className="text-xs font-black text-slate-900">☘️ Raspa Fortuna</span>
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-teal-100 text-teal-800">
+                  {universalRtp >= 80 ? 'Equilibrada' : 'Baixa Odd'}
+                </span>
+              </div>
+              <div className="space-y-1 text-[11px]">
+                <div className="flex justify-between text-slate-600">
+                  <span>Cartelas Premiadas:</span>
+                  <strong className="text-slate-900 font-mono">{(universalRtp * 0.38).toFixed(1)}%</strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Teto Multiplicador:</span>
+                  <strong className="text-indigo-600 font-mono">
+                    {universalRtp >= 80 ? '100x' : universalRtp >= 50 ? '50x' : '15x'}
+                  </strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Sensibilidade da Raspagem:</span>
+                  <strong className="text-emerald-600 font-mono">50% para revelar</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Subway Pay */}
+            <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                <span className="text-xs font-black text-slate-900">🛹 Subway Pay</span>
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                  {universalRtp >= 85 ? 'Normal' : universalRtp >= 60 ? 'Rápido' : 'Extremo'}
+                </span>
+              </div>
+              <div className="space-y-1 text-[11px]">
+                <div className="flex justify-between text-slate-600">
+                  <span>Velocidade Base:</span>
+                  <strong className="text-slate-900 font-mono">{(5.0 + (100 - universalRtp) * 0.08).toFixed(1)}x</strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Densidade de Trens:</span>
+                  <strong className="text-slate-900 font-mono">{Math.round(Math.min(95, Math.max(20, 20 + (100 - universalRtp) * 0.75)))}%</strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Teto Multiplicador:</span>
+                  <strong className="text-indigo-600 font-mono">
+                    {universalRtp >= 90 ? '4.0x' : universalRtp >= 70 ? '3.5x' : universalRtp >= 50 ? '2.5x' : '2.0x'}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Rodapé explicativo e botão de fixação permanente */}
+        <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 text-xs text-indigo-950 font-medium">
+            <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>
+              <strong>Garantia de Persistência:</strong> Ao clicar em salvar, a configuração é gravada permanentemente no Firestore. Ela <strong>NÃO</strong> voltará para fácil sozinha.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleApplyUniversalRtp}
+            disabled={savingUniversal}
+            className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs transition-all shadow-md shadow-indigo-600/20 active:scale-98 disabled:opacity-50 shrink-0 cursor-pointer"
+          >
+            {savingUniversal ? 'Sincronizando...' : 'Confirmar e Fixar Tudo'}
+          </button>
+        </div>
+      </div>
+
       {/* Game Selector Carousel / Cards */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-indigo-600" />
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-              Selecione o Jogo para Configuração
+              Selecione o Jogo para Configuração Individual
             </h3>
           </div>
           <span className="text-xs text-slate-400 font-medium">
@@ -586,7 +1127,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {games.map((game) => {
             const isSelected = selectedGame.id === game.id;
             const cover = getGameCover(game.id);
@@ -935,6 +1476,29 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   <span>88% (Padrão iGaming)</span>
                   <span>99% (Ultra Fácil)</span>
                 </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await handleSaveGame(selectedGame);
+                        onShowToast(`Configuração FIXADA: RTP de ${selectedGame.rtpPercent.toFixed(1)}% gravado permanentemente no banco para ${selectedGame.name}!`, 'success');
+                      } catch {
+                        onShowToast('Erro ao salvar RTP do jogo.', 'error');
+                      }
+                    }}
+                    disabled={savingGameId === selectedGame.id}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>
+                      {savingGameId === selectedGame.id
+                        ? 'Gravando no Banco de Dados...'
+                        : `Salvar e Fixar RTP de ${selectedGame.rtpPercent.toFixed(1)}% deste Jogo no Banco de Dados`}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {/* Economic Bounds (Bets & Multipliers) */}
@@ -1164,6 +1728,624 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
 
           {/* TAB 3: FÍSICA & MOTOR DO JOGO */}
           {activeSubTab === 'physics' && (
+            selectedGame.id === 'g_raspa_fortuna' ? (
+              <div className="space-y-6">
+                {/* Header Raspa Fortuna */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 text-white shadow-lg">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Motor Probabilístico da Raspadinha
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-300">Sync Instantâneo Ativo</span>
+                    </div>
+                    <h4 className="text-lg font-black text-white flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-amber-400" />
+                      <span>Probabilidades, Cartelas & Prêmios (Raspa Fortuna)</span>
+                    </h4>
+                    <p className="text-xs text-slate-200 max-w-2xl">
+                      Ajuste a frequência de cartelas premiadas, multiplicadores de PIX, sensibilidade de raspagem e travas de lucratividade da banca.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateGameField('bonusFrequencyPercent', 25);
+                        updateGameField('rtpPercent', 88);
+                      }}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white transition-all flex items-center gap-1.5 border border-white/10 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Restaurar Padrão</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Module: Frequência de Cartelas Premiadas */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                        <Target className="w-4 h-4 text-emerald-600" />
+                        <span>Taxa de Cartelas Premiadas (% de Bilhetes com Vitória)</span>
+                      </h5>
+                      <p className="text-[11px] text-slate-500">
+                        Determina a porcentagem das cartelas geradas que conterão combinações premiadas.
+                      </p>
+                    </div>
+                    <span className="text-base font-black text-emerald-600 font-heading">
+                      {selectedGame.bonusFrequencyPercent ?? 25}%
+                    </span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="1"
+                    max="60"
+                    step="1"
+                    value={selectedGame.bonusFrequencyPercent ?? 25}
+                    onChange={(e) => updateGameField('bonusFrequencyPercent', parseInt(e.target.value, 10))}
+                    className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                  />
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { label: '5% (Dreno Rápido)', val: 5 },
+                      { label: '15% (Retenção Alta)', val: 15 },
+                      { label: '25% (Padrão Equilibrado)', val: 25 },
+                      { label: '38% (Giro Amigável)', val: 38 },
+                      { label: '50% (Promoção / Demo)', val: 50 }
+                    ].map((p) => (
+                      <button
+                        key={p.val}
+                        type="button"
+                        onClick={() => updateGameField('bonusFrequencyPercent', p.val)}
+                        className={`py-2 px-2.5 rounded-xl text-xs font-black transition-all border cursor-pointer ${
+                          (selectedGame.bonusFrequencyPercent ?? 25) === p.val
+                            ? 'bg-emerald-600 text-white border-emerald-700'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Module: Teto de Multiplicador & Revelação */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-black text-slate-900 block">
+                        Teto Máximo de Multiplicador por Cartela
+                      </label>
+                      <span className="text-xs font-black text-indigo-600">
+                        Até {selectedGame.rtpPercent >= 80 ? '100x' : selectedGame.rtpPercent >= 50 ? '50x' : '15x'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Multiplicador máximo que um bilhete individual pode pagar sobre o valor da aposta.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['15x (Seguro)', '50x (Médio)', '100x (Alto)'].map((opt) => (
+                        <div key={opt} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs font-bold text-slate-800">
+                          {opt}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-black text-slate-900 block">
+                        Sensibilidade de Revelação Automática
+                      </label>
+                      <span className="text-xs font-black text-emerald-600">
+                        50% raspado
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Quando o jogador raspa 50% da área do prêmio, o canvas auto-revela com efeito de brilho suave para garantir agilidade.
+                    </p>
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Auto-conclusão inteligente ativada (Mobile & Desktop)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Module: Salvar Configurações do Raspa Fortuna */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <span className="text-xs text-slate-600">
+                    Clique abaixo para gravar e fixar permanentemente todas as regras do Raspa Fortuna no banco de dados.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await handleSaveGame(selectedGame);
+                        onShowToast('Regras e probabilidades do Raspa Fortuna FIXADAS no banco de dados com sucesso!', 'success');
+                      } catch {
+                        onShowToast('Erro ao salvar regras do Raspa Fortuna.', 'error');
+                      }
+                    }}
+                    disabled={savingGameId === selectedGame.id}
+                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 shrink-0"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{savingGameId === selectedGame.id ? 'Gravando...' : 'Salvar Regras do Raspa Fortuna'}</span>
+                  </button>
+                </div>
+              </div>
+            ) : selectedGame.id === 'g_subway_pay' ? (
+              <div className="space-y-6">
+                {/* Header Subway Pay */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-amber-950 via-slate-900 to-indigo-950 text-white shadow-lg">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        Motor Subway Surfers PIX
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-300">Sync Instantâneo Ativo</span>
+                    </div>
+                    <h4 className="text-lg font-black text-white flex items-center gap-2">
+                      <Zap className="w-5 h-5 text-amber-400" />
+                      <span>Física, Velocidades & Multiplicadores (Subway Pay)</span>
+                    </h4>
+                    <p className="text-xs text-slate-300 max-w-2xl">
+                      Ajuste instantaneamente a velocidade dos trilhos, densidade de trens, multiplicador teto da corrida e o limite exato de moedas para liberar o botão de Cashout.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateGameField('baseSpeed', 180);
+                        updateGameField('maxSpeed', 320);
+                        updateGameField('acceleration', 0.0015);
+                        updateGameField('gameSpeedPercent', 100);
+                        updateGameField('obstacleDensityPercent', 50);
+                        updateGameField('bonusFrequencyPercent', 40);
+                        updateGameField('maxMultiplier', 4.0);
+                        updateGameField('minCashoutMultiplier', 2.0);
+                        updateGameField('rtpPercent', 88);
+                      }}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white transition-all flex items-center gap-1.5 border border-white/10 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Restaurar Padrão</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Presets Rápidos de Dificuldade Subway Pay */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-500 block">
+                    Presets Rápidos de Dificuldade & RTP (Subway Pay)
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {[
+                      {
+                        label: 'Fácil / Onboarding',
+                        desc: 'Velocidade suave, trens espaçados e cashout em 1.5x.',
+                        badge: '🟢 95% RTP',
+                        baseSpeed: 120,
+                        maxSpeed: 280,
+                        speedPct: 85,
+                        density: 35,
+                        bonusFreq: 55,
+                        maxMult: 4.0,
+                        minCashout: 1.5,
+                        rtp: 95,
+                        color: 'border-emerald-200 hover:border-emerald-400 bg-emerald-50/50'
+                      },
+                      {
+                        label: 'Equilibrado (iGaming)',
+                        desc: 'Velocidade padrão, moedas equilibradas e cashout em 2.0x.',
+                        badge: '🟡 88% RTP',
+                        baseSpeed: 180,
+                        maxSpeed: 320,
+                        speedPct: 100,
+                        density: 50,
+                        bonusFreq: 40,
+                        maxMult: 3.5,
+                        minCashout: 2.0,
+                        rtp: 88,
+                        color: 'border-blue-200 hover:border-blue-400 bg-blue-50/50'
+                      },
+                      {
+                        label: 'Desafio / Retenção',
+                        desc: 'Alta velocidade, trens frequentes e cashout em 2.5x.',
+                        badge: '🟠 60% RTP',
+                        baseSpeed: 245,
+                        maxSpeed: 360,
+                        speedPct: 125,
+                        density: 75,
+                        bonusFreq: 25,
+                        maxMult: 2.5,
+                        minCashout: 2.5,
+                        rtp: 60,
+                        color: 'border-amber-200 hover:border-amber-400 bg-amber-50/50'
+                      },
+                      {
+                        label: 'Mata-Banca / Dreno',
+                        desc: 'Velocidade extrema, reflexo sobre-humano e cashout 3.0x.',
+                        badge: '🔴 15% RTP',
+                        baseSpeed: 300,
+                        maxSpeed: 420,
+                        speedPct: 160,
+                        density: 90,
+                        bonusFreq: 10,
+                        maxMult: 2.0,
+                        minCashout: 3.0,
+                        rtp: 15,
+                        color: 'border-rose-200 hover:border-rose-400 bg-rose-50/50'
+                      }
+                    ].map((preset) => {
+                      const isActive =
+                        Math.abs(selectedGame.rtpPercent - preset.rtp) < 2.0 &&
+                        (selectedGame.baseSpeed ?? 180) === preset.baseSpeed;
+
+                      return (
+                        <div
+                          key={preset.label}
+                          onClick={() => {
+                            updateGameField('baseSpeed', preset.baseSpeed);
+                            updateGameField('maxSpeed', preset.maxSpeed);
+                            updateGameField('gameSpeedPercent', preset.speedPct);
+                            updateGameField('obstacleDensityPercent', preset.density);
+                            updateGameField('bonusFrequencyPercent', preset.bonusFreq);
+                            updateGameField('maxMultiplier', preset.maxMult);
+                            updateGameField('minCashoutMultiplier', preset.minCashout);
+                            updateGameField('rtpPercent', preset.rtp);
+                            onShowToast(`Preset "${preset.label}" aplicado ao Subway Pay!`, 'info');
+                          }}
+                          className={`p-4 rounded-2xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between space-y-3 ${
+                            isActive
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-amber-500/40'
+                              : `${preset.color} text-slate-800`
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <span className="text-xs font-black truncate">{preset.label}</span>
+                              <span
+                                className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${
+                                  isActive ? 'bg-white/20 text-white border-white/30' : 'bg-white/80 text-slate-700 border-slate-200'
+                                }`}
+                              >
+                                {preset.badge}
+                              </span>
+                            </div>
+                            <p className={`text-[11px] leading-snug ${isActive ? 'text-slate-300' : 'text-slate-500'}`}>
+                              {preset.desc}
+                            </p>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-200/20 flex items-center justify-between text-[11px]">
+                            <span className={isActive ? 'text-slate-300' : 'text-slate-500'}>
+                              Velocidade: <strong>{preset.baseSpeed}</strong> | Max: <strong>{preset.maxMult}x</strong>
+                            </span>
+                            {isActive && (
+                              <span className="text-[10px] font-black text-emerald-400 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" />
+                                ATIVO
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Módulo 1: Velocidade dos Trilhos & Esteira */}
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-black">
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-black text-slate-900 block">
+                        Velocidade dos Trilhos & Esteira de Corrida
+                      </label>
+                      <p className="text-xs text-slate-500">
+                        Controle a velocidade inicial (base), velocidade limite e a aceleração contínua por frame da corrida.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                    {/* Base Speed */}
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs font-black text-slate-800">Velocidade Base (Inicial)</label>
+                        <span className="text-sm font-black text-indigo-600 font-heading">
+                          {selectedGame.baseSpeed ?? 180}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="80"
+                        max="350"
+                        step="5"
+                        value={selectedGame.baseSpeed ?? 180}
+                        onChange={(e) => updateGameField('baseSpeed', parseFloat(e.target.value))}
+                        className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="80"
+                          max="350"
+                          step="5"
+                          value={selectedGame.baseSpeed ?? 180}
+                          onChange={(e) => updateGameField('baseSpeed', parseFloat(e.target.value) || 180)}
+                          className="w-full h-9 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-600"
+                        />
+                        <span className="text-[10px] text-slate-400 whitespace-nowrap">unid/motor</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">120 = Fácil | 180 = Médio | 245 = Rápido</p>
+                    </div>
+
+                    {/* Max Speed */}
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs font-black text-slate-800">Velocidade Máxima (Teto)</label>
+                        <span className="text-sm font-black text-orange-600 font-heading">
+                          {selectedGame.maxSpeed ?? 320}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="180"
+                        max="450"
+                        step="10"
+                        value={selectedGame.maxSpeed ?? 320}
+                        onChange={(e) => updateGameField('maxSpeed', parseFloat(e.target.value))}
+                        className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
+                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="180"
+                          max="450"
+                          step="10"
+                          value={selectedGame.maxSpeed ?? 320}
+                          onChange={(e) => updateGameField('maxSpeed', parseFloat(e.target.value) || 320)}
+                          className="w-full h-9 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-orange-600"
+                        />
+                        <span className="text-[10px] text-slate-400 whitespace-nowrap">unid/motor</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Velocidade máxima inalcançável sem bater (padrão: 320)</p>
+                    </div>
+
+                    {/* Game Speed % */}
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs font-black text-slate-800">Velocidade da Esteira (%)</label>
+                        <span className="text-sm font-black text-emerald-600 font-heading">
+                          {selectedGame.gameSpeedPercent ?? 100}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="50"
+                        max="200"
+                        step="5"
+                        value={selectedGame.gameSpeedPercent ?? 100}
+                        onChange={(e) => updateGameField('gameSpeedPercent', parseInt(e.target.value, 10))}
+                        className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                      />
+                      <div className="grid grid-cols-4 gap-1 pt-1">
+                        {[75, 100, 125, 150].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => updateGameField('gameSpeedPercent', pct)}
+                            className={`py-1 px-1 rounded-lg text-[10px] font-bold border ${
+                              (selectedGame.gameSpeedPercent ?? 100) === pct
+                                ? 'bg-emerald-600 text-white border-emerald-700'
+                                : 'bg-white text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Módulo 2: Multiplicador Teto & Liberação do Cashout */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Multiplicador Teto */}
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-xs font-black text-slate-900 block">
+                          Multiplicador Teto Máximo da Corrida
+                        </label>
+                        <p className="text-[11px] text-slate-500">
+                          Teto limite que o jogador pode acumular na partida antes de encerrar automaticamente.
+                        </p>
+                      </div>
+                      <span className="text-lg font-black text-indigo-600 font-heading">
+                        {(selectedGame.maxMultiplier ?? 4.0).toFixed(1)}x
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min="1.5"
+                      max="10.0"
+                      step="0.5"
+                      value={selectedGame.maxMultiplier ?? 4.0}
+                      onChange={(e) => updateGameField('maxMultiplier', parseFloat(e.target.value))}
+                      className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+
+                    <div className="grid grid-cols-5 gap-1.5 pt-1">
+                      {[2.0, 3.0, 3.5, 4.0, 5.0].map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => updateGameField('maxMultiplier', val)}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all ${
+                            (selectedGame.maxMultiplier ?? 4.0) === val
+                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {val.toFixed(1)}x
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Multiplicador Mínimo para Cashout */}
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-xs font-black text-slate-900 block">
+                          Multiplicador Mínimo para Liberar Cashout
+                        </label>
+                        <p className="text-[11px] text-slate-500">
+                          O botão de Cashout só é desbloqueado quando o jogador atinge este multiplicador.
+                        </p>
+                      </div>
+                      <span className="text-lg font-black text-emerald-600 font-heading">
+                        {((selectedGame as any).minCashoutMultiplier ?? 2.0).toFixed(1)}x
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min="1.1"
+                      max="4.0"
+                      step="0.1"
+                      value={(selectedGame as any).minCashoutMultiplier ?? 2.0}
+                      onChange={(e) => updateGameField('minCashoutMultiplier', parseFloat(e.target.value))}
+                      className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                    />
+
+                    <div className="grid grid-cols-5 gap-1.5 pt-1">
+                      {[1.2, 1.5, 2.0, 2.5, 3.0].map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => updateGameField('minCashoutMultiplier', val)}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all ${
+                            ((selectedGame as any).minCashoutMultiplier ?? 2.0) === val
+                              ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {val.toFixed(1)}x
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Módulo 3: Densidade de Trens & Frequência de Moedas */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Densidade de Trens */}
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-xs font-black text-slate-900 block">
+                          Densidade de Trens & Barreiras (%)
+                        </label>
+                        <p className="text-[11px] text-slate-500">
+                          Porcentagem de ocupação dos 3 trilhos com trens em movimento e obstáculos.
+                        </p>
+                      </div>
+                      <span className="text-sm font-black text-rose-600 font-heading">
+                        {selectedGame.obstacleDensityPercent ?? 50}%
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min="15"
+                      max="95"
+                      step="5"
+                      value={selectedGame.obstacleDensityPercent ?? 50}
+                      onChange={(e) => updateGameField('obstacleDensityPercent', parseInt(e.target.value, 10))}
+                      className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-600"
+                    />
+
+                    <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                      <span>20% (Trilhos Livres)</span>
+                      <span>50% (Padrão)</span>
+                      <span>85%+ (Muralha de Trens)</span>
+                    </div>
+                  </div>
+
+                  {/* Frequência de Moedas */}
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-xs font-black text-slate-900 block">
+                          Frequência de Moedas nos Trilhos (%)
+                        </label>
+                        <p className="text-[11px] text-slate-500">
+                          Quantidade de moedas e ímãs spawnados para o jogador coletar e subir o acumulado.
+                        </p>
+                      </div>
+                      <span className="text-sm font-black text-amber-600 font-heading">
+                        {selectedGame.bonusFrequencyPercent ?? 40}%
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min="10"
+                      max="80"
+                      step="5"
+                      value={selectedGame.bonusFrequencyPercent ?? 40}
+                      onChange={(e) => updateGameField('bonusFrequencyPercent', parseInt(e.target.value, 10))}
+                      className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+                    />
+
+                    <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                      <span>10% (Escasso)</span>
+                      <span>40% (Equilibrado)</span>
+                      <span>70%+ (Chuva de Moedas)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Módulo: Salvar Configurações do Subway Pay */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <span className="text-xs text-slate-600">
+                    Ao salvar, a nova velocidade, multiplicador teto e regras de cashout serão sincronizadas instantaneamente com a partida do jogador.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await handleSaveGame(selectedGame);
+                        onShowToast('Regras de velocidade, multiplicador e RTP do Subway Pay FIXADAS no banco com sucesso!', 'success');
+                      } catch {
+                        onShowToast('Erro ao salvar regras do Subway Pay.', 'error');
+                      }
+                    }}
+                    disabled={savingGameId === selectedGame.id}
+                    className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 shrink-0"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{savingGameId === selectedGame.id ? 'Gravando...' : 'Salvar Regras do Subway Pay'}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
             <div className="space-y-6">
               {/* Header with Live Telemetry */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white shadow-lg">
@@ -1652,6 +2834,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                 </div>
               </div>
             </div>
+            )
           )}
 
           {/* TAB 4: ALAVANCAS DE RETENÇÃO (HOUSE LEVERS) */}

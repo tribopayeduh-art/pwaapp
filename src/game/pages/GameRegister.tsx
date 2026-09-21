@@ -85,13 +85,22 @@ export const GameRegister: React.FC<GameRegisterProps> = ({
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Game-Origin': 'g_block_puzzle',
+          'X-Game-Id': 'g_block_puzzle'
+        },
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim().toLowerCase(),
           phone: phone.trim() || undefined,
           password,
           refCode: refCode || undefined,
+          registeredGame: 'g_block_puzzle',
+          acquisitionGame: 'g_block_puzzle',
+          game: 'g_block_puzzle',
+          gameId: 'g_block_puzzle',
+          trackingSource: 'game_register_blockwin'
         }),
       });
 

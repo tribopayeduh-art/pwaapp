@@ -113,7 +113,9 @@
         pixPollInterval: null,
         pixCountdownInterval: null,
         pixPaying: false,
-        gameConfig: null
+        gameConfig: null,
+        profileMode: 'player',
+        influencerStats: null
     };
 
     function getDynamicGameModifiers() {
@@ -633,6 +635,30 @@
             segment.classList.toggle('is-filled', index < Math.min(5, ((level - 1) % 5) + 1));
         });
 
+        // Modo Influenciador: Exibir apenas se o afiliado marcou o usuário como influenciador
+        var isInf = Boolean(profile && profile.isInfluencer);
+        var modeSelectorCard = byId('profile-mode-selector');
+        if (modeSelectorCard) {
+            modeSelectorCard.style.display = isInf ? 'block' : 'none';
+        }
+        if (elements.btnModeInfluencer) {
+            elements.btnModeInfluencer.style.display = isInf ? '' : 'none';
+        }
+        if (!isInf) {
+            if (state.profileMode === 'influencer') {
+                state.profileMode = 'player';
+            }
+            if (elements.profilePanelPlayer) elements.profilePanelPlayer.style.display = 'block';
+            if (elements.profilePanelInfluencer) elements.profilePanelInfluencer.style.display = 'none';
+            if (elements.btnModePlayer) {
+                elements.btnModePlayer.classList.add('is-active');
+                elements.btnModePlayer.setAttribute('aria-selected', 'true');
+            }
+            if (elements.btnModeInfluencer) {
+                elements.btnModeInfluencer.classList.remove('is-active');
+                elements.btnModeInfluencer.setAttribute('aria-selected', 'false');
+            }
+        }
     }
 
     function updateRunUI() {
@@ -1256,6 +1282,9 @@
         showScreen('profile');
         updateProfileUI();
         setProfileFormMessage('', false);
+        if (state.profileMode === 'influencer') {
+            loadInfluencerStats();
+        }
     }
 
     function handleProfileForm(event) {
@@ -1336,6 +1365,254 @@
         showScreen('auth');
         setAuthMode('login');
         setAuthMessage('Sessão encerrada. Entre novamente quando quiser.');
+    }
+
+    function setProfileMode(mode) {
+        var isAllowed = Boolean(state.profile && state.profile.isInfluencer);
+        if (mode === 'influencer' && !isAllowed) {
+            mode = 'player';
+        }
+        state.profileMode = mode === 'influencer' ? 'influencer' : 'player';
+        var isInfluencer = state.profileMode === 'influencer' && isAllowed;
+
+        if (elements.btnModePlayer) {
+            elements.btnModePlayer.classList.toggle('is-active', !isInfluencer);
+            elements.btnModePlayer.setAttribute('aria-selected', String(!isInfluencer));
+        }
+        if (elements.btnModeInfluencer) {
+            elements.btnModeInfluencer.classList.toggle('is-active', isInfluencer);
+            elements.btnModeInfluencer.setAttribute('aria-selected', String(isInfluencer));
+            elements.btnModeInfluencer.style.display = isAllowed ? '' : 'none';
+        }
+        var modeSelectorCard = byId('profile-mode-selector');
+        if (modeSelectorCard) {
+            modeSelectorCard.style.display = isAllowed ? 'block' : 'none';
+        }
+        if (elements.profilePanelPlayer) {
+            elements.profilePanelPlayer.style.display = isInfluencer ? 'none' : 'block';
+        }
+        if (elements.profilePanelInfluencer) {
+            elements.profilePanelInfluencer.style.display = isInfluencer ? 'block' : 'none';
+        }
+
+        if (isInfluencer) {
+            loadInfluencerStats();
+        }
+    }
+
+    async function loadInfluencerStats() {
+        if (!state.profile || !state.profile.isInfluencer) return;
+        var token = getStoredToken();
+        if (!token) return;
+
+        try {
+            var res = await fetch('/api/gen-dino/influencer-stats?game=g_gen_dino', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            var data = await res.json();
+            if (res.ok && data && data.success && data.stats) {
+                state.influencerStats = data.stats;
+                updateInfluencerUI(data.stats);
+            }
+        } catch (err) {
+            console.error('Erro ao carregar influencer-stats:', err);
+        }
+    }
+
+    function updateInfluencerUI(stats) {
+        if (!stats) return;
+
+        var dinoStats = (stats.byGame && stats.byGame['g_gen_dino']) || {
+            referralsCount: stats.gameReferralsCount !== undefined ? stats.gameReferralsCount : stats.referralsCount,
+            totalDepositsBrought: stats.gameTotalDepositsBrought !== undefined ? stats.gameTotalDepositsBrought : stats.totalDepositsBrought,
+            paidDepositsCount: stats.gamePaidDepositsCount !== undefined ? stats.gamePaidDepositsCount : stats.paidDepositsCount,
+            paidDepositsAmount: stats.gamePaidDepositsAmount !== undefined ? stats.gamePaidDepositsAmount : stats.paidDepositsAmount,
+        };
+
+        var totalDep = Number(dinoStats.totalDepositsBrought || 0);
+        var paidCount = Number(dinoStats.paidDepositsCount || 0);
+        var paidAmount = Number(dinoStats.paidDepositsAmount || 0);
+        var referrals = Number(dinoStats.referralsCount || 0);
+        var commBalance = Number(stats.commissionBalance || 0);
+
+        if (elements.infTotalDeposits) {
+            elements.infTotalDeposits.textContent = 'R$ ' + totalDep.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        if (elements.infPaidDeposits) {
+            elements.infPaidDeposits.textContent = paidCount + ' depósito' + (paidCount !== 1 ? 's' : '');
+        }
+        if (elements.infPaidDepositsSub) {
+            elements.infPaidDepositsSub.textContent = 'R$ ' + paidAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' (GEN DINO)';
+        }
+        if (elements.infReferralsCount) {
+            elements.infReferralsCount.textContent = referrals + ' indicado' + (referrals !== 1 ? 's' : '') + ' no Dino';
+        }
+        if (elements.infCommissionBalance) {
+            elements.infCommissionBalance.textContent = 'R$ ' + commBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        if (elements.infWithdrawMaxLabel) {
+            elements.infWithdrawMaxLabel.textContent = 'R$ ' + commBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        if (stats.sponsorAffiliate) {
+            if (elements.infSponsorName) {
+                elements.infSponsorName.textContent = stats.sponsorAffiliate.name || 'Afiliado Gestor';
+            }
+            if (elements.infSponsorCode) {
+                elements.infSponsorCode.textContent = stats.sponsorAffiliate.code ? 'REF: ' + stats.sponsorAffiliate.code : 'GESTOR VINCULADO';
+            }
+        } else {
+            if (elements.infSponsorName) {
+                elements.infSponsorName.textContent = 'Administrador do Sistema';
+            }
+            if (elements.infSponsorCode) {
+                elements.infSponsorCode.textContent = 'SUPORTE CENTRAL';
+            }
+        }
+
+        if (elements.influencerRequestsList) {
+            var requests = stats.recentRequests || [];
+            if (requests.length === 0) {
+                elements.influencerRequestsList.innerHTML = '<p style="color: #7789a8; font-size: 11px; text-align: center; padding: 12px;">Nenhuma solicitação enviada ainda.</p>';
+            } else {
+                var html = '';
+                requests.forEach(function(r) {
+                    var statusText = 'Aguardando aprovação';
+                    var statusClass = 'pending';
+                    if (r.status === 'approved') {
+                        statusText = 'Aprovado e Liberado';
+                        statusClass = 'approved';
+                    } else if (r.status === 'rejected') {
+                        statusText = 'Recusado';
+                        statusClass = 'rejected';
+                    }
+
+                    var dateStr = '';
+                    try {
+                        var d = new Date(r.createdAt);
+                        dateStr = d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    } catch(_) {
+                        dateStr = r.createdAt;
+                    }
+
+                    var valFormatted = 'R$ ' + Number(r.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                    var approvedInfo = '';
+                    if (r.status === 'approved' && r.approvedAmount) {
+                        approvedInfo = ' <span style="color:#6ee7b7;">(Liberado: R$ ' + Number(r.approvedAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ')</span>';
+                    }
+
+                    html += '<div class="influencer-req-item">' +
+                        '<div class="influencer-req-item-left">' +
+                            '<strong>' + valFormatted + approvedInfo + '</strong>' +
+                            '<small>' + dateStr + ' • PIX (' + (r.pixKeyType || 'CHAVE') + '): ' + (r.pixKey || '') + '</small>' +
+                        '</div>' +
+                        '<span class="influencer-status-pill ' + statusClass + '">' + statusText + '</span>' +
+                    '</div>';
+                });
+                elements.influencerRequestsList.innerHTML = html;
+            }
+        }
+    }
+
+    function toggleInfluencerWithdrawDrawer() {
+        if (!elements.influencerWithdrawDrawer) return;
+        var isHidden = elements.influencerWithdrawDrawer.style.display === 'none';
+        elements.influencerWithdrawDrawer.style.display = isHidden ? 'block' : 'none';
+
+        if (isHidden) {
+            var stats = state.influencerStats || {};
+            var bal = Number(stats.commissionBalance || 0);
+            if (elements.infWithdrawAmount && !elements.infWithdrawAmount.value && bal > 0) {
+                elements.infWithdrawAmount.value = bal.toFixed(2);
+            }
+            if (elements.infPixKey && state.profile && state.profile.pixKey) {
+                elements.infPixKey.value = state.profile.pixKey;
+            }
+            setInfWithdrawMessage('', false);
+        }
+    }
+
+    async function handleInfluencerWithdrawForm(event) {
+        if (event && event.preventDefault) event.preventDefault();
+        var token = getStoredToken();
+        if (!token) {
+            showToast('Sessão expirada. Entre novamente.', false);
+            return;
+        }
+
+        var amountVal = parseFloat(String((elements.infWithdrawAmount || {}).value || '').replace(',', '.'));
+        var pixKeyVal = String((elements.infPixKey || {}).value || '').trim();
+        var pixTypeVal = String((elements.infPixType || {}).value || 'CPF').trim();
+
+        if (isNaN(amountVal) || amountVal <= 0) {
+            setInfWithdrawMessage('Informe um valor de saque válido.', false);
+            return;
+        }
+
+        if (!pixKeyVal || pixKeyVal.length < 3) {
+            setInfWithdrawMessage('Informe uma chave PIX válida.', false);
+            return;
+        }
+
+        var stats = state.influencerStats || {};
+        var currentBal = Number(stats.commissionBalance || 0);
+        if (amountVal > currentBal) {
+            setInfWithdrawMessage('Saldo de comissões insuficiente. Disponível: R$ ' + currentBal.toFixed(2), false);
+            return;
+        }
+
+        if (elements.btnSubmitInfWithdraw) {
+            elements.btnSubmitInfWithdraw.disabled = true;
+            elements.btnSubmitInfWithdraw.textContent = 'Enviando solicitação...';
+        }
+
+        setInfWithdrawMessage('Registrando solicitação e notificando seu afiliado gestor...', true);
+
+        try {
+            var res = await fetch('/api/gen-dino/influencer-withdraw', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({
+                    amount: amountVal,
+                    pixKey: pixKeyVal,
+                    pixKeyType: pixTypeVal,
+                    gameOrigin: 'g_gen_dino'
+                })
+            });
+            var data = await res.json();
+            if (res.ok && data && data.success) {
+                setInfWithdrawMessage('✨ ' + (data.message || 'Solicitação enviada com sucesso ao afiliado responsável!'), true);
+                showToast('Solicitação de saque enviada ao afiliado!', true);
+                if (elements.infWithdrawAmount) elements.infWithdrawAmount.value = '';
+                loadInfluencerStats();
+                setTimeout(function() {
+                    if (elements.influencerWithdrawDrawer) {
+                        elements.influencerWithdrawDrawer.style.display = 'none';
+                    }
+                }, 3500);
+            } else {
+                setInfWithdrawMessage(data.error || 'Não foi possível solicitar o saque.', false);
+                showToast(data.error || 'Erro ao solicitar saque.', false);
+            }
+        } catch (err) {
+            setInfWithdrawMessage('Erro de conexão ao enviar solicitação.', false);
+            showToast('Erro de conexão.', false);
+        } finally {
+            if (elements.btnSubmitInfWithdraw) {
+                elements.btnSubmitInfWithdraw.disabled = false;
+                elements.btnSubmitInfWithdraw.innerHTML = '<i class="ui-icon" data-icon="send"></i> Confirmar Solicitação de Saque';
+                renderAppIcons();
+            }
+        }
+    }
+
+    function setInfWithdrawMessage(msg, isSuccess) {
+        if (!elements.infWithdrawMessage) return;
+        elements.infWithdrawMessage.textContent = msg;
+        elements.infWithdrawMessage.style.color = isSuccess ? '#8ff7e8' : '#fda4af';
     }
 
     function closePixOverlay() {
@@ -1840,13 +2117,22 @@
             try {
                 var regRes = await window.fetch('/api/auth/register', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Game-Origin': 'g_gen_dino',
+                        'X-Game-Id': 'g_gen_dino'
+                    },
                     body: JSON.stringify({
                         name: name,
                         email: email,
                         password: password,
                         phone: 'Não informado',
-                        refCode: refCode
+                        refCode: refCode,
+                        registeredGame: 'g_gen_dino',
+                        acquisitionGame: 'g_gen_dino',
+                        game: 'g_gen_dino',
+                        gameId: 'g_gen_dino',
+                        trackingSource: 'gen_dino_screen'
                     })
                 });
                 var regData = await regRes.json().catch(function () { return {}; });
@@ -1900,10 +2186,16 @@
         try {
             var loginRes = await window.fetch('/api/auth/login', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Game-Origin': 'g_gen_dino',
+                    'X-Game-Id': 'g_gen_dino'
+                },
                 body: JSON.stringify({
                     email: email,
-                    password: password
+                    password: password,
+                    game: 'g_gen_dino',
+                    acquisitionGame: 'g_gen_dino'
                 })
             });
             var loginData = await loginRes.json().catch(function () { return {}; });
@@ -2118,6 +2410,16 @@
                     checkActivePixStatus(true);
                 } else if (action === 'simulate-pix-payment') {
                     simulatePixPayment();
+                } else if (action === 'set-profile-mode') {
+                    setProfileMode(button.getAttribute('data-mode'));
+                } else if (action === 'toggle-influencer-withdraw') {
+                    toggleInfluencerWithdrawDrawer();
+                } else if (action === 'inf-max-amount') {
+                    var stats = state.influencerStats || {};
+                    var bal = Number(stats.commissionBalance || 0);
+                    if (elements.infWithdrawAmount) {
+                        elements.infWithdrawAmount.value = bal > 0 ? bal.toFixed(2) : '0.00';
+                    }
                 } else if (action === 'favorite') {
                     var selected = button.classList.toggle('is-favorite');
                     button.setAttribute('aria-pressed', String(selected));
@@ -2141,6 +2443,10 @@
 
         if (elements.profileForm) {
             elements.profileForm.addEventListener('submit', handleProfileForm);
+        }
+
+        if (elements.influencerWithdrawForm) {
+            elements.influencerWithdrawForm.addEventListener('submit', handleInfluencerWithdrawForm);
         }
 
         if (elements.depositAmountInput) {
@@ -2320,7 +2626,6 @@
     }
 
     async function pollLiveGameConfig() {
-        if (typeof document !== 'undefined' && document.hidden) return;
         try {
             var token = getStoredToken();
             if (token && !rejectedTokens[token]) {
@@ -2337,6 +2642,7 @@
                     var newCash = Math.round(Number(data.user.balance || 0) * 100);
                     if (state.profile.cashBalance !== newCash) {
                         state.profile.cashBalance = newCash;
+                        saveProfile();
                         updateProfileUI();
                     }
                     state.profile.isInfluencer = Boolean(data.user.isInfluencer);
@@ -2466,7 +2772,29 @@
             pixCopiaColaInput: byId('pix-copia-cola-input'),
             pixStatusText: byId('pix-status-text'),
             pixTimerText: byId('pix-timer-text'),
-            pixCopyBtn: byId('pix-copy-btn')
+            pixCopyBtn: byId('pix-copy-btn'),
+            btnModePlayer: byId('btn-mode-player'),
+            btnModeInfluencer: byId('btn-mode-influencer'),
+            profilePanelPlayer: byId('profile-panel-player'),
+            profilePanelInfluencer: byId('profile-panel-influencer'),
+            infSponsorName: byId('inf-sponsor-name'),
+            infSponsorCode: byId('inf-sponsor-code'),
+            infTotalDeposits: byId('inf-total-deposits'),
+            infPaidDeposits: byId('inf-paid-deposits'),
+            infPaidDepositsSub: byId('inf-paid-deposits-sub'),
+            infReferralsCount: byId('inf-referrals-count'),
+            infCommissionBalance: byId('inf-commission-balance'),
+            btnOpenInfluencerWithdraw: byId('btn-open-influencer-withdraw'),
+            influencerWithdrawDrawer: byId('influencer-withdraw-drawer'),
+            influencerWithdrawForm: byId('influencer-withdraw-form'),
+            infPixType: byId('inf-pix-type'),
+            infPixKey: byId('inf-pix-key'),
+            infWithdrawAmount: byId('inf-withdraw-amount'),
+            infWithdrawMaxLabel: byId('inf-withdraw-max-label'),
+            btnInfMaxAmount: byId('btn-inf-max-amount'),
+            infWithdrawMessage: byId('inf-withdraw-message'),
+            btnSubmitInfWithdraw: byId('btn-submit-inf-withdraw'),
+            influencerRequestsList: byId('influencer-requests-list')
         };
 
         updateProfileUI();
@@ -2484,7 +2812,11 @@
         initEmbeddedProfile();
 
         if (!state.pollIntervalId) {
-            state.pollIntervalId = window.setInterval(pollLiveGameConfig, 15000);
+            state.pollIntervalId = window.setInterval(pollLiveGameConfig, 4000);
+            window.addEventListener('focus', function () { pollLiveGameConfig(); });
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) pollLiveGameConfig();
+            });
         }
 
         appInitialized = true;

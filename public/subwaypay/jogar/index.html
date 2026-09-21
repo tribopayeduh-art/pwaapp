@@ -1,0 +1,126 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    
+    <link rel="icon" href="assets/images/app-icon-16.png" type="image/png">
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="assets/images/app-icon-114.png">
+    <link rel="apple-touch-icon-precomposed" sizes="72x72" href="assets/images/app-icon-72.png">
+    <link rel="apple-touch-icon-precomposed" sizes="57x57" href="assets/images/app-icon-57.png">
+    <link rel="apple-touch-icon-precomposed" href="assets/images/app-icon-57.png">
+    
+    <meta name="robots" content="noindex,nofollow" />
+    <title>
+        Subway Pay
+    </title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            height: 100%;
+            background-color: #0b316b;
+            overflow: hidden;
+            background-image: url('assets/preload/splash.png');
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        #message {
+            text-align: center;
+            font-size: 8px;
+            z-index: 5;
+            font-family: "Verdana", sans-serif;
+            color: #fff;
+            position: fixed;
+            width: 100%;
+            z-index: 9999;
+        }
+
+        .dot {
+            display: inline;
+            margin-left: 0.2em;
+            margin-right: 0.2em;
+            position: relative;
+            top: -1em;
+            font-size: 3.5em;
+            opacity: 0;
+            animation: showHideDot 2.5s ease-in-out infinite;
+        }
+
+        .dot.one {
+            animation-delay: 0.2s;
+        }
+
+        .dot.two {
+            animation-delay: 0.4s;
+        }
+
+        .dot.three {
+            animation-delay: 0.6s;
+        }
+
+        @keyframes showHideDot {
+            0% {
+                opacity: 0;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            60% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+            }
+        }
+
+        button#sair {
+            position: absolute;
+            display: none;
+            top: 135px;
+            left: calc(50% - 130px);
+            padding: .85rem 2.8rem;
+            line-height: 32px;
+            font-size: 18px;
+            text-align: center;
+            font-weight: 700;
+            color: white;
+            background-color: #1fbffe;
+            box-shadow: -3px 3px 0 0 #1f2024;
+            border: 4px solid #1f2024;
+            border-radius: 8px;
+            transition: background-color .2s ease, transform .2s ease, box-shadow .2s ease;
+            z-index: 100000;
+        }
+    </style>
+<link rel="stylesheet" href="../responsive.css">
+<link rel="stylesheet" href="bridge.css"><link rel="stylesheet" href="cashout-position.css?v=load15"><link rel="stylesheet" href="run-hud.css?v=load15"><link rel="preload" href="js/dependencies.bundle.js?v=load15" as="script"><link rel="preload" href="js/index.js?v=load15" as="script"></head>
+
+<body>
+<div class="game-tools"><button id="cashout" hidden disabled><i data-lucide="banknote"></i><span>Cashout</span></button></div><div class="cashout-note" id="cashout-note">Cashout libera ao atingir 2x</div>
+<div class="run-hud" id="run-hud" aria-label="Informações da corrida"><div class="run-hud-card run-hud-meta"><small>Meta</small><strong id="hud-target">R$ 0,00</strong></div><div class="run-hud-card run-hud-total"><small>Acumulado</small><strong id="hud-value">R$ 0,00</strong></div><strong class="run-hud-score" id="hud-score">000000</strong></div>
+<dialog id="result"><img src="assets/preload/splash.png" alt="Subway Surfers"><div class="result-icon"><i id="result-icon" data-lucide="trophy"></i></div><h2 id="result-title"></h2><strong id="result-value"></strong><p id="result-detail"></p><button id="result-retry">Jogar novamente</button><button id="result-home" class="secondary">Voltar ao painel</button><small>Subway Pay Oficial · Corrida Valendo</small></dialog><dialog id="leave-dialog"><h2>Sair da corrida?</h2><p>Sair encerra a partida e consome o valor da sua entrada. Utilize o botão Cashout para resgatar o valor acumulado.</p><button id="stay">Continuar jogando</button><button id="confirm-leave" class="secondary">Encerrar corrida</button></dialog><script>const aposta=1;localStorage.setItem('realBetPage','true');</script>
+    <script>
+        window.NOSW = true;
+        window.GAME_CONFIG = {
+            leaderboard: 'mockup',
+            bundlesPath: './bundles',
+        }
+    </script>
+    <div id="message">
+        <h1>Loading</h1>
+        <h1 class="dot one">.</h1>
+        <h1 class="dot two">.</h1>
+        <h1 class="dot three">.</h1>
+    </div>
+    <script src="../lucide.min.js"></script><script src="../round.js?v=load15"></script><script src="bridge.js?v=load15"></script><script src="js/loading.js"></script>
+    <script src="js/boot.js?v=load15"></script>
+    
+</body>
+
+</html>

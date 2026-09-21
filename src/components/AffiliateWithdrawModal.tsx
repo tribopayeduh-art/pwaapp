@@ -12,7 +12,8 @@ import {
   Sparkles, 
   ExternalLink,
   Copy,
-  Check
+  Check,
+  ShieldAlert
 } from 'lucide-react';
 
 interface AffiliateWithdrawModalProps {
@@ -47,6 +48,8 @@ export const AffiliateWithdrawModal: React.FC<AffiliateWithdrawModalProps> = ({
   const [pixKeyType, setPixKeyType] = useState<'cpf' | 'cnpj' | 'email' | 'phone' | 'random'>('cpf');
   const [pixKey, setPixKey] = useState<string>('');
   const [isAutoCashout, setIsAutoCashout] = useState<boolean>(true); // Default to automatic Dotfy cashout!
+  const [autoWithdrawBlocked, setAutoWithdrawBlocked] = useState<boolean>(false);
+  const [withdrawBlocked, setWithdrawBlocked] = useState<boolean>(false);
   const [savedKeys, setSavedKeys] = useState<SavedPixKey[]>([]);
   const [selectedKeyId, setSelectedKeyId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
@@ -79,35 +82,56 @@ export const AffiliateWithdrawModal: React.FC<AffiliateWithdrawModalProps> = ({
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data && typeof data.withdrawFee === 'number' && !isNaN(data.withdrawFee)) {
-          setLiveFee(data.withdrawFee);
-        }
-      })
-      .catch((err) => {
-        console.error('Erro ao atualizar taxa de saque do afiliado:', err);
-      });
-
-    // 2. Fetch saved PIX keys
-    fetch('/api/pix-keys', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        const list = Array.isArray(data?.pixKeys) ? data.pixKeys : [];
-        setSavedKeys(list);
-        if (list.length > 0) {
-          const firstKey = list[0];
-          setSelectedKeyId(firstKey.id);
-          setPixKey(firstKey.key);
-          const rawType = (firstKey.type || 'CPF').toLowerCase();
-          if (['cpf', 'cnpj', 'email', 'phone', 'random'].includes(rawType)) {
-            setPixKeyType(rawType as any);
+        if (data) {
+          if (typeof data.withdrawFee === 'number' && !isNaN(data.withdrawFee)) {
+            setLiveFee(data.withdrawFee);
+          }
+          if (typeof data.autoWithdrawBlocked === 'boolean') {
+            setAutoWithdrawBlocked(data.autoWithdrawBlocked);
+            if (data.autoWithdrawBlocked) {
+              setIsAutoCashout(false); // Forced to manual queue by admin
+            } else {
+              setIsAutoCashout(true); // Default instant auto cashout
+            }
+          }
+          if (typeof data.withdrawBlocked === 'boolean') {
+            setWithdrawBlocked(data.withdrawBlocked);
           }
         }
       })
-      .catch(() => {
-        // Ignore fallback
+      .catch((err) => {
+        console.error('Erro ao atualizar informações de saque do afiliado:', err);
       });
+
+    // 2. Fetch saved PIX keys
+    const loadKeys = () => {
+      fetch('/api/pix-keys', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          const list = Array.isArray(data?.pixKeys) ? data.pixKeys : [];
+          setSavedKeys(list);
+          if (list.length > 0) {
+            const firstKey = list[0];
+            setSelectedKeyId((prev) => prev || firstKey.id || firstKey.key);
+            setPixKey((prev) => prev || firstKey.key);
+            const rawType = (firstKey.type || 'CPF').toLowerCase();
+            if (['cpf', 'cnpj', 'email', 'phone', 'random'].includes(rawType)) {
+              setPixKeyType(rawType as any);
+            }
+          }
+        })
+        .catch(() => {
+          // Ignore fallback
+        });
+    };
+
+    loadKeys();
+    window.addEventListener('pix_keys_updated', loadKeys);
+    return () => {
+      window.removeEventListener('pix_keys_updated', loadKeys);
+    };
   }, [isOpen]);
 
   const currentFee = liveFee;
@@ -207,7 +231,12 @@ export const AffiliateWithdrawModal: React.FC<AffiliateWithdrawModalProps> = ({
           onClose();
         }
       } else {
-        setError(data.error || 'Erro ao processar saque de comissões.');
+        let errMsg = data.error || 'Erro ao processar saque de comissões.';
+        const lower = errMsg.toLowerCase();
+        if ((lower.includes('saldo insuficiente') && (lower.includes('dotfy') || lower.includes('gateway'))) || lower.includes('dotfy gateway')) {
+          errMsg = 'Os saques estão em manutenção temporária. Tente novamente em 30 minutos. O seu saldo de comissões permanece intacto.';
+        }
+        setError(errMsg);
       }
     } catch (err: any) {
       setError('Erro de conexão ao processar o saque. Tente novamente.');
@@ -325,6 +354,19 @@ export const AffiliateWithdrawModal: React.FC<AffiliateWithdrawModalProps> = ({
             </p>
           </div>
 
+          {/* Hard Withdraw Block Warning */}
+          {withdrawBlocked && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-900 rounded-xl text-xs flex items-start gap-2.5">
+              <ShieldAlert className="w-5 h-5 shrink-0 text-rose-600 mt-0.5" />
+              <div>
+                <strong className="font-bold text-rose-900 block text-sm">Saques Temporariamente Desativados</strong>
+                <p className="mt-0.5 text-[11px] text-rose-700 leading-relaxed">
+                  Os saques da sua conta foram pausados pela administração para verificação de segurança. Entre em contato com o suporte para solicitar a liberação.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Mode Selector: Cashout Automático Dotfy vs Manual */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
@@ -337,29 +379,38 @@ export const AffiliateWithdrawModal: React.FC<AffiliateWithdrawModalProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setIsAutoCashout(true)}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
-                  isAutoCashout
-                    ? 'border-emerald-500 bg-emerald-50/50 shadow-xs ring-1 ring-emerald-500'
-                    : 'border-slate-200 bg-white hover:bg-slate-50'
+                disabled={autoWithdrawBlocked}
+                onClick={() => !autoWithdrawBlocked && setIsAutoCashout(true)}
+                className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                  autoWithdrawBlocked
+                    ? 'opacity-40 bg-slate-100 border-slate-200 cursor-not-allowed'
+                    : isAutoCashout
+                    ? 'border-emerald-500 bg-emerald-50/50 shadow-xs ring-1 ring-emerald-500 cursor-pointer'
+                    : 'border-slate-200 bg-white hover:bg-slate-50 cursor-pointer'
                 }`}
               >
                 <div className="flex items-center gap-1.5">
                   <div className={`w-5 h-5 rounded-md flex items-center justify-center ${
-                    isAutoCashout ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
+                    isAutoCashout && !autoWithdrawBlocked ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
                   }`}>
                     <Zap className="w-3.5 h-3.5 fill-current" />
                   </div>
-                  <span className={`text-xs font-black ${isAutoCashout ? 'text-emerald-950' : 'text-slate-800'}`}>
+                  <span className={`text-xs font-black ${isAutoCashout && !autoWithdrawBlocked ? 'text-emerald-950' : 'text-slate-800'}`}>
                     Dotfy Automático
                   </span>
                 </div>
                 <div className="mt-1.5 space-y-1">
-                  <span className="inline-block text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
-                    Aprovação Instantânea
+                  <span className={`inline-block text-[9px] font-extrabold px-1.5 py-0.2 rounded ${
+                    autoWithdrawBlocked
+                      ? 'bg-slate-200 text-slate-600'
+                      : 'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {autoWithdrawBlocked ? 'Bloqueado p/ Admin' : 'Aprovação Instantânea'}
                   </span>
                   <p className="text-[10px] text-slate-500 leading-tight">
-                    Saca direto da Dotfy sem precisar de aprovação manual.
+                    {autoWithdrawBlocked
+                      ? 'Admin configurou sua conta para análise manual.'
+                      : 'Saca direto da Dotfy sem precisar de aprovação manual.'}
                   </p>
                 </div>
               </button>
@@ -368,18 +419,18 @@ export const AffiliateWithdrawModal: React.FC<AffiliateWithdrawModalProps> = ({
                 type="button"
                 onClick={() => setIsAutoCashout(false)}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  !isAutoCashout
+                  !isAutoCashout || autoWithdrawBlocked
                     ? 'border-slate-800 bg-slate-50 shadow-xs ring-1 ring-slate-800'
                     : 'border-slate-200 bg-white hover:bg-slate-50'
                 }`}
               >
                 <div className="flex items-center gap-1.5">
                   <div className={`w-5 h-5 rounded-md flex items-center justify-center ${
-                    !isAutoCashout ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'
+                    !isAutoCashout || autoWithdrawBlocked ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'
                   }`}>
                     <Clock className="w-3.5 h-3.5" />
                   </div>
-                  <span className={`text-xs font-bold ${!isAutoCashout ? 'text-slate-950' : 'text-slate-700'}`}>
+                  <span className={`text-xs font-bold ${!isAutoCashout || autoWithdrawBlocked ? 'text-slate-950' : 'text-slate-700'}`}>
                     Saque Convencional
                   </span>
                 </div>
@@ -434,25 +485,29 @@ export const AffiliateWithdrawModal: React.FC<AffiliateWithdrawModalProps> = ({
                 Chaves PIX Cadastradas na Conta
               </label>
               <div className="flex flex-wrap gap-1.5">
-                {savedKeys.map((k) => (
-                  <button
-                    key={k.id}
-                    type="button"
-                    onClick={() => handleSelectSavedKey(k)}
-                    className={`px-2.5 py-1.5 text-xs rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
-                      selectedKeyId === k.id && pixKey === k.key
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span className="text-[10px] font-black uppercase opacity-80">
-                      {k.type}
-                    </span>
-                    <span className="font-mono font-semibold truncate max-w-[140px]">
-                      {k.key}
-                    </span>
-                  </button>
-                ))}
+                {savedKeys.map((k) => {
+                  const currentId = k.id || k.key;
+                  const isSelected = (selectedKeyId === currentId || selectedKeyId === k.id) && pixKey === k.key;
+                  return (
+                    <button
+                      key={currentId}
+                      type="button"
+                      onClick={() => handleSelectSavedKey(k)}
+                      className={`px-2.5 py-1.5 text-xs rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="text-[10px] font-black uppercase opacity-80">
+                        {k.type}
+                      </span>
+                      <span className="font-mono font-semibold truncate max-w-[140px]">
+                        {k.key}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -562,9 +617,11 @@ export const AffiliateWithdrawModal: React.FC<AffiliateWithdrawModalProps> = ({
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading || affiliateBalance < minWithdraw}
+            disabled={loading || affiliateBalance < minWithdraw || withdrawBlocked}
             className={`w-full h-12 text-white rounded-xl font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] ${
-              isAutoCashout
+              withdrawBlocked
+                ? 'bg-slate-400'
+                : isAutoCashout
                 ? 'bg-emerald-600 hover:bg-emerald-700'
                 : 'bg-slate-900 hover:bg-slate-800'
             }`}
@@ -577,6 +634,11 @@ export const AffiliateWithdrawModal: React.FC<AffiliateWithdrawModalProps> = ({
                     ? 'Sacando diretamente via Dotfy...'
                     : 'Enviando solicitação de saque...'}
                 </span>
+              </>
+            ) : withdrawBlocked ? (
+              <>
+                <ShieldAlert className="w-4 h-4" />
+                <span>Saques Desativados para sua Conta</span>
               </>
             ) : (
               <>

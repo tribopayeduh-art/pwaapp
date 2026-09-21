@@ -145,8 +145,9 @@ export const AdminVpsMigrationModal: React.FC<AdminVpsMigrationModalProps> = ({
 3. VARIÁVEIS DE AMBIENTE (.env):
    PORT=3000
    NODE_ENV=production
-   DOTFY_API_KEY=vk_live_0iTBP0DSt_865LGgyvH5kPmJ0CbtO4CPsy0xJvqm8tE
-   JWT_SECRET=sua_chave_secreta_super_segura
+   DOTFY_API_KEY=sua_chave_api_dotfy_aqui
+   JWT_SECRET=sua_chave_secreta_jwt_aqui
+   SYSTEM_ENCRYPTION_KEY=chave_mestra_criptografia_aes256
 
 4. INICIAR O SISTEMA NA VPS:
    npm install

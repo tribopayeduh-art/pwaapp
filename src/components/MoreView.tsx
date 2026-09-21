@@ -22,6 +22,7 @@ interface MoreViewProps {
   onOpenAffiliates: () => void;
   onOpenMembers?: () => void;
   onOpenCampaigns?: () => void;
+  onOpenPartnerPanel?: () => void;
   onOpenSettings: () => void;
   onOpenPixKeys?: () => void;
   onOpenTerms: () => void;
@@ -36,6 +37,7 @@ export const MoreView: React.FC<MoreViewProps> = ({
   onOpenAffiliates,
   onOpenMembers,
   onOpenCampaigns,
+  onOpenPartnerPanel,
   onOpenSettings,
   onOpenPixKeys,
   onOpenTerms,
@@ -44,8 +46,18 @@ export const MoreView: React.FC<MoreViewProps> = ({
   onOpenAdmin,
 }) => {
   const isAdminUser = user.role === 'admin' || user.role === 'superadmin' || user.email.toLowerCase() === 'admin.eduh@gmail.com' || user.email.toLowerCase() === 'tribopayeduh@gmail.com';
+  const isApprovedPartner = Boolean((user.isPartner === true && user.partnerApproved === true) || isAdminUser);
 
   const menuSections = [
+    ...(onOpenPartnerPanel && isApprovedPartner ? [{
+      id: 'partner',
+      label: 'Painel do Parceiro VIP',
+      description: 'parceiro.goalliancehub.com • Recrutamento e gestão exclusiva de afiliados',
+      icon: <Crown className="w-5 h-5 text-emerald-600" />,
+      onClick: onOpenPartnerPanel,
+      badge: 'ATIVO',
+      highlight: true
+    }] : []),
     ...(onOpenCampaigns ? [{
       id: 'campaigns',
       label: 'Automações WhatsApp',

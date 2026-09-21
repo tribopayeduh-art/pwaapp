@@ -121,3 +121,761 @@
 @media(prefers-reduced-motion:reduce){.heroSlide.active .eyebrow,.heroSlide.active h1,.heroSlide.active p,.heroSlide.active .big,.heroSlide.active>img,.tag:after,.depositPromoBadge,.withdrawOrb,.winnerIcon,.modal.open .backdrop,.modal.open .dialog,.depositPage.open .depositScreenHeader,.prizePage.open .prizeScreenHeader,.withdrawPage.open .withdrawScreenHeader,#profileModal.open .accountScreenHeader,.depositPage.open .depositPageGrid,.prizePage.open>.sectionHead,.withdrawPage.open .withdrawPageMain,#profileModal.open .profileDialog,.bonusNote.bonusActive,.toast.show,.motionPress{animation:none!important}.motionReveal{opacity:1!important;transform:none!important;filter:none!important}}
 
 .authError{min-height:17px;margin:10px 0 -8px;color:#ff8585;font-size:12px;font-weight:700}.authError:empty{display:none}#gameModal,#gameModal .dialog,#gameModal .scratchWrap,#scratchCanvas{touch-action:none;overscroll-behavior:contain}#scratchCanvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+
+/* === DOTFY PIX INTEGRATION STYLES === */
+.pixResult {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 20px;
+  background: radial-gradient(circle at 50% 0%, #153823 0%, #0d1711 70%, #090f0b 100%);
+  border: 1px solid #295137;
+  border-radius: 18px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  animation: pageIn 0.35s ease-out both;
+}
+.pixResult.show {
+  display: flex !important;
+}
+
+.pixStatus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255, 180, 50, 0.12);
+  border: 1px solid rgba(255, 180, 50, 0.35);
+  color: #ffc252;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  transition: all 0.25s ease;
+}
+.pixStatus svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+.pixStatus.checking {
+  background: rgba(43, 140, 255, 0.12);
+  border-color: rgba(43, 140, 255, 0.35);
+  color: #61b3ff;
+}
+.pixStatus.paid {
+  background: rgba(34, 214, 111, 0.18);
+  border-color: rgba(34, 214, 111, 0.6);
+  color: #38e07b;
+}
+
+.pixQrContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 4px 0;
+}
+.pixQrImage {
+  width: 210px;
+  height: 210px;
+  border-radius: 16px;
+  border: 4px solid #1a3c26;
+  background: #ffffff;
+  padding: 10px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+  object-fit: contain;
+}
+.pixQrPlaceholder {
+  width: 210px;
+  height: 210px;
+  border-radius: 16px;
+  border: 2px dashed #2a4c35;
+  background: #0d1510;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #87998d;
+  font-size: 12px;
+}
+
+.spinIcon {
+  animation: spin 1.1s linear infinite;
+  color: var(--green, #22d66f);
+  width: 26px;
+  height: 26px;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.pixMetaInfo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #0b120e;
+  border: 1px solid #1d2d22;
+  border-radius: 12px;
+}
+.pixMetaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pixMetaItem:last-child {
+  text-align: right;
+}
+.pixMetaItem span {
+  font-size: 11px;
+  color: #84968a;
+}
+.pixMetaItem strong {
+  font-size: 16px;
+  color: #e5efe8;
+}
+.pixMetaItem:first-child strong {
+  color: var(--green, #22d66f);
+}
+
+.pixCodeBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pixCodeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #a4b5aa;
+}
+.pixCodeHeader small {
+  font-size: 10px;
+  color: #6a7c70;
+}
+.pixCopyRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.pixCodeInput {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  background: #090e0b;
+  border: 1px solid #23362a;
+  border-radius: 10px;
+  color: #a0b3a6;
+  font-family: monospace;
+  font-size: 12px;
+  outline: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pixCodeInput:focus {
+  border-color: var(--green, #22d66f);
+}
+.copyButton {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #2c593b;
+  background: linear-gradient(135deg, #173d25, #102919);
+  color: #72f2a1;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.copyButton:hover {
+  background: #1b4b2c;
+  color: #fff;
+  border-color: var(--green, #22d66f);
+}
+.copyButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.pixActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+.verifyPixBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 46px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #2d4535;
+  background: #101913;
+  color: #b7c8bd;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.verifyPixBtn:hover {
+  background: #16241b;
+  color: #fff;
+  border-color: #3b5c47;
+}
+.verifyPixBtn svg {
+  width: 15px;
+  height: 15px;
+}
+.pixActions .payDemo {
+  min-height: 46px;
+  margin-top: 0;
+  font-size: 13px;
+}
+
+.pixSuccessNotice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: linear-gradient(110deg, #133f24, #0b2214);
+  border: 1px solid #29b85c;
+  color: #e5fbee;
+}
+.pixSuccessNotice svg {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: #38e07b;
+}
+.pixSuccessNotice strong {
+  display: block;
+  font-size: 14px;
+  color: #4ff18e;
+}
+.pixSuccessNotice p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #a7cbba;
+}
+
+@media(max-width: 600px) {
+  .pixQrImage {
+    width: 180px;
+    height: 180px;
+  }
+  .pixActions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   POPUP MODAL PIX COM ANIMAÇÃO, QR CODE, CRONÔMETRO, VALOR E BÔNUS
+   ========================================================================== */
+.pixModal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.pixModal.open {
+  display: flex !important;
+}
+
+.pixModal .backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 4, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.pixDialog {
+  position: relative;
+  width: min(390px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #0d1410;
+  border: 1px solid #1c3525;
+  border-radius: 24px;
+  padding: 24px 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75), 0 0 35px rgba(34, 214, 111, 0.08);
+  color: #e5f2eb;
+  isolation: isolate;
+  text-align: center;
+}
+
+.modal.open .pixDialog {
+  animation: pixModalIn 0.3s cubic-bezier(0.18, 0.95, 0.24, 1) both;
+}
+
+.pixClose {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #233e2d;
+  background: rgba(18, 30, 23, 0.8);
+  color: #8daea0;
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.pixClose:hover {
+  background: #1c3826;
+  color: #ffffff;
+  border-color: #34d399;
+}
+
+/* Header Clean */
+.pixCleanHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.pixCleanBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: rgba(34, 214, 111, 0.1);
+  border: 1px solid rgba(34, 214, 111, 0.25);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #34d399;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.pixCleanBadge svg {
+  width: 13px;
+  height: 13px;
+  color: #fcd34d;
+}
+
+.pixCleanAmountWrap {
+  margin-top: 4px;
+}
+
+.pixCleanAmountWrap small {
+  display: block;
+  font-size: 11px;
+  color: #7b9889;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pixCleanAmount {
+  display: block;
+  font-size: 30px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+}
+
+.pixBonusCleanTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.pixBonusCleanTag svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* QR Code Clean */
+.pixCleanQrBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.pixCleanQrCard {
+  width: 200px;
+  height: 200px;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pixCleanQrImg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+  display: block;
+}
+
+.pixCleanQrPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  color: #164227;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 16px;
+}
+
+.pixCleanQrPlaceholder svg {
+  width: 28px;
+  height: 28px;
+  color: #10b981;
+}
+
+.pixCleanTimer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8daea0;
+  margin-top: 8px;
+}
+
+.pixCleanTimer svg {
+  width: 14px;
+  height: 14px;
+  color: #34d399;
+}
+
+.pixCleanTimer strong {
+  font-family: ui-monospace, monospace;
+  color: #34d399;
+  font-weight: 700;
+}
+
+/* Copia e Cola Clean */
+.pixCleanCopySection {
+  margin-bottom: 12px;
+}
+
+.pixCleanCopyRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #080d0a;
+  border: 1px solid #1c3525;
+  border-radius: 12px;
+  padding: 4px 5px 4px 10px;
+  transition: border-color 0.2s;
+}
+
+.pixCleanCopyRow:focus-within {
+  border-color: #34d399;
+}
+
+.pixCleanCopyRow input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: #c7e5d5;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  outline: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pixCleanCopyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  background: #22d66f;
+  border: 0;
+  border-radius: 9px;
+  color: #04140a;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.pixCleanCopyBtn:hover {
+  background: #39ec85;
+}
+
+.pixCleanCopyBtn.copied {
+  background: #fbbf24;
+  color: #171c08;
+}
+
+.pixCleanCopyBtn svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Ações Limpas */
+.pixCleanActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pixCleanCheckBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #233e2d;
+  border-radius: 12px;
+  color: #d1ebe0;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pixCleanCheckBtn:hover {
+  background: rgba(34, 214, 111, 0.1);
+  border-color: #34d399;
+  color: #ffffff;
+}
+
+.pixCleanCheckBtn svg {
+  width: 15px;
+  height: 15px;
+  color: #34d399;
+}
+
+.pixCleanSubnote {
+  margin: 0;
+  font-size: 11px;
+  color: #6c897a;
+}
+
+/* Overlay de Sucesso Clean */
+.pixSuccessCover {
+  position: absolute;
+  inset: 0;
+  background: #0d1410;
+  border-radius: 24px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  animation: pixModalIn 0.3s cubic-bezier(0.18, 0.95, 0.24, 1) both;
+}
+
+.pixSuccessIconCircle {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #22d66f;
+  color: #031409;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  box-shadow: 0 0 30px rgba(34, 214, 111, 0.35);
+}
+
+.pixSuccessIconCircle svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 3;
+}
+
+.pixSuccessCover h3 {
+  font-size: 19px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 4px;
+}
+
+.pixSuccessCover p {
+  font-size: 12px;
+  color: #8daea0;
+  margin: 0 0 16px;
+}
+
+.pixSuccessInfoBox {
+  width: 100%;
+  background: #080d0a;
+  border: 1px solid #1c3525;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.pixSuccessInfoBox span {
+  display: block;
+  font-size: 11px;
+  color: #7b9889;
+  margin-bottom: 2px;
+}
+
+.pixSuccessInfoBox strong {
+  display: block;
+  font-size: 24px;
+  font-weight: 800;
+  color: #34d399;
+}
+
+.pixSuccessPlayBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 20px;
+  background: #22d66f;
+  border: 0;
+  border-radius: 12px;
+  color: #031409;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pixSuccessPlayBtn:hover {
+  background: #39ec85;
+}
+
+.pixSuccessPlayBtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes pixModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media(max-width: 440px) {
+  .pixDialog {
+    padding: 20px 16px;
+  }
+  .pixCleanQrCard {
+    width: 180px;
+    height: 180px;
+  }
+  .pixCleanAmount {
+    font-size: 26px;
+  }
+}
+
+/* Auth Moderno e Unificado - Email e Senha */
+.authTabs {
+  display: flex;
+  background: #090e0b;
+  border: 1px solid #1f2f24;
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+  margin: 0 0 16px;
+}
+.authTabBtn {
+  flex: 1;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #7f9184;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.authTabBtn:hover {
+  color: #e2ece5;
+}
+.authTabBtn.active {
+  background: linear-gradient(135deg, #25e370, #10bb53);
+  color: #05210e;
+  box-shadow: 0 4px 14px rgba(37, 227, 112, 0.28);
+}
+.authFormPane label {
+  display: grid;
+  gap: 6px;
+  color: #a4b4a9;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.authFormPane input[type="text"],
+.authFormPane input[type="email"],
+.authFormPane input[type="tel"],
+.authFormPane input[type="password"] {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid #28372d;
+  border-radius: 11px;
+  background: #080c09;
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.authFormPane input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(36, 214, 111, 0.18);
+}

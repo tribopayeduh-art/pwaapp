@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   TrendingUp,
   Users,
@@ -12,22 +12,69 @@ import {
   ArrowDownLeft,
   Activity,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Radio,
+  Gamepad2,
+  Zap
 } from 'lucide-react';
-import { AdminMetrics, AdminTabId } from './adminTypes';
+import { AdminMetrics, AdminTabId, LivePlayerSession } from './adminTypes';
 import { IOSCard, IOSStatCard, IOSBadge, IOSButton } from './IOSComponents';
 
 interface AdminMetricsTabProps {
   metrics: AdminMetrics | null;
   loading: boolean;
   onNavigateTab: (tab: AdminTabId) => void;
+  token?: string | null;
 }
 
 export const AdminMetricsTab: React.FC<AdminMetricsTabProps> = ({
   metrics,
   loading,
-  onNavigateTab
+  onNavigateTab,
+  token
 }) => {
+  const [liveSessions, setLiveSessions] = useState<LivePlayerSession[]>([]);
+  const [liveActiveCount, setLiveActiveCount] = useState<number>(0);
+  const [liveVolume, setLiveVolume] = useState<number>(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLiveOverview = async () => {
+      try {
+        const authToken =
+          token ||
+          (typeof window !== 'undefined'
+            ? localStorage.getItem('pg_auth_token') ||
+              localStorage.getItem('paygateway_token') ||
+              localStorage.getItem('token') ||
+              localStorage.getItem('auth_token')
+            : '');
+        const headers: Record<string, string> = {};
+        if (authToken) {
+          headers['Authorization'] = `Bearer ${authToken}`;
+        }
+
+        const res = await fetch('/api/admin/live-players', { headers });
+        if (res.ok) {
+          const json = await res.json();
+          if (isMounted && json) {
+            setLiveSessions(json.activeSessions || []);
+            setLiveActiveCount(json.activePlayersCount || 0);
+            setLiveVolume(json.totalVolumeInPlay || 0);
+          }
+        }
+      } catch (e) {
+        // silent fallback
+      }
+    };
+
+    fetchLiveOverview();
+    const interval = setInterval(fetchLiveOverview, 5000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [token]);
   const netProfit = metrics?.netProfit ?? 10230.0;
   const marginPercent = metrics?.profitMarginPercent ?? 85.4;
   const totalDeposits = metrics?.totalDepositsAmount ?? 11980.0;
@@ -157,7 +204,91 @@ export const AdminMetricsTab: React.FC<AdminMetricsTabProps> = ({
         </IOSCard>
       </div>
 
-      {/* 2. 4 KEY KPI STATS CARDS */}
+      {/* 2. REAL-TIME LIVE PLAYERS RADAR WIDGET */}
+      <IOSCard className="p-5 sm:p-6 bg-gradient-to-br from-emerald-950/90 via-slate-900 to-black text-white border-emerald-500/20 shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
+          <div className="flex items-center gap-3">
+            <div className="relative w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+              <Radio className="w-5 h-5 animate-pulse" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-slate-900 animate-ping" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  Jogadores em Campo em Tempo Real
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
+                  AO VIVO
+                </span>
+              </div>
+              <p className="text-xs text-white/60 font-medium">
+                Partidas ativas nos jogos Block Win, GEN DINO, Zumbla e Raspadinha
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <div className="text-xs text-white/50">Volume Ativo em Jogo</div>
+              <div className="text-sm font-extrabold text-emerald-400">
+                R$ {liveVolume.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('live')}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md active:scale-[0.98]"
+            >
+              <span>Abrir Monitoramento Completo</span>
+              <ChevronRight className="w-4 h-4 text-slate-950" />
+            </button>
+          </div>
+        </div>
+
+        {/* Live sessions mini preview */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-4">
+          {liveSessions.slice(0, 4).map((sess) => (
+            <div
+              key={sess.id}
+              className="p-3.5 rounded-2xl bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.08] transition-all space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-white truncate max-w-[110px]">
+                  {sess.userName}
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                  <Zap className="w-2.5 h-2.5 fill-emerald-300" />
+                  {sess.multiplier.toFixed(2)}x
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-white/60">
+                <span className="truncate">{sess.gameName}</span>
+                <span className="font-semibold text-white">
+                  R$ {sess.betAmount.toFixed(2)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-white/40 pt-1 border-t border-white/[0.06]">
+                <span className="truncate">{sess.lastAction || 'Em jogo'}</span>
+                <span className="text-emerald-400 font-bold">
+                  +R$ {sess.potentialPayout.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          ))}
+
+          {liveSessions.length === 0 && (
+            <div className="col-span-full py-4 text-center text-xs text-white/50">
+              Sincronizando partidas ao vivo dos jogos...
+            </div>
+          )}
+        </div>
+      </IOSCard>
+
+      {/* 3. 4 KEY KPI STATS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <IOSStatCard
           title="Vendas Diárias (Hoje)"

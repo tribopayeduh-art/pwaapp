@@ -27,11 +27,6 @@ export const Header: React.FC<HeaderProps> = ({ user, title, onProfileClick, onO
       <div className="flex items-center gap-2">
         {user && (
           <>
-            {user.isInfluencer && (
-              <span className="hidden min-[360px]:inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-violet-700">
-                Demo creator
-              </span>
-            )}
             {isAdminUser && onOpenAdmin && (
               <button
                 onClick={onOpenAdmin}

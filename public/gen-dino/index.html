@@ -4,12 +4,65 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0,maximum-scale=1.0, user-scalable=no">
-    <meta property="og:image" content="images/preview.png">
-    <title>GEN DINO — Arcade mobile</title>
+    <title>GEN DINO | Jogo do Dinossauro Arcade com Prêmios e PIX</title>
 
-    <!-- Primary Meta Tag -->
-    <meta name="title" content="GEN DINO — Arcade mobile">
-    <meta name="description" content="GEN DINO é uma experiência de arcade responsiva com moedas virtuais.">
+    <!-- SEO Meta Tags -->
+    <meta name="title" content="GEN DINO | Jogo do Dinossauro Arcade com Prêmios e PIX">
+    <meta name="description" content="Corra pelo deserto, pule sobre cactos e desvie de obstáculos com GEN DINO! Colete moedas valendo R$ 1 cada e converta seus pontos em PIX direto no celular.">
+    <meta name="keywords" content="gen dino, dino pay, jogo do dinossauro, chrome dino arcade, dinossauro corredor, dino runner celular, jogo do dinossauro pix, arcade mobile dinossauro, runner brasil">
+    <meta name="author" content="Alliance Hub">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <link rel="canonical" href="https://dinopay.site/">
+
+    <!-- Open Graph / Facebook / WhatsApp -->
+    <meta property="og:type" content="game">
+    <meta property="og:site_name" content="GEN DINO">
+    <meta property="og:locale" content="pt_BR">
+    <meta property="og:url" content="https://dinopay.site/">
+    <meta property="og:title" content="GEN DINO | Jogo do Dinossauro Arcade com Prêmios e PIX">
+    <meta property="og:description" content="Corra pelo deserto, pule sobre cactos e desvie de obstáculos com GEN DINO! Colete moedas valendo R$ 1 cada e converta seus pontos em PIX direto no celular.">
+    <meta property="og:image" content="https://dinopay.site/gen-dino/images/preview.png">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="GEN DINO | Jogo do Dinossauro Arcade com Prêmios e PIX">
+    <meta name="twitter:description" content="Corra pelo deserto, pule sobre cactos e desvie de obstáculos com GEN DINO! Colete moedas valendo R$ 1 cada e converta seus pontos em PIX direto no celular.">
+    <meta name="twitter:image" content="https://dinopay.site/gen-dino/images/preview.png">
+
+    <!-- Schema.org Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": ["VideoGame", "WebApplication", "SoftwareApplication"],
+      "name": "GEN DINO — Arcade Mobile Runner com Moedas Virtuais",
+      "alternateName": "GEN DINO",
+      "description": "Corra pelo deserto, pule sobre cactos e desvie de obstáculos com GEN DINO! Colete moedas valendo R$ 1 cada e converta seus pontos em PIX direto no celular.",
+      "url": "https://dinopay.site/",
+      "image": "https://dinopay.site/gen-dino/images/preview.png",
+      "inLanguage": "pt-BR",
+      "applicationCategory": "GameApplication",
+      "operatingSystem": "Android, iOS, Web, Windows, macOS",
+      "genre": ["EndlessRunner", "ArcadeGame"],
+      "playMode": "SinglePlayer",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "BRL",
+        "availability": "https://schema.org/InStock"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.9",
+        "bestRating": "5",
+        "ratingCount": "2150"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Alliance Hub",
+        "url": "https://goalliancehub.com"
+      }
+    }
+    </script>
 
     <!-- Favicon -->
     <link rel="shortcut icon" href="images/fav_icon.png"/>
@@ -267,43 +320,153 @@
                     <span class="profile-account-status"><i class="ui-icon" data-icon="shield-check"></i> Conta ativa</span>
                 </section>
 
-                <section class="profile-level-card" aria-label="Resumo do jogador">
-                    <div class="profile-level-copy">
-                        <span>NÍVEL ATUAL</span>
-                        <strong><b data-level>1</b><small>Explorador do deserto</small></strong>
+                <!-- Seleção de Modo: Jogador vs Influenciador (Apenas para influenciadores aprovados) -->
+                <section class="profile-mode-selector-card" id="profile-mode-selector" aria-label="Seleção de Modo da Conta" style="display: none;">
+                    <div class="profile-mode-tabs" role="tablist">
+                        <button type="button" class="profile-mode-tab is-active" id="btn-mode-player" data-action="set-profile-mode" data-mode="player" role="tab" aria-selected="true">
+                            <i class="ui-icon" data-icon="gamepad-2"></i>
+                            <span>Modo Jogador</span>
+                        </button>
+                        <button type="button" class="profile-mode-tab" id="btn-mode-influencer" data-action="set-profile-mode" data-mode="influencer" role="tab" aria-selected="false" style="display: none;">
+                            <i class="ui-icon" data-icon="sparkles"></i>
+                            <span>Modo Influenciador</span>
+                            <span class="mode-tab-badge">VIP</span>
+                        </button>
                     </div>
-                    <div class="profile-level-progress" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
-                    <p><b data-total-coins>0</b> moedas coletadas no total</p>
                 </section>
 
-                <section class="profile-stats" aria-label="Estatísticas">
-                    <article><span>MOEDAS</span><strong data-total-coins>0</strong><small>coletadas</small></article>
-                    <article><span>MELHOR CORRIDA</span><strong data-best-score>0</strong><small>pontos</small></article>
-                    <article><span>MEMBRO DESDE</span><strong data-profile-since>hoje</strong><small>GEN DINO</small></article>
-                </section>
+                <!-- PAINEL DO MODO JOGADOR -->
+                <div id="profile-panel-player" class="profile-panel">
+                    <section class="profile-level-card" aria-label="Resumo do jogador">
+                        <div class="profile-level-copy">
+                            <span>NÍVEL ATUAL</span>
+                            <strong><b data-level>1</b><small>Explorador do deserto</small></strong>
+                        </div>
+                        <div class="profile-level-progress" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+                        <p><b data-total-coins>0</b> moedas coletadas no total</p>
+                    </section>
 
-                <section class="profile-section profile-details-section" aria-labelledby="profile-details-title">
-                    <div class="profile-section-heading">
-                        <div><p>MINHA CONTA</p><h2 id="profile-details-title">Dados do perfil</h2></div>
-                        <i class="profile-heading-icon ui-icon" data-icon="pencil"></i>
+                    <section class="profile-stats" aria-label="Estatísticas">
+                        <article><span>MOEDAS</span><strong data-total-coins>0</strong><small>coletadas</small></article>
+                        <article><span>MELHOR CORRIDA</span><strong data-best-score>0</strong><small>pontos</small></article>
+                        <article><span>MEMBRO DESDE</span><strong data-profile-since>hoje</strong><small>GEN DINO</small></article>
+                    </section>
+
+                    <section class="profile-section profile-details-section" aria-labelledby="profile-details-title">
+                        <div class="profile-section-heading">
+                            <div><p>MINHA CONTA</p><h2 id="profile-details-title">Dados do perfil</h2></div>
+                            <i class="profile-heading-icon ui-icon" data-icon="pencil"></i>
+                        </div>
+                        <form class="profile-form" id="profile-form" novalidate>
+                            <label class="profile-field">
+                                <span>Nome de exibição</span>
+                                <input id="profile-name-input" type="text" autocomplete="name" maxlength="24" placeholder="Como quer ser chamado?">
+                            </label>
+                            <label class="profile-field">
+                                <span>E-mail da conta</span>
+                                <input id="profile-email-input" type="email" autocomplete="email" placeholder="voce@email.com">
+                            </label>
+                            <label class="profile-field">
+                                <span>Nova senha <em>opcional</em></span>
+                                <input id="profile-password-input" type="password" autocomplete="new-password" minlength="4" placeholder="Mínimo de 4 caracteres">
+                            </label>
+                            <p class="profile-form-message" id="profile-form-message" role="status"></p>
+                            <button class="btn btn-primary btn-full profile-save" type="submit"><i class="ui-icon" data-icon="circle-check"></i> Salvar alterações</button>
+                        </form>
+                    </section>
+                </div>
+
+                <!-- PAINEL DO MODO INFLUENCIADOR -->
+                <div id="profile-panel-influencer" class="profile-panel" style="display: none;">
+                    <!-- Afiliado Responsável / Sponsor -->
+                    <div class="influencer-sponsor-card">
+                        <div class="influencer-sponsor-info">
+                            <small>Afiliado Responsável pela Liberação</small>
+                            <strong id="inf-sponsor-name">Carregando gestor...</strong>
+                        </div>
+                        <span class="influencer-sponsor-badge" id="inf-sponsor-code">GESTOR VINCULADO</span>
                     </div>
-                    <form class="profile-form" id="profile-form" novalidate>
-                        <label class="profile-field">
-                            <span>Nome de exibição</span>
-                            <input id="profile-name-input" type="text" autocomplete="name" maxlength="24" placeholder="Como quer ser chamado?">
-                        </label>
-                        <label class="profile-field">
-                            <span>E-mail da conta</span>
-                            <input id="profile-email-input" type="email" autocomplete="email" placeholder="voce@email.com">
-                        </label>
-                        <label class="profile-field">
-                            <span>Nova senha <em>opcional</em></span>
-                            <input id="profile-password-input" type="password" autocomplete="new-password" minlength="4" placeholder="Mínimo de 4 caracteres">
-                        </label>
-                        <p class="profile-form-message" id="profile-form-message" role="status"></p>
-                        <button class="btn btn-primary btn-full profile-save" type="submit"><i class="ui-icon" data-icon="circle-check"></i> Salvar alterações</button>
-                    </form>
-                </section>
+
+                    <!-- Métricas Principais: Depósitos Trazidos, Pagos, Indicados, Comissões -->
+                    <div class="influencer-metrics-grid">
+                        <div class="influencer-metric-box highlight">
+                            <span><i class="ui-icon" data-icon="trending-up"></i> Depósitos Trazidos</span>
+                            <strong id="inf-total-deposits">R$ 0,00</strong>
+                            <small>Volume movimentado por indicados</small>
+                        </div>
+                        <div class="influencer-metric-box featured">
+                            <span><i class="ui-icon" data-icon="circle-check"></i> Depósitos Pagos</span>
+                            <strong id="inf-paid-deposits">0 depósitos</strong>
+                            <small id="inf-paid-deposits-sub">R$ 0,00 confirmados</small>
+                        </div>
+                        <div class="influencer-metric-box">
+                            <span><i class="ui-icon" data-icon="users"></i> Qtd de Indicados</span>
+                            <strong id="inf-referrals-count">0</strong>
+                            <small>Jogadores na sua rede</small>
+                        </div>
+                        <div class="influencer-metric-box highlight">
+                            <span><i class="ui-icon" data-icon="coins"></i> Comissões Disponíveis</span>
+                            <strong id="inf-commission-balance" style="color: #4ade80;">R$ 0,00</strong>
+                            <small>Pronto para solicitar saque</small>
+                        </div>
+                    </div>
+
+                    <!-- Botão de Ação: Sacar Minhas Comissões -->
+                    <div class="influencer-withdraw-cta-box">
+                        <h3>Sacar Minhas Comissões</h3>
+                        <p>Ao solicitar, uma notificação imediata é enviada para o afiliado responsável aprovar a liberação do seu PIX.</p>
+                        <button type="button" class="btn-withdraw-influencer" id="btn-open-influencer-withdraw" data-action="toggle-influencer-withdraw">
+                            <i class="ui-icon" data-icon="arrow-up-right"></i>
+                            <span>Sacar Minhas Comissões</span>
+                        </button>
+                    </div>
+
+                    <!-- Drawer / Formulário de Saque de Comissões -->
+                    <div class="influencer-withdraw-drawer" id="influencer-withdraw-drawer" style="display: none;">
+                        <h4>Solicitar Saque de Comissões</h4>
+                        <p class="notice">Informe sua chave PIX e o valor desejado. A liberação será processada pelo seu afiliado gestor.</p>
+                        
+                        <div class="influencer-approval-notice">
+                            <p>🔔 <strong>Aprovação pelo Afiliado:</strong> Seu saque de comissões depende da aprovação do afiliado gestor, garantindo a liberação diretamente para a sua chave PIX.</p>
+                        </div>
+
+                        <form id="influencer-withdraw-form">
+                            <div class="influencer-field">
+                                <label for="inf-pix-type">Tipo de Chave PIX</label>
+                                <select id="inf-pix-type">
+                                    <option value="CPF">CPF</option>
+                                    <option value="EMAIL">E-mail</option>
+                                    <option value="TELEFONE">Telefone / Celular</option>
+                                    <option value="ALEATORIA">Chave Aleatória (EVP)</option>
+                                </select>
+                            </div>
+                            <div class="influencer-field">
+                                <label for="inf-pix-key">Chave PIX</label>
+                                <input type="text" id="inf-pix-key" placeholder="Digite sua chave PIX" required autocomplete="off">
+                            </div>
+                            <div class="influencer-field">
+                                <label for="inf-withdraw-amount">Valor a Sacar (R$)</label>
+                                <input type="number" id="inf-withdraw-amount" step="0.01" min="1.00" placeholder="0.00" required>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
+                                    <small style="color: #92a4c2; font-size: 10px;">Saldo disponível: <b id="inf-withdraw-max-label" style="color: #ffe778;">R$ 0,00</b></small>
+                                    <button type="button" id="btn-inf-max-amount" data-action="inf-max-amount" style="background: none; border: none; color: #7ff7e8; font-size: 10px; font-weight: 800; cursor: pointer; text-decoration: underline;">Sacar tudo</button>
+                                </div>
+                            </div>
+                            <p id="inf-withdraw-message" style="min-height: 18px; font-size: 10px; font-weight: 800; margin-bottom: 8px;"></p>
+                            <button type="submit" class="btn btn-primary btn-full" id="btn-submit-inf-withdraw">
+                                <i class="ui-icon" data-icon="send"></i> Confirmar Solicitação de Saque
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Histórico de Solicitações -->
+                    <div class="influencer-requests-history">
+                        <h4>Histórico de Solicitações de Saque</h4>
+                        <div id="influencer-requests-list">
+                            <p style="color: #7789a8; font-size: 11px; text-align: center; padding: 12px;">Nenhuma solicitação enviada ainda.</p>
+                        </div>
+                    </div>
+                </div>
 
                 <section class="profile-section profile-referral-section" id="profile-referral-section" aria-labelledby="profile-referral-title">
                     <div class="profile-section-heading">

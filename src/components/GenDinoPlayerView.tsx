@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { ArrowLeft, Loader2, ExternalLink } from 'lucide-react';
 import { GAME_ASSETS } from '../config/gameAssets';
 import { User } from '../types';
+import { setTrackedGame } from '../lib/gameTracking';
 
 interface Props {
   user?: User;
@@ -17,13 +18,23 @@ export const GenDinoPlayerView: React.FC<Props> = ({ user, onBack, onDeposit, on
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const lastSentSessionRef = useRef<string>('');
 
+  useEffect(() => {
+    setTrackedGame('g_gen_dino', 'gen_dino_player_view');
+  }, []);
+
   // 1. Stable initial URL constructed once on mount so the iframe NEVER force-reloads on auth/balance updates
   const [iframeSrc] = useState<string>(() => {
     const token = typeof window !== 'undefined'
       ? localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token') || ''
       : '';
+    const incomingRef = typeof window !== 'undefined'
+      ? (new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('dino_ref_code') || localStorage.getItem('alliance_ref_code') || '')
+      : '';
     const separator = GAME_ASSETS.genDino.app.includes('?') ? '&' : '?';
-    return `${GAME_ASSETS.genDino.app}${separator}embedded=1${token ? `&token=${encodeURIComponent(token)}` : ''}`;
+    let url = `${GAME_ASSETS.genDino.app}${separator}embedded=1&game=g_gen_dino`;
+    if (token) url += `&token=${encodeURIComponent(token)}`;
+    if (incomingRef) url += `&ref=${encodeURIComponent(incomingRef)}`;
+    return url;
   });
 
   useEffect(() => {

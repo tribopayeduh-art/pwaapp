@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   BarChart3,
+  Radio,
   Users,
   ArrowUpRight,
   CreditCard,
@@ -21,6 +22,7 @@ export const AdminMobileTabBar: React.FC<AdminMobileTabBarProps> = ({
 }) => {
   const tabs = [
     { id: 'metrics' as AdminTabId, label: 'Visão Geral', icon: BarChart3 },
+    { id: 'live' as AdminTabId, label: 'Ao Vivo', icon: Radio },
     { id: 'users' as AdminTabId, label: 'Usuários', icon: Users },
     {
       id: 'withdrawals' as AdminTabId,
@@ -28,7 +30,6 @@ export const AdminMobileTabBar: React.FC<AdminMobileTabBarProps> = ({
       icon: ArrowUpRight,
       badge: pendingWithdrawalsCount > 0 ? pendingWithdrawalsCount : undefined
     },
-    { id: 'deposits' as AdminTabId, label: 'Depósitos', icon: CreditCard },
     { id: 'games' as AdminTabId, label: 'Jogos/RTP', icon: Gamepad2 }
   ];
 

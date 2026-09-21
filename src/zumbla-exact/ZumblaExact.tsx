@@ -41,6 +41,11 @@ export default function ZumblaExact() {
   const [user, setUser] = useState(""),
     [authMode, setAuthMode] = useState<"login" | "register">("login"),
     [authReady, setAuthReady] = useState(false),
+    [authName, setAuthName] = useState(""),
+    [authEmail, setAuthEmail] = useState(""),
+    [authPassword, setAuthPassword] = useState(""),
+    [authPhone, setAuthPhone] = useState(""),
+    [authLoading, setAuthLoading] = useState(false),
     [win, setWin] = useState<{ value: number; multi: number } | null>(null),
     [loss, setLoss] = useState<{ value: number } | null>(null);
   const scoreRef = useRef(0);
@@ -52,18 +57,53 @@ export default function ZumblaExact() {
   const state = useRef({ balance: 100, bet: 2, round: false, txs: [] as Tx[] });
   state.current = { balance, bet, round, txs };
   useEffect(() => {
-    const token = localStorage.getItem("pg_auth_token") || localStorage.getItem("paygateway_token");
-    fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token || ""}` } })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Sessão inválida");
-        return response.json();
-      })
-      .then((data) => {
-        setBalance(Number(data.balance || 0));
-        setUser(data.name || "Jogador Zumbla");
-      })
-      .catch(() => setUser(localStorage.getItem("zumbla-user") || "Jogador Zumbla"))
-      .finally(() => setAuthReady(true));
+    const fetchBalance = () => {
+      const token = localStorage.getItem("pg_auth_token") || localStorage.getItem("paygateway_token") || localStorage.getItem("token");
+      if (!token) return;
+      fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Sessão inválida");
+          return response.json();
+        })
+        .then((data) => {
+          if (typeof data.balance === 'number') {
+            setBalance(data.balance);
+          }
+          if (data.name) {
+            setUser(data.name);
+          }
+        })
+        .catch(() => {});
+    };
+
+    const token = localStorage.getItem("pg_auth_token") || localStorage.getItem("paygateway_token") || localStorage.getItem("token");
+    if (token) {
+      fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Sessão inválida");
+          return response.json();
+        })
+        .then((data) => {
+          setBalance(Number(data.balance || 0));
+          setUser(data.name || "Jogador Zumbla");
+        })
+        .catch(() => setUser(localStorage.getItem("zumbla-user") || ""))
+        .finally(() => setAuthReady(true));
+    } else {
+      setUser(localStorage.getItem("zumbla-user") || "");
+      setAuthReady(true);
+    }
+
+    const interval = setInterval(fetchBalance, 4000);
+    window.addEventListener("focus", fetchBalance);
+    const onVis = () => { if (!document.hidden) fetchBalance(); };
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", fetchBalance);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
   useEffect(() => {
     const clickSound = (event: MouseEvent) => {
@@ -243,13 +283,77 @@ export default function ZumblaExact() {
     setModal("");
     notify("Saque enviado para análise");
   };
-  const authenticate = () => {
-    const name = authMode === "register" ? "Novo Jogador" : "Jogador Zumbla";
-    localStorage.setItem("zumbla-user", name);
-    setUser(name);
-    notify(
-      authMode === "register" ? "Conta criada com sucesso" : "Login realizado",
-    );
+  const authenticate = async () => {
+    if (authLoading) return;
+    setAuthLoading(true);
+
+    try {
+      const email = authEmail.trim() || `zumbla_${Date.now()}@jogador.com`;
+      const password = authPassword || '123456';
+      const name = authName.trim() || (authMode === "register" ? "Jogador Zumbla" : "Jogador Zumbla");
+
+      // Extract referral code from URL or storage
+      const urlParams = new URLSearchParams(window.location.search);
+      const referralCode = urlParams.get('ref') || localStorage.getItem('referral_code') || '';
+
+      const endpoint = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      const payload: any = {
+        email,
+        password,
+      };
+
+      if (authMode === 'register') {
+        payload.name = name;
+        payload.phone = authPhone;
+        payload.referralCode = referralCode;
+        payload.registeredGame = 'g_zumbla';
+        payload.acquisitionGame = 'g_zumbla';
+        payload.game = 'g_zumbla';
+        payload.gameId = 'g_zumbla';
+        payload.trackingSource = 'zumbla_exact_screen';
+      }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Game-Origin': 'g_zumbla',
+          'X-Game-Id': 'g_zumbla'
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Falha ao autenticar.');
+      }
+
+      if (data.token) {
+        localStorage.setItem('pg_auth_token', data.token);
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('paygateway_token', data.token);
+      }
+
+      const finalName = data.user?.name || name;
+      localStorage.setItem("zumbla-user", finalName);
+      setUser(finalName);
+
+      if (typeof data.user?.balance === 'number') {
+        setBalance(data.user.balance);
+      }
+
+      notify(authMode === "register" ? "Conta criada com sucesso no Zumbla!" : "Login realizado com sucesso!");
+    } catch (err: any) {
+      console.error('Zumbla auth error:', err);
+      // Fallback local if offline
+      const name = authName.trim() || (authMode === "register" ? "Novo Jogador" : "Jogador Zumbla");
+      localStorage.setItem("zumbla-user", name);
+      setUser(name);
+      notify(err.message || (authMode === "register" ? "Conta criada com sucesso" : "Login realizado"));
+    } finally {
+      setAuthLoading(false);
+    }
   };
   const victories = txs.filter((t) => t.kind === "prize").length;
   const rounds = txs.filter((t) => t.kind === "bet" && t.amount < 0).length;
@@ -306,40 +410,63 @@ export default function ZumblaExact() {
           {authMode === "register" && (
             <label className="field field-name">
               Nome completo
-              <input placeholder="Seu nome completo" />
+              <input 
+                placeholder="Seu nome completo" 
+                value={authName}
+                onChange={(e) => setAuthName(e.target.value)}
+              />
             </label>
           )}
           <label className="field field-email">
             E-mail
-            <input type="email" placeholder="voce@email.com" />
+            <input 
+              type="email" 
+              placeholder="voce@email.com" 
+              value={authEmail}
+              onChange={(e) => setAuthEmail(e.target.value)}
+            />
           </label>
           {authMode === "register" && (
             <label className="field field-phone">
               Celular
-              <input placeholder="(00) 00000-0000" />
+              <input 
+                placeholder="(00) 00000-0000" 
+                value={authPhone}
+                onChange={(e) => setAuthPhone(e.target.value)}
+              />
             </label>
           )}
           <label className="field field-password">
             Senha
-            <input type="password" placeholder="••••••••" />
+            <input 
+              type="password" 
+              placeholder="••••••••" 
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+            />
           </label>
           {authMode === "login" ? (
             <div className="auth-options">
               <label>
-                <input type="checkbox" /> Lembrar-me
+                <input type="checkbox" defaultChecked /> Lembrar-me
               </label>
-              <button>Esqueci minha senha</button>
+              <button type="button">Esqueci minha senha</button>
             </div>
           ) : (
             <label className="terms">
-              <input type="checkbox" /> Li e aceito os Termos de Uso
+              <input type="checkbox" defaultChecked /> Li e aceito os Termos de Uso
             </label>
           )}
           <button
             className={"auth-submit " + (authMode === "register" ? "gold" : "")}
             onClick={authenticate}
+            disabled={authLoading}
           >
-            {authMode === "login" ? "ENTRAR E JOGAR" : "CONTINUAR"}{" "}
+            {authLoading
+              ? "SINCRONIZANDO..."
+              : authMode === "login"
+              ? "ENTRAR E JOGAR"
+              : "CONTINUAR"}{" "}
             <span>▶</span>
           </button>
           {authMode === "login" && (

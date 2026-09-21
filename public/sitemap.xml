@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  
+  <!-- Alliance Hub Main Lobby -->
+  <url>
+    <loc>https://goalliancehub.com/</loc>
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://goalliancehub.com/allifavicon.png</image:loc>
+      <image:title>Alliance Hub Jogos Online</image:title>
+    </image:image>
+  </url>
+
+  <!-- Block Win -->
+  <url>
+    <loc>https://goalliancehub.com/?game=blockwin</loc>
+    <xhtml:link rel="canonical" href="https://blockwinner.site/" />
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://goalliancehub.com/blocklogo.png</image:loc>
+      <image:title>Block Win - Quebra-Cabeça de Blocos e Multiplicador x2.90</image:title>
+    </image:image>
+  </url>
+
+  <!-- Zumbla Win -->
+  <url>
+    <loc>https://goalliancehub.com/?game=zumbla</loc>
+    <xhtml:link rel="canonical" href="https://zumblapay.site/" />
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://goalliancehub.com/zumbla/banner-zumbla-win.webp</image:loc>
+      <image:title>Zumbla Win - Jogo de Bolinhas Mágicas e Multiplicador x5.00</image:title>
+    </image:image>
+  </url>
+
+  <!-- GEN DINO -->
+  <url>
+    <loc>https://goalliancehub.com/?game=gen-dino</loc>
+    <xhtml:link rel="canonical" href="https://dinopay.site/" />
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://goalliancehub.com/gen-dino/images/preview.png</image:loc>
+      <image:title>GEN DINO - Corrida Arcade Mobile e Moedas Virtuais</image:title>
+    </image:image>
+  </url>
+
+  <!-- Raspa Fortuna -->
+  <url>
+    <loc>https://goalliancehub.com/?game=raspa-fortuna</loc>
+    <xhtml:link rel="canonical" href="https://raspadinhaadasorte.site/" />
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>https://goalliancehub.com/RASPAAFORTUNA.PNG</image:loc>
+      <image:title>Raspa Fortuna - Raspadinha Digital com Prêmios e PIX na Hora</image:title>
+    </image:image>
+  </url>
+</urlset>

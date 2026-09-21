@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -21,11 +22,12 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
   }, [isOpen]);
 
   if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 min-h-[100dvh] animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] overflow-y-auto bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 min-h-[100dvh] animate-in fade-in duration-200">
       <div
-        className="w-full max-w-md bg-white rounded-3xl sm:rounded-[28px] border border-[#E5E5E5] p-5 sm:p-6 shadow-2xl space-y-4 my-auto max-h-[92dvh] overflow-y-auto animate-in zoom-in-95 duration-200"
+        className="w-full max-w-md bg-white rounded-3xl sm:rounded-[28px] border border-[#E5E5E5] p-5 sm:p-6 shadow-2xl space-y-4 my-auto max-h-[88dvh] overflow-y-auto animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-3 border-b border-[#E5E5E5]">
@@ -40,6 +42,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
 
         <div>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

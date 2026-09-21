@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, Loader2, ArrowUpRight } from 'lucide-react';
+import { X, AlertCircle, Loader2, ArrowUpRight, KeyRound, RotateCcw, CheckCircle2, Plus } from 'lucide-react';
+
+interface PixKeyItem {
+  id: string;
+  type: string;
+  key: string;
+  name: string;
+  status?: string;
+}
 
 interface GameWithdrawModalProps {
   isOpen: boolean;
@@ -8,6 +16,9 @@ interface GameWithdrawModalProps {
   userBalance: number;
   minWithdraw?: number;
   loading: boolean;
+  token?: string | null;
+  userPixKey?: any;
+  userPixKeys?: any[];
 }
 
 export const GameWithdrawModal: React.FC<GameWithdrawModalProps> = ({
@@ -17,22 +28,98 @@ export const GameWithdrawModal: React.FC<GameWithdrawModalProps> = ({
   userBalance,
   minWithdraw = 100,
   loading,
+  token,
+  userPixKey,
+  userPixKeys,
 }) => {
   const [amount, setAmount] = useState<string>('');
   const [pixKey, setPixKey] = useState<string>('');
   const [cpf, setCpf] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
+  const [pixKeys, setPixKeys] = useState<PixKeyItem[]>([]);
+  const [selectedPixKeyId, setSelectedPixKeyId] = useState<string>('');
+  const [loadingKeys, setLoadingKeys] = useState<boolean>(false);
+  const [useCustomKey, setUseCustomKey] = useState<boolean>(false);
+
+  // Seed keys from user profile props
+  useEffect(() => {
+    if (userPixKeys && Array.isArray(userPixKeys) && userPixKeys.length > 0) {
+      setPixKeys(userPixKeys);
+      if (!selectedPixKeyId) {
+        setSelectedPixKeyId(userPixKeys[0].id || userPixKeys[0].key);
+        setPixKey(userPixKeys[0].key);
+        if (userPixKeys[0].type === 'CPF') setCpf(userPixKeys[0].key.replace(/\D/g, ''));
+      }
+    } else if (userPixKey && userPixKey.key) {
+      setPixKeys([userPixKey]);
+      if (!selectedPixKeyId) {
+        setSelectedPixKeyId(userPixKey.id || userPixKey.key);
+        setPixKey(userPixKey.key);
+        if (userPixKey.type === 'CPF') setCpf(userPixKey.key.replace(/\D/g, ''));
+      }
+    }
+  }, [userPixKey, userPixKeys]);
+
+  const fetchPixKeys = async () => {
+    const authToken = token || localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token');
+    if (!authToken) return;
+    setLoadingKeys(true);
+    try {
+      const res = await fetch('/api/pix-keys', {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.pixKeys)) {
+        setPixKeys(data.pixKeys);
+        if (data.pixKeys.length > 0) {
+          const first = data.pixKeys[0];
+          setSelectedPixKeyId(first.id || first.key);
+          setPixKey(first.key);
+          if (first.type === 'CPF') {
+            setCpf(first.key.replace(/\D/g, ''));
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao carregar chaves PIX no jogo:', err);
+    } finally {
+      setLoadingKeys(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setError(null);
       setAmount('');
-      setPixKey('');
-      setCpf('');
+      setUseCustomKey(false);
+      fetchPixKeys();
     }
   }, [isOpen]);
 
+  // Listen for PIX key update events across the app
+  useEffect(() => {
+    const handleKeysSync = () => {
+      fetchPixKeys();
+    };
+    window.addEventListener('pix_keys_updated', handleKeysSync);
+    window.addEventListener('focus', handleKeysSync);
+    return () => {
+      window.removeEventListener('pix_keys_updated', handleKeysSync);
+      window.removeEventListener('focus', handleKeysSync);
+    };
+  }, []);
+
   if (!isOpen) return null;
+
+  const handleSelectKey = (item: PixKeyItem) => {
+    setSelectedPixKeyId(item.id || item.key);
+    setPixKey(item.key);
+    setUseCustomKey(false);
+    if (item.type === 'CPF') {
+      setCpf(item.key.replace(/\D/g, ''));
+    }
+  };
 
   const handleSelectAllBalance = () => {
     if (userBalance > 0) {
@@ -56,8 +143,9 @@ export const GameWithdrawModal: React.FC<GameWithdrawModalProps> = ({
       return;
     }
 
-    if (!pixKey.trim()) {
-      setError('Por favor, informe a chave PIX.');
+    const keyToUse = pixKey.trim();
+    if (!keyToUse) {
+      setError('Por favor, selecione ou informe a chave PIX.');
       return;
     }
 
@@ -67,7 +155,7 @@ export const GameWithdrawModal: React.FC<GameWithdrawModalProps> = ({
     }
 
     try {
-      await onConfirmWithdraw(val, pixKey.trim());
+      await onConfirmWithdraw(val, keyToUse);
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Falha ao processar solicitação de saque.');
@@ -159,22 +247,120 @@ export const GameWithdrawModal: React.FC<GameWithdrawModalProps> = ({
             />
           </div>
 
-          {/* INPUT 2: Chave PIX */}
-          <div className="bg-[#0B1428] border border-[#182955] focus-within:border-emerald-500 rounded-2xl flex items-center px-4 py-3 gap-3 transition-colors">
-            <span className="font-mono font-black text-slate-300 text-xs sm:text-sm border-r border-[#182955] pr-3 shrink-0 select-none">
-              PIX
-            </span>
-            <input
-              type="text"
-              required
-              value={pixKey}
-              onChange={(e) => setPixKey(e.target.value)}
-              placeholder="Chave PIX (e-mail, telefone ou chave aleat...)"
-              className="w-full bg-transparent text-white font-mono font-medium text-xs sm:text-sm placeholder:text-slate-500 outline-none"
-            />
+          {/* CHAVES PIX SALVAS */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold font-mono text-slate-300 flex items-center gap-1.5 uppercase tracking-wide">
+                <KeyRound className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Chaves PIX Cadastradas</span>
+              </label>
+              <button
+                type="button"
+                onClick={fetchPixKeys}
+                title="Recarregar chaves salvas"
+                className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 py-0.5 px-2 rounded-lg bg-[#14234C]/60 hover:bg-[#14234C] transition-all cursor-pointer"
+              >
+                <RotateCcw className={`w-3 h-3 ${loadingKeys ? 'animate-spin text-cyan-300' : ''}`} />
+                <span>Atualizar</span>
+              </button>
+            </div>
+
+            {loadingKeys && pixKeys.length === 0 ? (
+              <div className="p-3 text-center bg-[#0B1428] rounded-xl border border-[#182955] flex items-center justify-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                <span className="text-xs font-mono text-slate-400">Carregando chaves salvas...</span>
+              </div>
+            ) : pixKeys.length > 0 && !useCustomKey ? (
+              <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                {pixKeys.map((item) => {
+                  const keyId = item.id || item.key;
+                  const isSelected = selectedPixKeyId === keyId && !useCustomKey;
+                  return (
+                    <div
+                      key={keyId}
+                      onClick={() => handleSelectKey(item)}
+                      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                        isSelected
+                          ? 'bg-[#14234C] border-emerald-500 shadow-sm ring-1 ring-emerald-500/50'
+                          : 'bg-[#0B1428] border-[#182955] hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                            isSelected ? 'border-emerald-400 bg-emerald-500' : 'border-slate-500'
+                          }`}
+                        >
+                          {isSelected && <div className="w-1.5 h-1.5 bg-black rounded-full" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-black font-mono text-white truncate">{item.name}</span>
+                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 bg-[#1A284D] text-emerald-400 rounded border border-emerald-500/20">
+                              {item.type}
+                            </span>
+                          </div>
+                          <p className="text-[11px] font-mono text-slate-300 truncate">{item.key}</p>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 pl-2">
+                        <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                          Pronta
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseCustomKey(true);
+                    setSelectedPixKeyId('');
+                    setPixKey('');
+                  }}
+                  className="text-[11px] font-mono text-slate-400 hover:text-white underline pt-1 block cursor-pointer"
+                >
+                  + Digitar outra chave PIX
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {pixKeys.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseCustomKey(false);
+                      if (pixKeys.length > 0) {
+                        handleSelectKey(pixKeys[0]);
+                      }
+                    }}
+                    className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 underline block cursor-pointer"
+                  >
+                    ← Voltar para chaves salvas ({pixKeys.length})
+                  </button>
+                )}
+
+                {/* INPUT 2: Chave PIX Manual */}
+                <div className="bg-[#0B1428] border border-[#182955] focus-within:border-emerald-500 rounded-2xl flex items-center px-4 py-3 gap-3 transition-colors">
+                  <span className="font-mono font-black text-slate-300 text-xs sm:text-sm border-r border-[#182955] pr-3 shrink-0 select-none">
+                    PIX
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    value={pixKey}
+                    onChange={(e) => setPixKey(e.target.value)}
+                    placeholder="Chave PIX (CPF, e-mail, telefone ou aleatória)"
+                    className="w-full bg-transparent text-white font-mono font-medium text-xs sm:text-sm placeholder:text-slate-500 outline-none"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* INPUT 3: CPF */}
+          {/* INPUT 3: CPF do Titular */}
           <div className="bg-[#0B1428] border border-[#182955] focus-within:border-emerald-500 rounded-2xl flex items-center px-4 py-3 gap-3 transition-colors">
             <span className="font-mono font-black text-slate-300 text-xs sm:text-sm border-r border-[#182955] pr-3 shrink-0 select-none">
               CPF

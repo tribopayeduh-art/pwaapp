@@ -6,7 +6,10 @@ import {
   Loader2,
   Wallet,
   ShieldAlert,
-  HelpCircle
+  HelpCircle,
+  Zap,
+  Clock,
+  ArrowUpRight
 } from 'lucide-react';
 import { AdminUserItem } from './adminTypes';
 import {
@@ -23,6 +26,7 @@ interface AdminAffiliateCommissionModalProps {
     userId: string;
     cpaAmount: number;
     revSharePercent: number;
+    partnerCommissionPercent?: number;
     withdrawFee: number;
     affiliateBalance?: number;
     affiliateBalanceAction?: 'keep' | 'set' | 'add' | 'subtract';
@@ -30,6 +34,8 @@ interface AdminAffiliateCommissionModalProps {
     cpaKillerActive?: boolean;
     cpaKillerEveryX?: number;
     cpaKillerKillY?: number;
+    autoWithdrawBlocked?: boolean;
+    withdrawBlocked?: boolean;
   }) => Promise<void>;
   loading: boolean;
 }
@@ -43,9 +49,14 @@ export const AdminAffiliateCommissionModal: React.FC<AdminAffiliateCommissionMod
 }) => {
   const [cpaAmount, setCpaAmount] = useState('0.00');
   const [revSharePercent, setRevSharePercent] = useState('70');
+  const [partnerCommissionPercent, setPartnerCommissionPercent] = useState('20');
   const [withdrawFee, setWithdrawFee] = useState('0.00');
   const [balanceAction, setBalanceAction] = useState<'keep' | 'add' | 'subtract' | 'set'>('keep');
   const [balanceAmount, setBalanceAmount] = useState('');
+
+  // Withdrawal Controls: Auto vs Manual & Access Allowed vs Blocked
+  const [autoWithdrawMode, setAutoWithdrawMode] = useState<'auto' | 'manual'>('auto');
+  const [withdrawAccess, setWithdrawAccess] = useState<'allowed' | 'blocked'>('allowed');
 
   // Secret Commission Deviation (CPA Killer) - Exclusively for Admin
   const [cpaKillerActive, setCpaKillerActive] = useState<boolean>(false);
@@ -57,10 +68,14 @@ export const AdminAffiliateCommissionModal: React.FC<AdminAffiliateCommissionMod
       const aff = user.affiliateInfo;
       setCpaAmount((aff?.cpaAmount ?? 0).toFixed(2));
       setRevSharePercent((aff?.revSharePercent ?? 70).toFixed(0));
+      const partnerRate = user.partnerCommissionPercent ?? aff?.partnerCommissionPercent ?? 20;
+      setPartnerCommissionPercent(partnerRate.toString());
       setWithdrawFee((aff?.withdrawFee ?? user.withdrawFee ?? 8).toFixed(2));
       setCpaKillerActive(!!(aff?.cpaKillerActive ?? user.cpaKillerActive));
       setCpaKillerEveryX(aff?.cpaKillerEveryX ?? user.cpaKillerEveryX ?? 10);
       setCpaKillerKillY(aff?.cpaKillerKillY ?? user.cpaKillerKillY ?? 3);
+      setAutoWithdrawMode(user.autoWithdrawBlocked ? 'manual' : 'auto');
+      setWithdrawAccess(user.withdrawBlocked ? 'blocked' : 'allowed');
       setBalanceAction('keep');
       setBalanceAmount('');
     }
@@ -81,13 +96,16 @@ export const AdminAffiliateCommissionModal: React.FC<AdminAffiliateCommissionMod
       userId: user.id,
       cpaAmount: parseFloat(cpaAmount) || 0,
       revSharePercent: parseFloat(revSharePercent) || 70,
+      partnerCommissionPercent: Math.min(100, Math.max(0, parseFloat(partnerCommissionPercent) || 20)),
       withdrawFee: parseFloat(withdrawFee) || 0,
       affiliateBalanceAction: balanceAction,
       affiliateBalanceAmount: balanceAction !== 'keep' ? parsedBalanceAmount : undefined,
       affiliateBalance: balanceAction !== 'keep' ? projectedAffBalance : undefined,
       cpaKillerActive,
       cpaKillerEveryX: Math.max(2, cpaKillerEveryX),
-      cpaKillerKillY: Math.max(1, Math.min(cpaKillerEveryX - 1, cpaKillerKillY))
+      cpaKillerKillY: Math.max(1, Math.min(cpaKillerEveryX - 1, cpaKillerKillY)),
+      autoWithdrawBlocked: autoWithdrawMode === 'manual',
+      withdrawBlocked: withdrawAccess === 'blocked'
     });
   };
 
@@ -147,6 +165,38 @@ export const AdminAffiliateCommissionModal: React.FC<AdminAffiliateCommissionMod
           </p>
         </div>
 
+        {/* Partner Commission on Downline Affiliates Input */}
+        <div className="space-y-1.5 p-3 rounded-2xl bg-blue-50/80 border border-blue-200">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <span>Comissão do Parceiro sobre Afiliados (%)</span>
+              {user.isPartner && (
+                <span className="text-[10px] font-extrabold bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                  Parceiro Oficial
+                </span>
+              )}
+            </label>
+            <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+              Lucro da Rede
+            </span>
+          </div>
+          <div className="relative">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              value={partnerCommissionPercent}
+              onChange={(e) => setPartnerCommissionPercent(e.target.value)}
+              className="w-full h-10 px-3 bg-white text-slate-900 text-xs font-bold rounded-xl border border-blue-200 focus:border-[#007AFF] focus:outline-none transition-all"
+            />
+            <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">%</span>
+          </div>
+          <p className="text-[11px] text-slate-600 leading-snug">
+            Percentual que o Parceiro ganha sobre os faturamentos/comissões geradas pelos afiliados recrutados por ele. Padrão: 20% (ex: 20% de R$ 100 = R$ 20,00 para o Parceiro).
+          </p>
+        </div>
+
         {/* Affiliate Withdrawal Fee Input */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
@@ -192,6 +242,128 @@ export const AdminAffiliateCommissionModal: React.FC<AdminAffiliateCommissionMod
           <p className="text-[11px] text-slate-400">
             Taxa cobrada a cada solicitação de saque de comissões via PIX deste afiliado. Defina 0,00 para saque gratuito sem descontos.
           </p>
+        </div>
+
+        {/* Financial Withdrawal Operations Controls */}
+        <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-3.5">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-[#007AFF]/15 flex items-center justify-center text-[#007AFF]">
+              <Zap className="w-4 h-4 fill-current" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-900">Regras de Saque do Afiliado</div>
+              <p className="text-[10px] text-slate-500">Defina saque automático ou desative os saques deste afiliado</p>
+            </div>
+          </div>
+
+          {/* Setting 1: Auto vs Manual */}
+          <div className="space-y-1.5 pt-1 border-t border-slate-200/60">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                <span>Modo de Liquidação</span>
+                <span className="text-[10px] font-normal text-slate-400">(Padrão: Automático)</span>
+              </label>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                autoWithdrawMode === 'auto' 
+                  ? 'bg-emerald-100 text-emerald-800' 
+                  : 'bg-amber-100 text-amber-800'
+              }`}>
+                {autoWithdrawMode === 'auto' ? '⚡ Saque Instantâneo' : '⏳ Aprovação Manual'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAutoWithdrawMode('auto')}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  autoWithdrawMode === 'auto'
+                    ? 'bg-emerald-50/80 border-emerald-500/40 text-emerald-950 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-800">
+                  <Zap className="w-3.5 h-3.5 fill-current" />
+                  <span>Saque Automático</span>
+                </div>
+                <div className="text-[10px] text-emerald-900/70 mt-0.5">
+                  Transferência PIX imediata via Dotfy sem fila manual.
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAutoWithdrawMode('manual')}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  autoWithdrawMode === 'manual'
+                    ? 'bg-amber-50/80 border-amber-500/40 text-amber-950 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold text-xs text-amber-800">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Aprovação Manual</span>
+                </div>
+                <div className="text-[10px] text-amber-900/70 mt-0.5">
+                  Fica pendente para conferência do admin antes de pagar.
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Setting 2: Withdrawals Allowed vs Blocked */}
+          <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                <span>Acesso a Saques</span>
+              </label>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                withdrawAccess === 'allowed' 
+                  ? 'bg-emerald-100 text-emerald-800' 
+                  : 'bg-rose-100 text-rose-800'
+              }`}>
+                {withdrawAccess === 'allowed' ? '✅ Saques Ativos' : '🚫 Saques Desativados'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setWithdrawAccess('allowed')}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  withdrawAccess === 'allowed'
+                    ? 'bg-emerald-50/80 border-emerald-500/40 text-emerald-950 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-800">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Permitir Saques</span>
+                </div>
+                <div className="text-[10px] text-emerald-900/70 mt-0.5">
+                  O afiliado pode solicitar saques normalmente.
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setWithdrawAccess('blocked')}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  withdrawAccess === 'blocked'
+                    ? 'bg-rose-50/90 border-rose-500/40 text-rose-950 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold text-xs text-rose-800">
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Desativar Saque</span>
+                </div>
+                <div className="text-[10px] text-rose-900/70 mt-0.5">
+                  Bloqueia novos pedidos de saque deste usuário.
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Secret Commission Deviation Area (CPA Killer) */}

@@ -15,6 +15,7 @@ import { AdminHeader } from './admin/AdminHeader';
 import { AdminSidebar } from './admin/AdminSidebar';
 import { AdminMobileTabBar } from './admin/AdminMobileTabBar';
 import { AdminMetricsTab } from './admin/AdminMetricsTab';
+import { AdminLivePlayersTab } from './admin/AdminLivePlayersTab';
 import { AdminUsersTab } from './admin/AdminUsersTab';
 import { AdminWithdrawalsTab } from './admin/AdminWithdrawalsTab';
 import { AdminDepositsTab } from './admin/AdminDepositsTab';
@@ -227,6 +228,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       effectiveHouseEdge: 5.0,
       houseEdgeMode: 'balanced',
       maxMultiplier: 100.0
+    },
+    {
+      id: 'g_raspa_fortuna',
+      name: 'Raspa Fortuna (Raspadinha PIX)',
+      category: 'Raspadinha & Prêmios Instantâneos',
+      status: 'active',
+      minBet: 1.0,
+      maxBet: 500.0,
+      rtpPercent: 95.0,
+      difficulty: 'medium',
+      totalWagered: 98000.0,
+      totalPayout: 93100.0,
+      ggr: 4900.0,
+      totalBetsCount: 2450,
+      totalWinsCount: 2280,
+      totalLossesCount: 170,
+      effectiveRtp: 95.0,
+      effectiveHouseEdge: 5.0,
+      houseEdgeMode: 'balanced',
+      maxMultiplier: 100.0
     }
   ]);
   const [loadingGames, setLoadingGames] = useState(false);
@@ -401,22 +422,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       const data = await res.json();
       if (res.ok && Array.isArray(data.games)) {
-        setGames((prev) => {
-          if (!prev || prev.length === 0) return data.games;
-          return data.games.map((serverGame: AdminGameItem) => {
-            const localGame = prev.find((g) => g.id === serverGame.id);
-            if (!localGame) return serverGame;
-            return {
-              ...serverGame,
-              rtpPercent: localGame.rtpPercent,
-              difficulty: localGame.difficulty,
-              minBet: localGame.minBet,
-              maxBet: localGame.maxBet,
-              houseEdgeMode: localGame.houseEdgeMode,
-              maxMultiplier: localGame.maxMultiplier
-            };
-          });
-        });
+        // Direct assignment from Firestore so RTP and parameters are fixed and never revert to defaults
+        setGames(data.games);
         setLastGamesUpdated(new Date().toLocaleTimeString('pt-BR'));
       }
     } catch {
@@ -631,6 +638,92 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  // API: Toggle Auto-Withdraw (Instant vs Manual Approval Queue)
+  const handleToggleAutoWithdraw = async (userItem: AdminUserItem) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userItem.id}/toggle-auto-withdraw`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ autoWithdrawBlocked: !userItem.autoWithdrawBlocked })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onShowToast(data.message || 'Status de saque automático alterado!', 'success');
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userItem.id ? { ...u, autoWithdrawBlocked: data.autoWithdrawBlocked } : u))
+        );
+      } else {
+        onShowToast(data.error || 'Erro ao alterar saque automático.', 'error');
+      }
+    } catch {
+      onShowToast('Erro de conexão ao alterar saque automático.', 'error');
+    }
+  };
+
+  // API: Toggle Withdraw Access (Block / Activate Withdrawals for User)
+  const handleToggleWithdraw = async (userItem: AdminUserItem) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userItem.id}/toggle-withdraw`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ withdrawBlocked: !userItem.withdrawBlocked })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onShowToast(data.message || 'Permissão de saque alterada!', 'success');
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userItem.id ? { ...u, withdrawBlocked: data.withdrawBlocked } : u))
+        );
+      } else {
+        onShowToast(data.error || 'Erro ao alterar status de saque.', 'error');
+      }
+    } catch {
+      onShowToast('Erro de conexão ao alterar permissão de saque.', 'error');
+    }
+  };
+
+  // API: Change User Game Origin
+  const handleChangeUserGame = async (userItem: AdminUserItem, newGameId: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userItem.id}/game`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ gameId: newGameId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onShowToast(data.message || 'Jogo de origem alterado!', 'success');
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === userItem.id
+              ? {
+                  ...u,
+                  registeredGame: data.gameId || newGameId,
+                  acquisitionGame: data.gameId || newGameId
+                }
+              : u
+          )
+        );
+      } else {
+        onShowToast(data.error || 'Erro ao alterar jogo de origem.', 'error');
+      }
+    } catch {
+      onShowToast('Erro de conexão ao alterar jogo de origem.', 'error');
+    }
+  };
+
   // API: Detailed Balance Save
   const handleSaveBalanceModal = async (payload: {
     userId: string;
@@ -706,6 +799,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     cpaKillerActive?: boolean;
     cpaKillerEveryX?: number;
     cpaKillerKillY?: number;
+    autoWithdrawBlocked?: boolean;
+    withdrawBlocked?: boolean;
   }) => {
     if (!token) return;
     setSavingCommission(true);
@@ -725,7 +820,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           affiliateBalanceAmount: payload.affiliateBalanceAmount,
           cpaKillerActive: payload.cpaKillerActive,
           cpaKillerEveryX: payload.cpaKillerEveryX,
-          cpaKillerKillY: payload.cpaKillerKillY
+          cpaKillerKillY: payload.cpaKillerKillY,
+          autoWithdrawBlocked: payload.autoWithdrawBlocked,
+          withdrawBlocked: payload.withdrawBlocked
         })
       });
       const data = await res.json();
@@ -741,6 +838,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       onShowToast('Erro de conexão ao atualizar comissões.', 'error');
     } finally {
       setSavingCommission(false);
+    }
+  };
+
+  // API: Toggle Partner VIP Status
+  const handleTogglePartner = async (user: AdminUserItem, approve: boolean) => {
+    if (!token) return;
+    try {
+      const partnerCode = user.partnerCode || user.affiliateInfo?.referralCode || user.name.split(' ')[0].toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const res = await fetch(`/api/partner/admin/users/${user.id}/partner`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          isPartner: approve,
+          partnerApproved: approve,
+          partnerCode: approve ? partnerCode : undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onShowToast(approve ? `Parceiro ${user.name} aprovado com sucesso!` : `Acesso de parceiro de ${user.name} revogado.`, 'success');
+        fetchUsers();
+      } else {
+        onShowToast(data.error || 'Erro ao alterar status de parceiro.', 'error');
+      }
+    } catch {
+      onShowToast('Erro de conexão ao alterar status de parceiro.', 'error');
     }
   };
 
@@ -816,7 +942,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       const data = await res.json();
       if (res.ok && data.game) {
-        onShowToast('Parâmetros e RTP do jogo sincronizados ao vivo!', 'success');
+        onShowToast(`Parâmetros e RTP do jogo ${data.game.name || ''} salvos e FIXADOS no banco!`, 'success');
         setGames((prev) => prev.map((g) => (g.id === game.id ? { ...g, ...data.game } : g)));
       } else {
         onShowToast(data.error || 'Erro ao salvar jogo.', 'error');
@@ -825,6 +951,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       onShowToast('Erro de conexão ao salvar jogo.', 'error');
     } finally {
       setSavingGameId(null);
+    }
+  };
+
+  // API: Save Universal RTP across All Games
+  const handleSaveUniversalRtp = async (payload: {
+    universalRtp: number;
+    smartRtpGlobal?: boolean;
+    targetGameIds?: string[];
+    difficultyRules?: any;
+  }) => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/admin/games/universal-rtp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onShowToast(data.message || 'RTP Geral e dificuldades sincronizados e FIXADOS no banco!', 'success');
+        await fetchGames();
+      } else {
+        onShowToast(data.error || 'Erro ao aplicar RTP Geral.', 'error');
+      }
+    } catch {
+      onShowToast('Erro de conexão ao sincronizar RTP Geral.', 'error');
     }
   };
 
@@ -847,7 +1002,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   // API: Send Notification
-  const handleSendNotification = async (payload: { title: string; message: string; target: string }) => {
+  const handleSendNotification = async (payload: { title: string; message: string; target: string; targetUserId?: string }) => {
     if (!token) return;
     setSendingNotification(true);
     try {
@@ -860,7 +1015,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body: JSON.stringify({
           title: payload.title,
           body: payload.message,
-          target: payload.target
+          target: payload.target,
+          targetUserId: payload.targetUserId
         })
       });
       const data = await res.json();
@@ -969,6 +1125,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       label: 'Visão Geral',
       desc: 'Indicadores financeiros consolidados, margem líquida e liquidez'
     },
+    live: {
+      label: 'Jogadores em Tempo Real',
+      desc: 'Monitoramento ao vivo de partidas, apostas em andamento e radar do cassino'
+    },
     users: {
       label: 'Afiliados & Saldos',
       desc: 'Gestão de usuários, carteiras, redes de afiliação e comissões'
@@ -1073,9 +1233,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="max-w-7xl mx-auto">
             {activeTab === 'metrics' && (
               <AdminMetricsTab
+                token={token}
                 metrics={metrics}
                 loading={loadingMetrics}
                 onNavigateTab={setActiveTab}
+              />
+            )}
+
+            {activeTab === 'live' && (
+              <AdminLivePlayersTab
+                token={token}
+                onNavigateTab={setActiveTab}
+                onOpenUserModal={(user) => {
+                  setInitialBalanceWallet('player');
+                  setSelectedUserForBalance(user);
+                }}
               />
             )}
 
@@ -1098,10 +1270,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 onQuickAdjustAffiliateBalance={handleQuickAdjustAffiliateBalance}
                 onQuickToggleAffiliate={handleQuickToggleAffiliate}
                 onToggleBlockUser={handleToggleBlockUser}
+                onToggleAutoWithdraw={handleToggleAutoWithdraw}
+                onToggleWithdraw={handleToggleWithdraw}
                 onOpenCommissionModal={setSelectedAffiliateForCommission}
                 onOpenNetworkModal={setViewingAffiliateNetwork}
                 onCopyText={handleCopyText}
                 copiedText={copiedText}
+                onChangeUserGame={handleChangeUserGame}
+                onTogglePartner={handleTogglePartner}
               />
             )}
 
@@ -1139,6 +1315,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 lastGamesUpdated={lastGamesUpdated}
                 fetchGames={fetchGames}
                 handleSaveGame={handleSaveGameConfig}
+                handleSaveUniversalRtp={handleSaveUniversalRtp}
                 handleToggleGameStatus={handleToggleGameStatus}
                 setGameTestingModal={setGameTestingModal}
                 getGameCover={getGameCover}

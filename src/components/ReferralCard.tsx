@@ -49,47 +49,53 @@ export const ReferralCard: React.FC<ReferralCardProps> = ({ affiliateInfo, onCop
         </span>
       </div>
 
-      <div className="affiliate-stat-grid grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="bg-white p-3.5 rounded-2xl border border-[#E5E5E5] text-center">
-          <div className="w-8 h-8 rounded-xl bg-[#F5F5F5] flex items-center justify-center mx-auto mb-1.5 text-[#111111]">
+      <div className="affiliate-stat-grid grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-[#E5E5E5] text-center flex flex-col justify-center min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-[#F5F5F5] flex items-center justify-center mx-auto mb-1.5 text-[#111111] shrink-0">
             <Users className="w-4 h-4 stroke-[2]" />
           </div>
-          <span className="text-[10px] text-[#737373] font-medium block">Indicações</span>
-          <span className="font-bold text-sm text-[#111111]">{affiliateInfo.indicationsCount}</span>
+          <span className="text-[9px] sm:text-[10px] text-[#737373] font-medium block truncate">Indicações</span>
+          <span className="font-extrabold text-xs sm:text-sm md:text-base text-[#111111] truncate block">{affiliateInfo.indicationsCount}</span>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-[#E5E5E5] text-center">
-          <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center mx-auto mb-1.5 text-emerald-600">
+        <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-[#E5E5E5] text-center flex flex-col justify-center min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center mx-auto mb-1.5 text-emerald-600 shrink-0">
             <Wallet className="w-4 h-4 stroke-[2]" />
           </div>
-          <span className="text-[10px] text-[#737373] font-medium block">Depósitos da Rede</span>
-          <span className="font-bold text-xs text-emerald-600">{formatCurrency(affiliateInfo.totalNetworkDeposits || 0)}</span>
+          <span className="text-[9px] sm:text-[10px] text-[#737373] font-medium block truncate">Depósitos da Rede</span>
+          <span className="font-extrabold text-[11px] sm:text-xs md:text-sm text-emerald-600 truncate block" title={formatCurrency(affiliateInfo.totalNetworkDeposits || 0)}>
+            {formatCurrency(affiliateInfo.totalNetworkDeposits || 0)}
+          </span>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-[#E5E5E5] text-center">
-          <div className="w-8 h-8 rounded-xl bg-[#F5F5F5] flex items-center justify-center mx-auto mb-1.5 text-[#111111]">
+        <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-[#E5E5E5] text-center flex flex-col justify-center min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-[#F5F5F5] flex items-center justify-center mx-auto mb-1.5 text-[#111111] shrink-0">
             <DollarSign className="w-4 h-4 stroke-[2]" />
           </div>
-          <span className="text-[10px] text-[#737373] font-medium block">Comissão Total</span>
-          <span className="font-bold text-xs text-[#111111]">{formatCurrency(affiliateInfo.commissionTotal)}</span>
+          <span className="text-[9px] sm:text-[10px] text-[#737373] font-medium block truncate">Comissão Total</span>
+          <span className="font-extrabold text-[11px] sm:text-xs md:text-sm text-[#111111] truncate block" title={formatCurrency(affiliateInfo.commissionTotal)}>
+            {formatCurrency(affiliateInfo.commissionTotal)}
+          </span>
         </div>
 
-        <div className="bg-white p-3.5 rounded-2xl border border-[#E5E5E5] text-center flex flex-col justify-between">
-          <div>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center mx-auto mb-1.5 text-emerald-600">
+        <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-[#E5E5E5] text-center flex flex-col justify-between min-w-0">
+          <div className="min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center mx-auto mb-1.5 text-emerald-600 shrink-0">
               <Wallet className="w-4 h-4 stroke-[2]" />
             </div>
-            <span className="text-[10px] text-[#737373] font-medium block">Saldo de Afiliado</span>
-            <span className="font-bold text-xs text-emerald-700">{formatCurrency(affiliateInfo.affiliateBalance)}</span>
+            <span className="text-[9px] sm:text-[10px] text-[#737373] font-medium block truncate">Saldo de Afiliado</span>
+            <span className="font-extrabold text-[11px] sm:text-xs md:text-sm text-emerald-700 truncate block" title={formatCurrency(affiliateInfo.affiliateBalance)}>
+              {formatCurrency(affiliateInfo.affiliateBalance)}
+            </span>
           </div>
           {onOpenWithdraw && (
             <button
               onClick={onOpenWithdraw}
               type="button"
-              className="mt-1.5 py-1 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
+              className="mt-1.5 py-1 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs w-full shrink-0"
             >
               <ArrowUpRight className="w-3 h-3" />
-              Sacar
+              <span>Sacar</span>
             </button>
           )}
         </div>

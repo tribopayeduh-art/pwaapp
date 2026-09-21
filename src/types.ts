@@ -12,12 +12,60 @@ export interface AdminPermissions {
   canManageDotfy?: boolean;
 }
 
+export interface InfluencerCommissionRequest {
+  id: string;
+  affiliateId: string;
+  affiliateUserId: string;
+  influencerUserId: string;
+  influencerName: string;
+  influencerEmail: string;
+  amount: number;
+  approvedAmount?: number;
+  pixKey: string;
+  pixKeyType?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  processedAt?: string;
+  rejectReason?: string;
+  gameOrigin?: string;
+  totalDepositsBrought?: number;
+  paidDepositsCount?: number;
+  paidDepositsAmount?: number;
+  referralsCount?: number;
+}
+
+export interface PlayerWithdrawalRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userPhone?: string;
+  amount: number;
+  fee?: number;
+  netAmount?: number;
+  status: 'pending' | 'approved' | 'rejected';
+  pixKey?: string;
+  pixKeyType?: string;
+  gameOrigin?: string;
+  description?: string;
+  createdAt: string;
+  processedAt?: string;
+  rejectReason?: string;
+  approvedByName?: string;
+  totalDeposits?: number;
+  paidDeposits?: number;
+  playerBalance?: number;
+  isInfluencer?: boolean;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   phone: string;
   affiliateId?: string;
+  parentAffiliateId?: string;
+  parentAffiliateUserId?: string;
   referralCode: string;
   balance: number;
   realBalance?: number;
@@ -25,6 +73,8 @@ export interface User {
   minWithdraw?: number;
   withdrawFee?: number;
   isInfluencer?: boolean;
+  influencerRate?: number;
+  influencerBalance?: number;
   cpaKillerAllowed?: boolean;
   cpaKillerActive?: boolean;
   cpaKillerEveryX?: number;
@@ -32,6 +82,18 @@ export interface User {
   cpaCounter?: number;
   role?: 'user' | 'admin' | 'superadmin' | 'affiliate';
   isBlocked?: boolean;
+  isPartner?: boolean;
+  partnerApproved?: boolean;
+  partnerRequested?: boolean;
+  partnerRequestedAt?: string;
+  partnerCode?: string;
+  partnerId?: string;
+  partnerUserId?: string;
+  autoWithdrawBlocked?: boolean;
+  withdrawBlocked?: boolean;
+  hasAffiliateDemoBalance?: boolean;
+  affiliateDemoCreditedAt?: string;
+  affiliateDemoCreditedBy?: string;
   adminPermissions?: AdminPermissions;
   pixKey?: {
     id?: string;
@@ -51,6 +113,8 @@ export interface IndicationItem {
   referredBalance?: number;
   totalDeposited?: number;
   isInfluencer?: boolean;
+  influencerRate?: number;
+  influencerBalance?: number;
   subReferralsCount?: number;
   subNetworkDeposits?: number;
   subNetworkBalances?: number;
@@ -58,6 +122,18 @@ export interface IndicationItem {
   ftdCount?: number;
   lastGameId?: string;
   lastGameName?: string;
+  registeredGame?: string;
+  registeredGameName?: string;
+  registeredGameTag?: string;
+  referredByInfluencerName?: string;
+  referredByInfluencerId?: string;
+  isFromInfluencer?: boolean;
+  isPartner?: boolean;
+  partnerApproved?: boolean;
+  partnerCode?: string;
+  partnerRequested?: boolean;
+  withdrawBlocked?: boolean;
+  hasAffiliateDemoBalance?: boolean;
   createdAt: string;
 }
 
@@ -76,6 +152,7 @@ export interface AffiliateInfo {
   totalNetworkDeposits?: number;
   totalFtds?: number;
   indications?: IndicationItem[];
+  influencerRequests?: InfluencerCommissionRequest[];
   commissions?: AffiliateCommissionItem[];
   cpaKillerAllowed?: boolean;
   cpaKillerActive?: boolean;
@@ -194,3 +271,101 @@ export interface WhatsAppLog {
   messagePreview: string;
   sentAt: string;
 }
+
+export interface PartnerAffiliateStats {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  referralCode: string;
+  balance: number;
+  totalDeposited: number;
+  paidDepositsCount: number;
+  totalWithdrawn: number;
+  totalPlayersInvited: number;
+  totalVolumeWagered: number;
+  commissionGeneratedForPartner: number;
+  autoWithdrawBlocked: boolean;
+  status: 'active' | 'suspended' | 'blocked' | 'idle';
+  lastActivityAt?: string;
+  createdAt: string;
+  registeredGame?: string;
+  isOnlineNow?: boolean;
+  revSharePercent?: number;
+  partnerCutPercent?: number;
+  recentActivity?: Array<{
+    id: string;
+    type: 'deposit' | 'bet' | 'win' | 'withdrawal' | 'signup';
+    description: string;
+    amount?: number;
+    createdAt: string;
+    gameName?: string;
+  }>;
+}
+
+export interface PartnerDashboardData {
+  partner: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    partnerCode: string;
+    partnerInviteLink: string;
+    partnerShortLink?: string;
+    partnerDirectLink?: string;
+    partnerPortalLink?: string;
+    isPartner: boolean;
+    partnerApproved: boolean;
+    partnerCommissionPercent?: number;
+    revSharePercent?: number;
+    commissionTotal?: number;
+    partnerBalance?: number;
+  };
+  metrics: {
+    totalAffiliates: number;
+    activeAffiliatesToday: number;
+    totalPlayersInNetwork: number;
+    totalDepositedByNetwork: number;
+    totalWageredByNetwork: number;
+    totalPartnerCommissions: number;
+    netRevenue: number;
+    ggr: number;
+    realtimeActivePlayers: number;
+    blockedWithdrawalsCount: number;
+    ftdCount: number;
+    conversionRate: number;
+  };
+  affiliates: PartnerAffiliateStats[];
+  rankings: Array<{
+    rank: number;
+    affiliateId: string;
+    name: string;
+    email: string;
+    totalDeposits: number;
+    playersCount: number;
+    totalWagered: number;
+    commissionGenerated: number;
+    score: number;
+    tierBadge?: 'gold' | 'silver' | 'bronze' | 'elite' | 'standard';
+  }>;
+  realtimeFeed: Array<{
+    id: string;
+    affiliateName: string;
+    playerName?: string;
+    type: 'deposit' | 'bet' | 'win' | 'withdrawal' | 'signup';
+    amount?: number;
+    gameName?: string;
+    multiplier?: number;
+    status?: string;
+    timestamp: string;
+  }>;
+  dailyTimeline?: Array<{
+    date: string;
+    displayDate: string;
+    deposits: number;
+    withdrawals: number;
+    newAffiliates: number;
+    activePlayers: number;
+  }>;
+}
+

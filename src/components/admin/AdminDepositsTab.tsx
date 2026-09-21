@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   CreditCard,
   TrendingUp,
@@ -17,6 +17,7 @@ import {
   IOSBadge,
   IOSSearchBar
 } from './IOSComponents';
+import { Pagination } from '../Pagination';
 
 interface AdminDepositsTabProps {
   deposits: AdminDepositItem[];
@@ -65,6 +66,20 @@ export const AdminDepositsTab: React.FC<AdminDepositsTabProps> = ({
       );
     });
   }, [deposits, filter, searchQuery]);
+
+  // 40 deposits per page pagination
+  const PAGE_SIZE = 40;
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Reset page when filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchQuery]);
+
+  const paginatedDeposits = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredDeposits.slice(start, start + PAGE_SIZE);
+  }, [filteredDeposits, currentPage, PAGE_SIZE]);
 
   const filterOptions = [
     { id: 'all' as const, label: 'Todos', count: deposits.length },
@@ -141,8 +156,9 @@ export const AdminDepositsTab: React.FC<AdminDepositsTabProps> = ({
             <p className="text-xs text-slate-400 font-medium">Ajuste os filtros para visualizar outros registros.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
               <thead className="bg-[#F2F2F7] text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-black/[0.04]">
                 <tr>
                   <th className="py-3 px-4">Usuário</th>
@@ -154,7 +170,7 @@ export const AdminDepositsTab: React.FC<AdminDepositsTabProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/[0.04]">
-                {filteredDeposits.map((item) => {
+                {paginatedDeposits.map((item) => {
                   const isApproved = item.status === 'approved';
                   const isPending = item.status === 'pending';
 
@@ -225,7 +241,21 @@ export const AdminDepositsTab: React.FC<AdminDepositsTabProps> = ({
               </tbody>
             </table>
           </div>
-        )}
+
+          {/* 40 per page Pagination */}
+          {filteredDeposits.length > 0 && (
+            <div className="p-4 border-t border-black/[0.05] bg-slate-50/50">
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filteredDeposits.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setCurrentPage}
+                itemLabel="depósitos"
+              />
+            </div>
+          )}
+        </>
+      )}
       </IOSCard>
     </div>
   );

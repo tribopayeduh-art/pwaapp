@@ -9,6 +9,8 @@ import { MoreView } from './components/MoreView';
 import { AffiliatesView } from './components/AffiliatesView';
 import { MembersAreaView } from './components/MembersAreaView';
 import { CampaignsView } from './components/CampaignsView';
+import { PartnerPanelView } from './components/partner/PartnerPanelView';
+import { PartnerRequestView } from './components/partner/PartnerRequestView';
 import { LoginView } from './components/LoginView';
 import { RegisterView } from './components/RegisterView';
 import { DepositModal } from './components/DepositModal';
@@ -21,6 +23,12 @@ import { BannerModal } from './components/BannerModal';
 import { Toast, ToastType } from './components/Toast';
 import { trackDepositInitiated, trackDepositSuccess, trackRegistration } from './lib/tracking';
 import {
+  getTrackedGame,
+  getGameTrackingPayload,
+  setTrackedGame,
+  normalizeGameId,
+} from './lib/gameTracking';
+import {
   registerServiceWorker,
   subscribeToWebPush,
   triggerSaleNotification,
@@ -28,6 +36,7 @@ import {
   getNotificationState,
   playSaleSound,
 } from './lib/pwaNotification';
+import { applyGameSEO } from './lib/seo';
 import { Loader2, Gamepad2, ShieldCheck, ExternalLink, Wallet, Activity, Layers3 } from 'lucide-react';
 import logoImg from './components/logo.webp';
 import { GAME_ASSETS, publicAsset } from './config/gameAssets';
@@ -36,7 +45,7 @@ const AdminPanel = lazy(() => import('./components/AdminPanel').then((module) =>
 const BlockPuzzleApp = lazy(() => import('./game/BlockPuzzleApp').then((module) => ({ default: module.BlockPuzzleApp })));
 const LazyScreen = () => <div className="min-h-screen bg-white grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-zinc-800" /></div>;
 
-type AppContext = 'alliance-hub' | 'blockwin' | 'zumbla' | 'gen-dino' | 'raspa-fortuna';
+type AppContext = 'alliance-hub' | 'blockwin' | 'zumbla' | 'gen-dino' | 'raspa-fortuna' | 'subwaypay';
 
 const detectAppContext = (): AppContext => {
   const host = window.location.hostname.toLowerCase();
@@ -46,20 +55,28 @@ const detectAppContext = (): AppContext => {
 
   if (host.includes('goalliancehub')) return 'alliance-hub';
   if (
-    host.includes('zumblapay') ||
-    site === 'raspa-fortuna' || site === 'raspafortuna' || site === 'raspa' || host.includes('raspafortuna') ||
-    search.includes('site=raspa') || search.includes('game=raspa') || pathname.startsWith('/raspa')
-  ) return 'raspa-fortuna';
+    host.includes('joguesubway') || host.includes('subwaypay') || host.includes('subway') ||
+    site === 'subway' || site === 'subwaypay' || site === 'subway-pay' || site === 'joguesubway' ||
+    search.includes('site=subway') || search.includes('game=subway') || search.includes('site=joguesubway') ||
+    pathname.startsWith('/subway') ||
+    host.includes('zumblapay') || host.includes('zumbla') ||
+    site === 'zumbla' || site === 'zumbla-win' || site === 'zumblapay' ||
+    search.includes('site=zumbla') || search.includes('game=zumbla') || search.includes('site=zumblapay') ||
+    pathname.startsWith('/zumbla')
+  ) return 'subwaypay';
   if (
-    site === 'zumbla' || site === 'zumbla-win' || (host.includes('zumbla') && !host.includes('zumblapay')) ||
-    search.includes('site=zumbla') || search.includes('game=zumbla') || pathname.startsWith('/zumbla')
-  ) return 'zumbla';
+    host.includes('raspadinhaadasorte') || host.includes('raspadinha') || host.includes('raspafortuna') ||
+    site === 'raspa-fortuna' || site === 'raspafortuna' || site === 'raspa' || site === 'raspadinha' || site === 'raspadinhaadasorte' ||
+    search.includes('site=raspa') || search.includes('game=raspa') || search.includes('site=raspadinha') || search.includes('game=raspadinha') ||
+    pathname.startsWith('/raspa') || pathname.startsWith('/raspadinha')
+  ) return 'raspa-fortuna';
   if (
     site === 'gen-dino' || site === 'gendino' || site === 'dino' || site === 'dinopay' || site === 'dinoplay' || site === 'dinipay' ||
     host.includes('dinopay') || host.includes('dinoplay') || host.includes('dinipay') || host.includes('gendino') ||
-    search.includes('site=dino') || search.includes('site=dinopay') || search.includes('site=dinoplay') || search.includes('site=gendino') ||
-    search.includes('game=dino') || search.includes('game=dinopay') || search.includes('game=dinoplay') || search.includes('game=gendino') ||
-    pathname.startsWith('/dinopay') || pathname.startsWith('/dinoplay') || pathname.startsWith('/dino') || pathname.startsWith('/gendino')
+    search.includes('site=dino') || search.includes('site=dinopay') || search.includes('site=dinoplay') || search.includes('site=gendino') || search.includes('site=gen-dino') ||
+    search.includes('game=dino') || search.includes('game=dinopay') || search.includes('game=dinoplay') || search.includes('game=gendino') || search.includes('game=gen-dino') ||
+    pathname.startsWith('/dinopay') || pathname.startsWith('/dinoplay') || pathname.startsWith('/dino') || pathname.startsWith('/gendino') || pathname.startsWith('/gen-dino') ||
+    pathname.includes('gen-dino') || pathname.includes('/dino')
   ) return 'gen-dino';
   if (
     site === 'blockwin' || site === 'block-win' || host.includes('blockwinner') || host.includes('blockwinn.fun') || host.includes('blockwin') ||
@@ -68,20 +85,31 @@ const detectAppContext = (): AppContext => {
   return 'alliance-hub';
 };
 
-const gameTrackingId = (context: AppContext) => context === 'zumbla' ? 'g_zumbla' : context === 'gen-dino' ? 'g_gen_dino' : context === 'raspa-fortuna' ? 'g_raspa_fortuna' : context === 'blockwin' ? 'g_block_puzzle' : 'platform';
+const gameTrackingId = (context: AppContext) => context === 'zumbla' ? 'g_zumbla' : context === 'gen-dino' ? 'g_gen_dino' : context === 'raspa-fortuna' ? 'g_raspa_fortuna' : context === 'subwaypay' ? 'g_subway_pay' : context === 'blockwin' ? 'g_block_puzzle' : 'platform';
 
-const resolveAcquisitionGame = (context: AppContext) => {
-  const raw = (new URLSearchParams(window.location.search).get('game') || '').toLowerCase().replaceAll('_', '-');
-  if (['zumbla', 'zumbla-win', 'g-zumbla'].includes(raw)) return 'g_zumbla';
-  if (['gen-dino', 'gendino', 'g-gen-dino'].includes(raw)) return 'g_gen_dino';
-  if (['raspa-fortuna', 'raspafortuna', 'raspa', 'g-raspa-fortuna'].includes(raw)) return 'g_raspa_fortuna';
-  if (['blockwin', 'block-win', 'block-puzzle', 'g-block-puzzle'].includes(raw)) return 'g_block_puzzle';
-  return gameTrackingId(context);
+const resolveAcquisitionGame = (context: AppContext): string => {
+  const searchParams = new URLSearchParams(window.location.search);
+  const rawParam = searchParams.get('game') || searchParams.get('site') || searchParams.get('g') || searchParams.get('gameId');
+  const normalized = normalizeGameId(rawParam);
+  if (normalized && normalized !== 'alliance_hub') return normalized;
+
+  if (context !== 'alliance-hub') {
+    return gameTrackingId(context);
+  }
+
+  // Strictly preserve Alliance Hub context when in the hub/affiliate panel
+  return 'alliance-hub';
 };
 
-const DirectGameFrame: React.FC<{ context: 'zumbla' | 'gen-dino' | 'raspa-fortuna' }> = ({ context }) => {
+const DirectGameFrame: React.FC<{ context: 'zumbla' | 'gen-dino' | 'raspa-fortuna' | 'subwaypay' }> = ({ context }) => {
   const [depositOpen, setDepositOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
+  useEffect(() => {
+    const gid = gameTrackingId(context);
+    setTrackedGame(gid, `direct_frame_${context}`);
+    applyGameSEO(context);
+  }, [context]);
 
   const showToast = (message: string, type: ToastType = 'info') => {
     setToast({ message, type });
@@ -93,7 +121,9 @@ const DirectGameFrame: React.FC<{ context: 'zumbla' | 'gen-dino' | 'raspa-fortun
         ? GAME_ASSETS.zumbla.app
         : context === 'gen-dino'
           ? GAME_ASSETS.genDino.app
-          : GAME_ASSETS.raspaFortuna.app;
+          : context === 'subwaypay'
+            ? GAME_ASSETS.subwayPay.app
+            : GAME_ASSETS.raspaFortuna.app;
     const target = new URL(base, window.location.href);
     const incoming = new URLSearchParams(window.location.search);
     const ref = incoming.get('ref') || incoming.get('refCode') || incoming.get('r');
@@ -106,14 +136,35 @@ const DirectGameFrame: React.FC<{ context: 'zumbla' | 'gen-dino' | 'raspa-fortun
     return target.toString();
   });
 
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const sendTokenToGame = () => {
+    try {
+      const t = localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token') || '';
+      if (t && iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage({
+          source: 'tribopay-parent',
+          event: 'session',
+          token: t,
+        }, '*');
+      }
+    } catch (_) {}
+  };
+
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!event.data) return;
+      if (event.data.event === 'ready') {
+        sendTokenToGame();
+      }
       if (event.data.event === 'auth' && event.data.token) {
         try {
           localStorage.setItem('pg_auth_token', event.data.token);
           localStorage.setItem('paygateway_token', event.data.token);
           localStorage.setItem('token', event.data.token);
+          if (event.data.user) {
+            localStorage.setItem('user', JSON.stringify(event.data.user));
+          }
         } catch (_) {}
       }
       if (event.data.event === 'deposit' || event.data.action === 'deposit' || event.data.type === 'deposit') {
@@ -143,7 +194,9 @@ const DirectGameFrame: React.FC<{ context: 'zumbla' | 'gen-dino' | 'raspa-fortun
         />
       )}
       <iframe
+        ref={iframeRef}
         src={targetSrc}
+        onLoad={sendTokenToGame}
         title={context === 'zumbla' ? 'Zumbla Win' : context === 'gen-dino' ? 'GEN DINO' : 'Raspa Fortuna'}
         className="fixed inset-0 h-[100dvh] w-full border-0 bg-black"
         allow="autoplay; fullscreen; clipboard-write"
@@ -164,7 +217,27 @@ export default function App() {
   const isGameSite = appContext !== 'alliance-hub';
 
   // Auth State
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('pg_auth_token'));
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromUrl = urlParams.get('token') || urlParams.get('t') || urlParams.get('auth');
+    if (fromUrl) {
+      try {
+        localStorage.setItem('pg_auth_token', fromUrl);
+        localStorage.setItem('paygateway_token', fromUrl);
+        localStorage.setItem('token', fromUrl);
+      } catch (_) {}
+      return fromUrl;
+    }
+    return (
+      localStorage.getItem('pg_auth_token') ||
+      localStorage.getItem('paygateway_token') ||
+      localStorage.getItem('token') ||
+      sessionStorage.getItem('token') ||
+      sessionStorage.getItem('pg_auth_token') ||
+      null
+    );
+  });
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
@@ -178,7 +251,7 @@ export default function App() {
 
   // Main App State
   const [activeTab, setActiveTab] = useState<TabType>('home');
-  const [subView, setSubView] = useState<'main' | 'affiliates' | 'members' | 'campaigns'>('main');
+  const [subView, setSubView] = useState<'main' | 'affiliates' | 'members' | 'campaigns' | 'partner'>('main');
   const [gamesResetKey, setGamesResetKey] = useState<number>(0);
 
   // Data State
@@ -232,26 +305,67 @@ export default function App() {
   useEffect(() => {
     registerServiceWorker();
 
-    const metadata = {
-      'alliance-hub': ['Alliance Hub | iGAMING PAINEL', publicAsset('allifavicon.png')],
-      blockwin: ['BLOCK WIN | GANHE DINHEIRO JOGANDO', publicAsset('faviconblock.png')],
-      zumbla: ['ZUMBLA WIN | JOGAR', publicAsset('zumbla/favicon.svg')],
-      'gen-dino': ['GEN DINO | JOGAR', publicAsset('gen-dino/images/fav_icon.png')],
-      'raspa-fortuna': ['RASPA FORTUNA | JOGAR', publicAsset('RASPAAFORTUNA.PNG')],
-    } satisfies Record<AppContext, [string, string]>;
-    document.title = metadata[appContext][0];
-    document.querySelectorAll("link[rel*='icon']").forEach((el) => { (el as HTMLLinkElement).href = metadata[appContext][1]; });
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((reg) => {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          subscribeToWebPush(reg).catch(console.error);
+        }
+      }).catch(console.error);
+    }
 
     const pathname = window.location.pathname.toLowerCase();
+    const hostname = window.location.hostname.toLowerCase();
+    const isPartnerContext =
+      hostname.includes('parceiro') ||
+      pathname.startsWith('/parceiro') ||
+      pathname.startsWith('/p/');
+
+    if (appContext !== 'alliance-hub') {
+      applyGameSEO(appContext);
+    } else {
+      const targetAcquisitionGame = resolveAcquisitionGame(appContext);
+      if (
+        targetAcquisitionGame &&
+        targetAcquisitionGame !== 'alliance-hub' &&
+        targetAcquisitionGame !== 'alliance_hub' &&
+        targetAcquisitionGame !== 'platform'
+      ) {
+        applyGameSEO(targetAcquisitionGame);
+      } else {
+        applyGameSEO(isPartnerContext ? 'partner' : 'alliance-hub');
+      }
+    }
+
     const params = new URLSearchParams(window.location.search);
-    const ref = params.get('ref') || params.get('refCode') || params.get('r');
+
+    // Support clean short links: /p/:code, /parceiro/:code, /partner/:code, /r/:code
+    let pathCode: string | null = null;
+    const shortMatch = window.location.pathname.match(/^\/(?:p|parceiro|partner|r)\/([a-zA-Z0-9_-]+)/i);
+    if (shortMatch && shortMatch[1]) {
+      pathCode = shortMatch[1].toUpperCase().trim();
+    }
+
+    const partnerParam = params.get('p') || params.get('partner') || params.get('partnerCode');
+    const refParam = params.get('ref') || params.get('refCode') || params.get('r');
+    const isPartnerReferral = Boolean(
+      (pathCode && !window.location.pathname.startsWith('/r/')) ||
+      partnerParam ||
+      params.get('source') === 'partner'
+    );
+
+    const activeCode = pathCode || partnerParam || refParam;
     
-    if (ref) {
-      const cleanRef = ref.toUpperCase().trim();
+    if (activeCode) {
+      const cleanRef = activeCode.toUpperCase().trim();
       setInitialRefCode(cleanRef);
       try {
         localStorage.setItem('alliance_ref_code', cleanRef);
         sessionStorage.setItem('alliance_ref_code', cleanRef);
+        if (isPartnerReferral) {
+          localStorage.setItem('alliance_partner_code', cleanRef);
+          sessionStorage.setItem('alliance_partner_code', cleanRef);
+          localStorage.setItem('alliance_partner_source', 'partner');
+        }
         localStorage.setItem('alliance_origin_game', resolveAcquisitionGame(appContext));
         localStorage.setItem('alliance_origin_domain', window.location.hostname.toLowerCase());
       } catch (e) {}
@@ -264,14 +378,21 @@ export default function App() {
       } catch (e) {}
     }
 
-    if (pathname.includes('/cadastro') || pathname.includes('/register') || ref) {
+    const isPartnerDomain = window.location.hostname.toLowerCase().includes('parceiro');
+    const isPartnerPath = pathname === '/parceiro' || pathname === '/parceiros';
+    if ((isPartnerDomain && !pathCode && !partnerParam) || isPartnerPath) {
+      setActiveTab('more');
+      setSubView('partner');
+    }
+
+    if (pathname.includes('/cadastro') || pathname.includes('/register') || activeCode) {
       setAuthView('register');
     } else if (pathname.includes('/login')) {
       setAuthView('login');
     }
 
     const handleNavEvent = (e: Event) => {
-      const custom = e as CustomEvent<{ tab: TabType; subView?: 'main' | 'affiliates' | 'members' | 'campaigns' }>;
+      const custom = e as CustomEvent<{ tab: TabType; subView?: 'main' | 'affiliates' | 'members' | 'campaigns' | 'partner' }>;
       if (custom.detail?.tab) {
         setActiveTab(custom.detail.tab);
       }
@@ -292,6 +413,18 @@ export default function App() {
       window.removeEventListener('message', handleWindowMsg);
     };
   }, [appContext]);
+
+  // Ensure Alliance Hub / Partner SEO remains strictly active when navigating panel tabs
+  useEffect(() => {
+    if (appContext === 'alliance-hub' && activeTab !== 'games') {
+      const isPartnerRoute =
+        window.location.hostname.toLowerCase().includes('parceiro') ||
+        window.location.pathname.startsWith('/parceiro') ||
+        window.location.pathname.startsWith('/p/') ||
+        (activeTab === 'more' && subView === 'partner');
+      applyGameSEO(isPartnerRoute ? 'partner' : 'alliance-hub');
+    }
+  }, [activeTab, subView, appContext]);
 
   // 2. Fetch User Data on mount or token change
   useEffect(() => {
@@ -355,6 +488,12 @@ export default function App() {
         } else {
           // Invalid token
           localStorage.removeItem('pg_auth_token');
+          localStorage.removeItem('paygateway_token');
+          localStorage.removeItem('token');
+          try {
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('pg_auth_token');
+          } catch (_) {}
           setToken(null);
           setUser(null);
           knownTxIdsRef.current = null;
@@ -538,6 +677,29 @@ export default function App() {
     }
   };
 
+  const refreshData = async () => {
+    if (token) {
+      fetchOverview(token);
+      fetchAffiliateInfo(token);
+      try {
+        const res = await fetch('/api/auth/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const userData = await res.json();
+          setUser(userData);
+        }
+      } catch {}
+    }
+  };
+
+  // Automatically refresh user authorization and partner status when accessing partner view
+  useEffect(() => {
+    if (subView === 'partner' && token) {
+      refreshData();
+    }
+  }, [subView, token]);
+
   // AUTH ACTIONS
   const handleLogin = async (email: string, pass: string) => {
     setAuthError(null);
@@ -555,6 +717,12 @@ export default function App() {
       }
 
       localStorage.setItem('pg_auth_token', data.token);
+      localStorage.setItem('paygateway_token', data.token);
+      localStorage.setItem('token', data.token);
+      try {
+        sessionStorage.setItem('token', data.token);
+        sessionStorage.setItem('pg_auth_token', data.token);
+      } catch (_) {}
       setToken(data.token);
       setUser(data.user);
       showToast('Bem-vindo de volta!', 'success');
@@ -594,13 +762,34 @@ export default function App() {
     setAuthError(null);
     setActionLoading(true);
     try {
+      const tracking = getGameTrackingPayload();
+      const resolvedGame = resolveAcquisitionGame(appContext) || tracking.registeredGame || 'g_block_puzzle';
+      const storedPartnerCode =
+        sessionStorage.getItem('alliance_partner_code') ||
+        localStorage.getItem('alliance_partner_code') ||
+        new URLSearchParams(window.location.search).get('p') ||
+        new URLSearchParams(window.location.search).get('partner') ||
+        undefined;
+
       const res = await fetch('/api/auth/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Game-Origin': resolvedGame,
+          'X-Game-Id': resolvedGame
+        },
         body: JSON.stringify({
           ...data,
+          refCode: data.refCode || storedPartnerCode,
+          partnerCode: storedPartnerCode,
+          partner: storedPartnerCode,
+          p: storedPartnerCode,
           isAffiliate: !isGameSite, // Registers as affiliate when on goalliancehub.com portal
-          acquisitionGame: resolveAcquisitionGame(appContext),
+          acquisitionGame: resolvedGame,
+          registeredGame: resolvedGame,
+          game: resolvedGame,
+          gameId: resolvedGame,
+          trackingSource: tracking.trackingSource,
           acquisitionDomain: window.location.hostname.toLowerCase(),
         }),
       });
@@ -611,6 +800,12 @@ export default function App() {
       }
 
       localStorage.setItem('pg_auth_token', resData.token);
+      localStorage.setItem('paygateway_token', resData.token);
+      localStorage.setItem('token', resData.token);
+      try {
+        sessionStorage.setItem('token', resData.token);
+        sessionStorage.setItem('pg_auth_token', resData.token);
+      } catch (_) {}
       setToken(resData.token);
       setUser(resData.user);
       showToast('Conta criada com sucesso!', 'success');
@@ -626,6 +821,15 @@ export default function App() {
     }
   };
 
+  // Keep push subscription synchronized with authenticated user
+  useEffect(() => {
+    if (token && 'serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
+      navigator.serviceWorker.ready.then((reg) => {
+        subscribeToWebPush(reg).catch(console.error);
+      }).catch(console.error);
+    }
+  }, [token, user]);
+
   const handleLogout = async () => {
     if (token) {
       try {
@@ -638,6 +842,12 @@ export default function App() {
       }
     }
     localStorage.removeItem('pg_auth_token');
+    localStorage.removeItem('paygateway_token');
+    localStorage.removeItem('token');
+    try {
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('pg_auth_token');
+    } catch (_) {}
     setToken(null);
     setUser(null);
     knownTxIdsRef.current = null;
@@ -690,7 +900,12 @@ export default function App() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || data.message || 'Erro ao processar saque.');
+        let msg = data.error || data.message || 'Erro ao processar saque.';
+        const lower = msg.toLowerCase();
+        if ((lower.includes('saldo insuficiente') && (lower.includes('dotfy') || lower.includes('gateway'))) || lower.includes('dotfy gateway')) {
+          msg = 'Os saques estão em manutenção temporária. Tente novamente em 30 minutos. Seu saldo na plataforma permanece intacto.';
+        }
+        throw new Error(msg);
       }
 
       if (typeof data.balance === 'number') {
@@ -720,7 +935,7 @@ export default function App() {
     );
   }
 
-  if (appContext === 'zumbla' || appContext === 'gen-dino' || appContext === 'raspa-fortuna') {
+  if (appContext === 'zumbla' || appContext === 'gen-dino' || appContext === 'raspa-fortuna' || appContext === 'subwaypay') {
     return <DirectGameFrame context={appContext} />;
   }
 
@@ -781,8 +996,8 @@ export default function App() {
   // Render Authenticated Mobile Container
   return (
     <div className="min-h-screen bg-zinc-900/5 sm:py-6 flex items-center justify-center">
-      {/* Centered Mobile Shell Frame (100% Mobile First) */}
-      <div className="alliance-app-shell w-full max-w-md lg:max-w-[1440px] bg-white min-h-screen sm:min-h-[820px] border border-zinc-200/90 shadow-2xl relative overflow-hidden flex flex-col justify-between transition-[max-width,border-radius] duration-300 sm:rounded-3xl lg:rounded-[28px]">
+      {/* Responsive Shell Frame: clean mobile-first that smoothly expands for tablet & desktop */}
+      <div className="alliance-app-shell w-full max-w-md md:max-w-3xl lg:max-w-[1400px] xl:max-w-[1440px] bg-white min-h-screen sm:min-h-[820px] border border-zinc-200/90 shadow-2xl relative overflow-hidden flex flex-col justify-between transition-[max-width,border-radius] duration-300 sm:rounded-3xl lg:rounded-[28px]">
         {/* Toast */}
         {toast && (
           <Toast message={toast.message} type={toast.type} duration={3000} onClose={() => setToast(null)} />
@@ -826,6 +1041,8 @@ export default function App() {
               affiliateInfo={affiliateInfo}
               onDeposit={() => { setDepositGameId('platform'); setDepositOpen(true); }}
               onWithdraw={() => setWithdrawOpen(true)}
+              onRefresh={refreshData}
+              onShowToast={showToast}
             />
           )}
 
@@ -866,14 +1083,57 @@ export default function App() {
               ) : subView === 'affiliates' ? (
                 <AffiliatesView
                   affiliateInfo={affiliateInfo}
+                  currentUser={user}
                   onBack={() => setSubView('main')}
                   onCopySuccess={() => showToast('Link de indicação copiado!', 'success')}
                   onShowToast={showToast}
                   onOpenSettings={() => setGatewaySettingsOpen(true)}
+                  onOpenPartnerPanel={((user.isPartner && user.partnerApproved) || isUserAdmin(user)) ? () => {
+                    setSubView('partner');
+                    try {
+                      if (!window.location.pathname.startsWith('/parceiro')) {
+                        window.history.pushState({}, '', '/parceiros');
+                      }
+                    } catch (e) {}
+                  } : undefined}
                   onRefresh={() => {
                     if (token) fetchAffiliateInfo(token);
                   }}
                 />
+              ) : subView === 'partner' ? (
+                (user.isPartner && user.partnerApproved) || isUserAdmin(user) ? (
+                  <PartnerPanelView
+                    user={user}
+                    token={token}
+                    onBackToHub={() => {
+                      setSubView('main');
+                      try {
+                        if (window.location.pathname.startsWith('/parceiro')) {
+                          window.history.pushState({}, '', '/');
+                        }
+                      } catch (e) {}
+                    }}
+                    onShowToast={showToast}
+                  />
+                ) : (
+                  <div className="p-8 text-center text-zinc-500 max-w-md mx-auto">
+                    <p className="font-semibold text-zinc-700">Acesso Restrito</p>
+                    <p className="text-xs mt-1">O Painel de Parceiro é restrito a parceiros homologados pela administração.</p>
+                    <button
+                      onClick={() => {
+                        setSubView('main');
+                        try {
+                          if (window.location.pathname.startsWith('/parceiro')) {
+                            window.history.pushState({}, '', '/');
+                          }
+                        } catch (e) {}
+                      }}
+                      className="mt-4 px-4 py-2 bg-zinc-900 text-white text-xs font-bold rounded-xl cursor-pointer"
+                    >
+                      Voltar ao Início
+                    </button>
+                  </div>
+                )
               ) : subView === 'members' ? (
                 <MembersAreaView onBack={() => setSubView('main')} />
               ) : (
@@ -884,6 +1144,14 @@ export default function App() {
                     setSubView('affiliates');
                     if (token) fetchAffiliateInfo(token);
                   }}
+                  onOpenPartnerPanel={((user.isPartner && user.partnerApproved) || isUserAdmin(user)) ? () => {
+                    setSubView('partner');
+                    try {
+                      if (!window.location.pathname.startsWith('/parceiro')) {
+                        window.history.pushState({}, '', '/parceiros');
+                      }
+                    } catch (e) {}
+                  } : undefined}
                   onOpenMembers={() => setSubView('members')}
                   onOpenCampaigns={() => setSubView('campaigns')}
                   onOpenSettings={() => setGatewaySettingsOpen(true)}
@@ -928,11 +1196,14 @@ export default function App() {
           isOpen={withdrawOpen}
           onClose={() => setWithdrawOpen(false)}
           onConfirmWithdraw={handleConfirmWithdraw}
-          userBalance={user.balance}
-          minWithdraw={user.minWithdraw}
-          withdrawFee={user.withdrawFee}
+          userBalance={user?.balance ?? 0}
+          affiliateBalance={Number(affiliateInfo?.affiliateBalance || 0)}
+          minWithdraw={user?.minWithdraw}
+          withdrawFee={user?.withdrawFee}
           loading={actionLoading}
           token={token}
+          userPixKey={user?.pixKey}
+          userPixKeys={user?.pixKeys}
           onOpenAddPixKey={() => {
             setPixKeyModalInitialView('add');
             setPixKeyModalOpen(true);
@@ -943,6 +1214,8 @@ export default function App() {
           user={user}
           isOpen={profileOpen}
           onClose={() => setProfileOpen(false)}
+          currentGameId={gameTrackingId(appContext)}
+          onShowToast={showToast}
         />
 
         <TermsModal isOpen={termsOpen} onClose={() => setTermsOpen(false)} />

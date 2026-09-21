@@ -906,22 +906,16 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {isSuperAdmin && (
-              <button
-                type="button"
-                onClick={() => setShowRawKeys(!showRawKeys)}
-                className="h-8 px-3 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                {showRawKeys ? <EyeOff className="w-3.5 h-3.5 text-slate-500" /> : <Eye className="w-3.5 h-3.5 text-slate-500" />}
-                <span>{showRawKeys ? 'Ocultar Chaves' : 'Revelar Token'}</span>
-              </button>
-            )}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              Criptografia AES-256 Ativa
+            </span>
           </div>
         </div>
 
         <div className="divide-y divide-black/[0.04]">
           {data?.apiCredentials.keys.map((k) => {
-            const displayToken = (showRawKeys && isSuperAdmin && k.rawKey) ? k.rawKey : k.keyMasked;
+            const displayToken = k.keyMasked;
 
             return (
               <div key={k.id} className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3.5 hover:bg-slate-50/60 transition-colors">
@@ -948,11 +942,11 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
                       </code>
                       <button
                         type="button"
-                        onClick={() => handleCopy(k.rawKey || k.keyMasked, 'Chave de API')}
+                        onClick={() => handleCopy(k.keyMasked, 'Token Mascarado de Segurança')}
                         className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 hover:text-slate-800 cursor-pointer transition-colors"
-                        title="Copiar Chave de API"
+                        title="Copiar Identificador Protegido"
                       >
-                        {copiedKey === (k.rawKey || k.keyMasked) ? (
+                        {copiedKey === k.keyMasked ? (
                           <Check className="w-3.5 h-3.5 text-emerald-600" />
                         ) : (
                           <Copy className="w-3.5 h-3.5" />
@@ -969,7 +963,7 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
                 <div className="flex items-center gap-2 self-start md:self-auto text-xs text-slate-500">
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-medium text-[11px]">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    Conectada à Dotfy API
+                    Conectada e Blindada
                   </span>
                 </div>
               </div>
@@ -983,13 +977,13 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
             <Server className="w-4 h-4 text-slate-400 shrink-0" />
             <span>Endpoint de Retorno (Webhook):</span>
             <code className="font-mono bg-white border border-slate-200 px-2 py-0.5 rounded text-[11px] text-slate-800">
-              {data?.apiCredentials.webhookUrl || 'https://alliancedepositos.online/api/webhooks/pix'}
+              {data?.apiCredentials.webhookUrl || 'https://goalliancehub.com/api/webhooks/pix'}
             </code>
           </div>
 
           <button
             type="button"
-            onClick={() => handleCopy(data?.apiCredentials.webhookUrl || 'https://alliancedepositos.online/api/webhooks/pix', 'URL do Webhook')}
+            onClick={() => handleCopy(data?.apiCredentials.webhookUrl || 'https://goalliancehub.com/api/webhooks/pix', 'URL do Webhook')}
             className="text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1 cursor-pointer self-start sm:self-auto"
           >
             <Copy className="w-3.5 h-3.5" />
@@ -1246,7 +1240,7 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
               type="url"
               value={newWebhookUrl}
               onChange={(e) => setNewWebhookUrl(e.target.value)}
-              placeholder="https://alliancedepositos.online/api/webhooks/pix"
+              placeholder="https://goalliancehub.com/api/webhooks/pix"
               className="w-full h-10 px-3.5 bg-[#767680]/10 focus:bg-white text-slate-900 text-xs rounded-xl border border-transparent focus:border-emerald-600 focus:outline-none transition-all font-mono"
             />
           </div>

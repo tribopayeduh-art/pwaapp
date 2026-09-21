@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { ArrowLeft, Loader2, ExternalLink, RefreshCw } from 'lucide-react';
 import { GAME_ASSETS } from '../config/gameAssets';
 import { User } from '../types';
+import { setTrackedGame } from '../lib/gameTracking';
 
 interface Props {
   user?: User;
@@ -22,6 +23,10 @@ export const RaspaFortunaPlayerView: React.FC<Props> = ({
   const [failed, setFailed] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
+  useEffect(() => {
+    setTrackedGame('g_raspa_fortuna', 'raspa_player_view');
+  }, []);
+
   const [iframeSrc, setIframeSrc] = useState<string>(() => {
     const token =
       typeof window !== 'undefined'
@@ -37,17 +42,28 @@ export const RaspaFortunaPlayerView: React.FC<Props> = ({
   // Send current session / balance to the game
   const sendSessionToIframe = () => {
     if (!iframeRef.current?.contentWindow) return;
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('pg_auth_token') ||
+          localStorage.getItem('paygateway_token') ||
+          localStorage.getItem('token') ||
+          ''
+        : '';
     try {
       iframeRef.current.contentWindow.postMessage(
         {
           source: 'tribopay-parent',
           event: 'session',
           balance: Number(user?.balance || 0),
+          token,
           user: user
             ? {
+                id: user.id,
                 name: user.name,
                 phone: user.phone,
                 email: user.email,
+                cpf: (user as any).cpf,
+                balance: Number(user?.balance || 0),
               }
             : null,
         },
@@ -55,6 +71,12 @@ export const RaspaFortunaPlayerView: React.FC<Props> = ({
       );
     } catch (_) {}
   };
+
+  useEffect(() => {
+    if (loaded) {
+      sendSessionToIframe();
+    }
+  }, [user?.balance, loaded]);
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
@@ -65,7 +87,7 @@ export const RaspaFortunaPlayerView: React.FC<Props> = ({
       if (data.event === 'ready') {
         sendSessionToIframe();
       }
-      if (data.event === 'balance') {
+      if (data.event === 'balance' || data.event === 'withdraw' || data.event === 'bet' || data.event === 'win') {
         const newBalance = Number(data.balance);
         if (!isNaN(newBalance) && user && user.balance !== newBalance) {
           onBalanceChange(newBalance);

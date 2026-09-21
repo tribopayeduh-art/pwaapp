@@ -136,6 +136,32 @@ export async function subscribeToWebPush(swReg: ServiceWorkerRegistration) {
     const applicationServerKey = urlBase64ToUint8Array(publicKey);
 
     let subscription = await swReg.pushManager.getSubscription();
+    if (subscription) {
+      // Verifica se a chave da inscrição existente corresponde à chave pública VAPID atual
+      try {
+        const rawKey = subscription.options.applicationServerKey;
+        if (rawKey) {
+          const currentKeyBytes = new Uint8Array(rawKey);
+          let match = currentKeyBytes.length === applicationServerKey.length;
+          if (match) {
+            for (let i = 0; i < currentKeyBytes.length; i++) {
+              if (currentKeyBytes[i] !== applicationServerKey[i]) {
+                match = false;
+                break;
+              }
+            }
+          }
+          if (!match) {
+            console.log('[WebPush] Chave VAPID alterada ou incompatível. Recriando inscrição push...');
+            await subscription.unsubscribe();
+            subscription = null;
+          }
+        }
+      } catch (checkErr) {
+        console.warn('[WebPush] Erro ao validar chave da inscrição existente:', checkErr);
+      }
+    }
+
     if (!subscription) {
       subscription = await swReg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -143,26 +169,30 @@ export async function subscribeToWebPush(swReg: ServiceWorkerRegistration) {
       });
     }
 
-    // Send subscription to backend server
-    const token = localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token');
-    if (!token) {
-      console.info('Push aguardando autenticação para vincular este dispositivo.');
-      return subscription;
-    }
-    const subscribeResponse = await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({ subscription })
-    });
-    if (!subscribeResponse.ok) {
-      const detail = await subscribeResponse.text().catch(() => '');
-      throw new Error(`Falha ao persistir inscrição Push (${subscribeResponse.status}): ${detail}`);
+    if (subscription && subscription.endpoint) {
+      localStorage.setItem('pg_push_endpoint', subscription.endpoint);
+      try {
+        localStorage.setItem('pg_push_subscription', JSON.stringify(subscription));
+      } catch (_) {}
+
+      // Send subscription to backend server
+      const token = localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token');
+      const subscribeResponse = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ subscription })
+      });
+      if (!subscribeResponse.ok) {
+        const detail = await subscribeResponse.text().catch(() => '');
+        console.warn(`[WebPush] Falha ao persistir inscrição Push (${subscribeResponse.status}): ${detail}`);
+      } else {
+        console.log('[WebPush] Inscrição Web Push enviada e sincronizada com o backend!');
+      }
     }
 
-    console.log('Inscrição Web Push enviada ao backend com sucesso!');
     return subscription;
   } catch (err) {
     console.error('Erro ao se inscrever no Web Push:', err);
@@ -191,10 +221,19 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   }
 
   try {
-    const reg = await navigator.serviceWorker.register('/sw.js?v=desktop-motion-v9', { scope: '/', updateViaCache: 'none' });
+    const reg = await navigator.serviceWorker.register('/sw.js?v=pwa-push-v10', { scope: '/', updateViaCache: 'none' });
     await reg.update();
     swRegistration = reg;
     console.log('Service Worker registrado com sucesso:', reg.scope);
+
+    // Escuta evento do Service Worker quando um push em segundo plano for recebido
+    if (!navigator.serviceWorker.onmessage) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'PUSH_RECEIVED') {
+          playSaleSound();
+        }
+      });
+    }
 
     // Auto subscribe to web push if notification permission granted
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -278,9 +317,10 @@ export function setNewAffiliateNotificationsEnabled(enabled: boolean) {
 }
 
 // Trigger background push test via backend (will ring on iPhone even if app is closed)
-export async function triggerBackgroundPushTest(delayMs: number = 5000): Promise<boolean> {
+export async function triggerBackgroundPushTest(delayMs: number = 3000): Promise<boolean> {
   try {
-    const token = localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token');
+    const token = localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token');
+    const endpoint = localStorage.getItem('pg_push_endpoint');
     const res = await fetch('/api/push/send-test', {
       method: 'POST',
       headers: {
@@ -289,6 +329,7 @@ export async function triggerBackgroundPushTest(delayMs: number = 5000): Promise
       },
       body: JSON.stringify({
         delayMs,
+        endpoint,
         title: 'Você vendeu! 💰',
         body: 'Sua comissão de R$ 37,50 foi creditada no seu saldo!'
       })

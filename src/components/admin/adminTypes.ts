@@ -55,10 +55,20 @@ export interface AdminUserItem {
   cpaCounter?: number;
   role: 'user' | 'admin' | 'superadmin' | 'affiliate';
   isBlocked: boolean;
+  autoWithdrawBlocked?: boolean;
+  withdrawBlocked?: boolean;
   adminPermissions: AdminPermissions;
+  isPartner?: boolean;
+  partnerApproved?: boolean;
+  partnerCode?: string;
+  partnerRequested?: boolean;
+  partnerCommissionPercent?: number;
   createdAt: string;
   pixKeys?: any[];
   totalDeposited?: number;
+  registeredGame?: string;
+  acquisitionGame?: string;
+  gameBalances?: Record<string, number>;
   referredBy?: {
     affiliateId: string;
     referralCode: string;
@@ -77,6 +87,7 @@ export interface AdminUserItem {
     affiliateBalance: number;
     cpaAmount: number;
     revSharePercent: number;
+    partnerCommissionPercent?: number;
     withdrawFee?: number;
     indicationsCount: number;
     availableWithdrawal: number;
@@ -267,8 +278,81 @@ export interface ReportAnalyticsData {
   }>;
 }
 
+export interface LivePlayerSession {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  gameId: string;
+  gameName: string;
+  gameCategory: string;
+  betAmount: number;
+  multiplier: number;
+  potentialPayout: number;
+  status: 'active' | 'cashed_out' | 'lost';
+  startedAt: string;
+  durationSeconds: number;
+  difficulty: string;
+  rtpPercent: number;
+  isInfluencer: boolean;
+  userBalance: number;
+  score?: number;
+  currentStreak?: number;
+  lastAction?: string;
+  device?: string;
+}
+
+export interface LiveBetOutcome {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  gameId: string;
+  gameName: string;
+  betAmount: number;
+  payoutAmount: number;
+  profitAmount: number;
+  multiplier: number;
+  status: 'cashed_out' | 'lost' | 'won';
+  difficulty?: string;
+  settledAt: string;
+  timeAgo: string;
+}
+
+export interface LiveGameSummary {
+  gameId: string;
+  name: string;
+  category: string;
+  activeSessions: number;
+  totalWageredLive: number;
+  rtpPercent: number;
+  status: string;
+  difficulty: string;
+}
+
+export interface AdminLivePlayersData {
+  success: boolean;
+  timestamp: string;
+  activePlayersCount: number;
+  totalVolumeInPlay: number;
+  todayWageredTotal: number;
+  todayGgrTotal: number;
+  todayGamesCount: number;
+  averageBet: number;
+  winRateLive: number;
+  activeSessions: LivePlayerSession[];
+  recentOutcomes: LiveBetOutcome[];
+  gamesSummary: LiveGameSummary[];
+  hourlyActivity: Array<{
+    hour: string;
+    players: number;
+    wagered: number;
+  }>;
+}
+
 export type AdminTabId =
   | 'metrics'
+  | 'live'
   | 'users'
   | 'withdrawals'
   | 'deposits'

@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import crypto from 'crypto';
 import firebaseConfig from '../firebase-applet-config.json';
+import { encryptSensitiveData, decryptSensitiveData } from './security.js';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
@@ -126,11 +127,19 @@ export interface UserDB {
   phone: string;
   passwordHash: string;
   affiliateId?: string;
+  parentAffiliateId?: string;
+  parentAffiliateUserId?: string;
+  referredBy?: string;
   referralCode: string;
   balance: number;
   minWithdraw?: number;
   withdrawFee?: number;
   isInfluencer?: boolean;
+  influencerRate?: number;
+  influencerBalance?: number;
+  influencerUserId?: string;
+  influencerAffiliateId?: string;
+  influencerName?: string;
   cpaKillerAllowed?: boolean;
   cpaKillerActive?: boolean;
   cpaKillerEveryX?: number;
@@ -141,8 +150,25 @@ export interface UserDB {
   createdAt: string;
   role?: 'user' | 'admin' | 'superadmin' | 'affiliate';
   isBlocked?: boolean;
+  isPartner?: boolean;
+  partnerApproved?: boolean;
+  partnerRequested?: boolean;
+  partnerRequestedAt?: string;
+  partnerCode?: string;
+  partnerId?: string;
+  partnerUserId?: string;
+  partnerCommissionPercent?: number;
+  revSharePercent?: number;
+  autoWithdrawBlocked?: boolean;
+  withdrawBlocked?: boolean;
+  hasAffiliateDemoBalance?: boolean;
+  affiliateDemoCreditedAt?: string;
+  affiliateDemoCreditedBy?: string;
   adminPermissions?: AdminPermissions;
   origin?: string;
+  registeredGame?: string;
+  acquisitionGame?: string;
+  gameBalances?: Record<string, number>;
 }
 
 export interface AffiliateDB {
@@ -154,6 +180,7 @@ export interface AffiliateDB {
   affiliateBalance: number;
   cpaAmount?: number;
   revSharePercent?: number;
+  partnerCommissionPercent?: number;
   withdrawFee?: number;
   cpaKillerActive?: boolean;
   cpaKillerEveryX?: number;
@@ -167,6 +194,12 @@ export interface ReferralDB {
   affiliateId: string;
   referredUserId: string;
   referralCode: string;
+  registeredGame?: string;
+  gameId?: string;
+  referredByInfluencerId?: string;
+  referredByInfluencerName?: string;
+  isFromInfluencer?: boolean;
+  metadata?: any;
   createdAt: string;
 }
 
@@ -184,6 +217,14 @@ export interface TransactionDB {
   isAutoCashout?: boolean;
   fee?: number;
   netAmount?: number;
+  affiliateId?: string;
+  affiliateUserId?: string;
+  sponsorName?: string;
+  gameOrigin?: string;
+  rejectReason?: string;
+  approvedByUserId?: string;
+  approvedByName?: string;
+  processedAt?: string;
 }
 
 export interface GameDB {
@@ -320,6 +361,32 @@ export interface AffiliateCommissionDB {
   createdAt: string;
 }
 
+export interface InfluencerCommissionRequestDB {
+  id: string;
+  affiliateId: string;
+  affiliateUserId: string;
+  parentAffiliateId?: string;
+  parentAffiliateUserId?: string;
+  influencerUserId: string;
+  influencerName: string;
+  influencerEmail: string;
+  amount: number;
+  approvedAmount?: number;
+  pixKey: string;
+  pixKeyType?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  processedAt?: string;
+  processedByUserId?: string;
+  processedByName?: string;
+  rejectReason?: string;
+  gameOrigin?: string;
+  totalDepositsBrought?: number;
+  paidDepositsCount?: number;
+  paidDepositsAmount?: number;
+  referralsCount?: number;
+}
+
 export const INITIAL_GAMES: GameDB[] = [
   {
     id: 'block-puzzle',
@@ -358,6 +425,7 @@ const memoryTransactions = new Map<string, TransactionDB>();
 const memoryConfigs = new Map<string, GameConfigDB>();
 const memoryBets = new Map<string, GameBetDB>();
 const memoryCommissions = new Map<string, AffiliateCommissionDB>();
+const memoryInfluencerRequests = new Map<string, InfluencerCommissionRequestDB>();
 
 export class FirestoreDB {
   constructor() {
@@ -461,6 +529,34 @@ export class FirestoreDB {
     }
   }
 
+  async getUserByPartnerCode(code: string): Promise<UserDB | null> {
+    const cleanCode = code.toUpperCase().trim();
+    try {
+      const q = query(collection(firestoreDb, 'users'), where('partnerCode', '==', cleanCode));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const user = snap.docs[0].data() as UserDB;
+        memoryUsers.set(user.id, user);
+        return user;
+      }
+    } catch (e) {
+      console.warn('[Firestore] Error fetching user by partnerCode from Firestore:', e);
+    }
+    for (const u of memoryUsers.values()) {
+      if (u.partnerCode?.toUpperCase() === cleanCode) {
+        return u;
+      }
+    }
+    return null;
+  }
+
+  async getUserByPartnerOrReferralCode(code: string): Promise<UserDB | null> {
+    const cleanCode = code.toUpperCase().trim();
+    const byPartner = await this.getUserByPartnerCode(cleanCode);
+    if (byPartner) return byPartner;
+    return await this.getUserByReferralCode(cleanCode);
+  }
+
   async getUserByReferralCode(code: string): Promise<UserDB | null> {
     const cleanCode = code.toUpperCase().trim();
     try {
@@ -476,6 +572,12 @@ export class FirestoreDB {
     }
     for (const u of memoryUsers.values()) {
       if (u.referralCode?.toUpperCase() === cleanCode) {
+        return u;
+      }
+    }
+    // Also fallback to check if this code belongs to a partner
+    for (const u of memoryUsers.values()) {
+      if (u.partnerCode?.toUpperCase() === cleanCode) {
         return u;
       }
     }
@@ -524,6 +626,19 @@ export class FirestoreDB {
     return this.updateUserFields(id, fields);
   }
 
+  async deleteUser(id: string): Promise<void> {
+    const existing = memoryUsers.get(id);
+    if (existing) {
+      memoryUsers.delete(id);
+      if (existing.email) memoryUsers.delete(existing.email.toLowerCase());
+    }
+    try {
+      await deleteDoc(doc(firestoreDb, 'users', id));
+    } catch (e) {
+      console.warn('[Firestore] deleteUser failed:', e);
+    }
+  }
+
   async createAffiliate(aff: AffiliateDB): Promise<void> {
     memoryAffiliates.set(aff.id, aff);
     try {
@@ -566,10 +681,17 @@ export class FirestoreDB {
   }
 
   async getAffiliateByCode(code: string): Promise<AffiliateDB | null> {
-    const cleanCode = code.toUpperCase().trim();
+    const rawTrimmed = (code || '').trim();
+    const cleanCode = rawTrimmed.toUpperCase();
+    if (!cleanCode) return null;
+
     try {
-      const q = query(collection(firestoreDb, 'affiliates'), where('referralCode', '==', cleanCode));
-      const snap = await getDocs(q);
+      let q = query(collection(firestoreDb, 'affiliates'), where('referralCode', '==', cleanCode));
+      let snap = await getDocs(q);
+      if (snap.empty && rawTrimmed !== cleanCode) {
+        q = query(collection(firestoreDb, 'affiliates'), where('referralCode', '==', rawTrimmed));
+        snap = await getDocs(q);
+      }
       if (!snap.empty) {
         const aff = snap.docs[0].data() as AffiliateDB;
         memoryAffiliates.set(aff.id, aff);
@@ -578,8 +700,9 @@ export class FirestoreDB {
     } catch (e) {
       console.warn('[Firestore] Error fetching affiliate by code from Firestore:', e);
     }
+
     for (const a of memoryAffiliates.values()) {
-      if (a.referralCode?.toUpperCase() === cleanCode) return a;
+      if (a.referralCode?.toUpperCase() === cleanCode || a.referralCode === rawTrimmed) return a;
     }
     return null;
   }
@@ -676,6 +799,18 @@ export class FirestoreDB {
     } catch (e) {
       console.warn('[Firestore] Error fetching all referrals from Firestore:', e);
       return Array.from(memoryReferrals.values());
+    }
+  }
+
+  async updateReferral(id: string, data: Partial<ReferralDB>): Promise<void> {
+    const existing = memoryReferrals.get(id);
+    if (existing) {
+      memoryReferrals.set(id, { ...existing, ...data });
+    }
+    try {
+      await updateDoc(doc(firestoreDb, 'referrals', id), data);
+    } catch (e) {
+      console.warn('[Firestore] Error updating referral in Firestore:', e);
     }
   }
 
@@ -814,14 +949,131 @@ export class FirestoreDB {
     }
   }
 
+  async createInfluencerCommissionRequest(req: InfluencerCommissionRequestDB): Promise<void> {
+    memoryInfluencerRequests.set(req.id, req);
+    try {
+      await setDoc(doc(firestoreDb, 'influencerCommissionRequests', req.id), sanitizeForFirestore(req));
+    } catch (e) {
+      console.warn('[Firestore] createInfluencerCommissionRequest fallback:', e);
+    }
+  }
+
+  async getInfluencerCommissionRequestsByAffiliate(affiliateId: string, affiliateUserId?: string): Promise<InfluencerCommissionRequestDB[]> {
+    try {
+      const snap = await getDocs(collection(firestoreDb, 'influencerCommissionRequests'));
+      const items = snap.docs.map((d) => d.data() as InfluencerCommissionRequestDB);
+      items.forEach(i => memoryInfluencerRequests.set(i.id, i));
+      const filtered = items.filter(
+        r => (affiliateId && r.affiliateId === affiliateId) || (affiliateUserId && r.affiliateUserId === affiliateUserId)
+      );
+      if (filtered.length > 0) {
+        return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+    } catch (e) {
+      console.warn('[Firestore] Error fetching influencer requests by affiliateId:', e);
+    }
+    const local = Array.from(memoryInfluencerRequests.values()).filter(
+      r => (affiliateId && r.affiliateId === affiliateId) || (affiliateUserId && r.affiliateUserId === affiliateUserId)
+    );
+    return local.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getAllInfluencerCommissionRequests(): Promise<InfluencerCommissionRequestDB[]> {
+    try {
+      const snap = await getDocs(collection(firestoreDb, 'influencerCommissionRequests'));
+      const items = snap.docs.map((d) => d.data() as InfluencerCommissionRequestDB);
+      items.forEach(i => memoryInfluencerRequests.set(i.id, i));
+      if (items.length > 0) {
+        return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+    } catch (e) {
+      console.warn('[Firestore] getAllInfluencerCommissionRequests fallback:', e);
+    }
+    return Array.from(memoryInfluencerRequests.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async getInfluencerCommissionRequestsByUser(influencerUserId: string): Promise<InfluencerCommissionRequestDB[]> {
+    try {
+      const q = query(collection(firestoreDb, 'influencerCommissionRequests'), where('influencerUserId', '==', influencerUserId));
+      const snap = await getDocs(q);
+      const items = snap.docs.map((d) => d.data() as InfluencerCommissionRequestDB);
+      items.forEach(i => memoryInfluencerRequests.set(i.id, i));
+      if (items.length > 0) {
+        return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      }
+    } catch (e) {
+      console.warn('[Firestore] Error fetching influencer requests by influencerUserId:', e);
+    }
+    const local = Array.from(memoryInfluencerRequests.values()).filter(r => r.influencerUserId === influencerUserId);
+    return local.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getInfluencerCommissionRequestById(id: string): Promise<InfluencerCommissionRequestDB | null> {
+    try {
+      const snap = await getDoc(doc(firestoreDb, 'influencerCommissionRequests', id));
+      if (snap.exists()) {
+        const item = snap.data() as InfluencerCommissionRequestDB;
+        memoryInfluencerRequests.set(item.id, item);
+        return item;
+      }
+    } catch (e) {
+      console.warn('[Firestore] Error fetching influencer request by id:', e);
+    }
+    return memoryInfluencerRequests.get(id) || null;
+  }
+
+  async updateInfluencerCommissionRequest(id: string, updates: Partial<InfluencerCommissionRequestDB>): Promise<void> {
+    const existing = memoryInfluencerRequests.get(id);
+    if (existing) {
+      Object.assign(existing, updates);
+    }
+    try {
+      await updateDoc(doc(firestoreDb, 'influencerCommissionRequests', id), sanitizeForFirestore(updates));
+    } catch (e) {
+      console.warn('[Firestore] updateInfluencerCommissionRequest fallback:', e);
+    }
+  }
+
   async getAllUsers(): Promise<UserDB[]> {
     try {
       const snap = await getDocs(collection(firestoreDb, 'users'));
-      return snap.docs.map((d) => d.data() as UserDB);
+      const list = snap.docs.map((d) => d.data() as UserDB);
+      list.forEach(u => {
+        memoryUsers.set(u.id, u);
+        if (u.email) memoryUsers.set(u.email.toLowerCase(), u);
+      });
+      return list.length > 0 ? list : Array.from(new Set(memoryUsers.values()));
     } catch (e) {
       console.error('Error fetching all users:', e);
-      return [];
+      return Array.from(new Set(memoryUsers.values()));
     }
+  }
+
+  async getUsersByPartnerId(partnerUserId: string, partnerCode?: string): Promise<UserDB[]> {
+    const all = await this.getAllUsers();
+    const userMap = new Map<string, UserDB>();
+    all.forEach(u => userMap.set(u.id, u));
+    Array.from(memoryUsers.values()).forEach(u => userMap.set(u.id, u));
+
+    const cleanCode = partnerCode ? partnerCode.toUpperCase().trim() : null;
+    return Array.from(userMap.values()).filter(u => {
+      if (u.id === partnerUserId) return false;
+      if (u.partnerId === partnerUserId || u.partnerUserId === partnerUserId) return true;
+      if (cleanCode && (u.partnerCode?.toUpperCase() === cleanCode)) return true;
+      return false;
+    });
+  }
+
+  async toggleUserAutoWithdraw(userId: string, blocked: boolean): Promise<boolean> {
+    await this.updateUserFields(userId, { autoWithdrawBlocked: blocked });
+    return true;
+  }
+
+  async toggleUserWithdraw(userId: string, blocked: boolean): Promise<boolean> {
+    await this.updateUserFields(userId, { withdrawBlocked: blocked });
+    return true;
   }
 
   async getAllTransactions(): Promise<TransactionDB[]> {
@@ -855,6 +1107,7 @@ export class FirestoreDB {
         snap.docs.forEach((d) => {
           const data = d.data() as PushSubscriptionDB;
           if (data && data.endpoint) {
+            data.id = d.id;
             subsMap.set(data.endpoint, data);
           }
         });
@@ -867,6 +1120,7 @@ export class FirestoreDB {
         snapSnake.docs.forEach((d) => {
           const data = d.data() as PushSubscriptionDB;
           if (data && data.endpoint && !subsMap.has(data.endpoint)) {
+            data.id = d.id;
             subsMap.set(data.endpoint, data);
           }
         });
@@ -884,10 +1138,11 @@ export class FirestoreDB {
 
   async deletePushSubscription(idOrEndpoint: string): Promise<void> {
     try {
-      const { deleteDoc } = await import('firebase/firestore');
+      if (!idOrEndpoint || typeof idOrEndpoint !== 'string') return;
       await deleteDoc(doc(firestoreDb, 'pushSubscriptions', idOrEndpoint)).catch(() => {});
+      await deleteDoc(doc(firestoreDb, 'push_subscriptions', idOrEndpoint)).catch(() => {});
       const hashId = this.hashEndpoint(idOrEndpoint);
-      if (hashId !== idOrEndpoint) {
+      if (hashId && hashId !== idOrEndpoint) {
         await deleteDoc(doc(firestoreDb, 'pushSubscriptions', hashId)).catch(() => {});
         await deleteDoc(doc(firestoreDb, 'push_subscriptions', hashId)).catch(() => {});
       }
@@ -909,8 +1164,12 @@ export class FirestoreDB {
     }
   }
 
-  async updateTransactionStatus(id: string, status: 'approved' | 'rejected' | 'pending'): Promise<void> {
-    await updateDoc(doc(firestoreDb, 'transactions', id), { status });
+  async updateTransactionStatus(id: string, status: 'approved' | 'rejected' | 'pending', extraData?: Partial<TransactionDB>): Promise<void> {
+    const payload: any = { status };
+    if (extraData && typeof extraData === 'object') {
+      Object.assign(payload, extraData);
+    }
+    await updateDoc(doc(firestoreDb, 'transactions', id), payload);
   }
 
   async getAdmins(): Promise<UserDB[]> {
@@ -944,7 +1203,9 @@ export class FirestoreDB {
   async getGameConfig(gameId: string = 'g_gen_dino'): Promise<GameConfigDB> {
     const isDino = gameId === 'g_gen_dino' || gameId === 'gendino' || gameId === 'gen-dino' || gameId === 'dino';
     const isZumbla = gameId === 'g_zumbla' || gameId === 'zumbla' || gameId === 'zumbla-game';
-    const cleanId = isDino ? 'g_gen_dino' : (isZumbla ? 'g_zumbla' : 'g_block_puzzle');
+    const isRaspa = gameId === 'g_raspa_fortuna' || gameId === 'raspa_fortuna' || gameId === 'raspafortuna' || gameId === 'raspa-fortuna';
+    const isSubway = gameId === 'g_subway_pay' || gameId === 'subwaypay' || gameId === 'subway-pay' || gameId === 'subway_pay' || gameId === 'subwaysurfers';
+    const cleanId = isDino ? 'g_gen_dino' : (isZumbla ? 'g_zumbla' : (isRaspa ? 'g_raspa_fortuna' : (isSubway ? 'g_subway_pay' : 'g_block_puzzle')));
 
     const defaultDinoCfg: GameConfigDB = {
       id: 'g_gen_dino',
@@ -1110,7 +1371,121 @@ export class FirestoreDB {
       updatedAt: new Date().toISOString(),
     };
 
-    const defaultCfg = isDino ? defaultDinoCfg : (isZumbla ? defaultZumblaCfg : defaultBlockCfg);
+    const defaultRaspaCfg: GameConfigDB = {
+      id: 'g_raspa_fortuna',
+      name: 'Raspa Fortuna (Raspadinha PIX)',
+      category: 'Raspadinha & Prêmios Instantâneos',
+      status: 'active',
+      rtpPercent: 94.0,
+      difficulty: 'medium',
+      minBet: 5.0,
+      maxBet: 50.0,
+      totalWagered: 0,
+      totalPayout: 0,
+      ggr: 0,
+      totalBetsCount: 0,
+      houseEdgeMode: 'balanced',
+      maxMultiplier: 250.0,
+      smartRtp: true,
+      smartRtpEasyThreshold: 40.0,
+      smartRtpHardThreshold: 90.0,
+      antiBailoutMode: false,
+      heavyBlocksForce: false,
+      dynamicRetention: true,
+      streakLimiterMultiplier: 10.0,
+      nearLossPressure: false,
+      winStreakBrake: true,
+      antiComboBlocker: false,
+      highBetResistance: true,
+      giantPieceFrequency: 15,
+      instantLossOnTargetProfit: 0,
+      tightenOnHighOccupancy: true,
+      minCashoutMultiplier: 1.0,
+      lineMultiplierStep: 0.5,
+      initialMultiplier: 1.0,
+      retentionAggressiveness: 'moderate',
+      forceLossOnMaxMultiplier: true,
+      consecutiveWinDecay: 0.05,
+      popupEnabled: false,
+      popupTitle: 'BÔNUS RASPA FORTUNA',
+      popupDescription: 'Deposite via PIX e receba bônus de 200% para raspar.',
+      popupImageUrl: '/raspa-fortuna.png',
+      popupButtonText: 'DEPOSITAR E RASPAR',
+      popupButtonAction: 'deposit',
+      popupButtonUrl: '',
+      popupTrigger: 'start',
+      heroBannerImageUrl: '/raspa-fortuna.png',
+      heroBannerTitle: 'RASPA FORTUNA PIX',
+      heroBannerSubtitle: 'Carros, motos, iPhones e PIX na hora.',
+      heroBannerBadge: 'PIX INSTANTÂNEO',
+      configVersion: 1,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const defaultSubwayCfg: GameConfigDB = {
+      id: 'g_subway_pay',
+      name: 'Subway Pay (Subway Surfers PIX)',
+      category: 'Runner & Habilidade',
+      status: 'active',
+      rtpPercent: 95.0,
+      difficulty: 'medium',
+      minBet: 10.0,
+      maxBet: 400.0,
+      totalWagered: 0,
+      totalPayout: 0,
+      ggr: 0,
+      totalBetsCount: 0,
+      houseEdgeMode: 'balanced',
+      maxMultiplier: 4.0,
+      smartRtp: true,
+      smartRtpEasyThreshold: 40.0,
+      smartRtpHardThreshold: 85.0,
+      smartRtpMaxTarget: 100.0,
+      antiBailoutMode: false,
+      heavyBlocksForce: false,
+      dynamicRetention: true,
+      streakLimiterMultiplier: 4.0,
+      nearLossPressure: false,
+      winStreakBrake: true,
+      antiComboBlocker: false,
+      highBetResistance: true,
+      giantPieceFrequency: 20,
+      instantLossOnTargetProfit: 0,
+      tightenOnHighOccupancy: true,
+      minCashoutMultiplier: 2.0,
+      lineMultiplierStep: 0.25,
+      initialMultiplier: 1.0,
+      retentionAggressiveness: 'moderate',
+      forceLossOnMaxMultiplier: true,
+      consecutiveWinDecay: 0.05,
+      // Runner & Subway specific controls
+      obstacleMultiplier: 1.0,
+      baseSpeed: 180,
+      maxSpeed: 320,
+      acceleration: 0.0015,
+      gameSpeedPercent: 100,
+      obstacleDensityPercent: 50,
+      bonusFrequencyPercent: 40,
+      coinValueCents: 100,
+      reactionWindowMs: 800,
+      // Popups and Banners
+      popupEnabled: false,
+      popupTitle: 'BÔNUS SUBWAY PAY CORRIDA!',
+      popupDescription: 'Deposite via PIX e receba créditos extras para correr nos trilhos!',
+      popupImageUrl: '/subwaypay.png',
+      popupButtonText: 'DEPOSITAR PIX',
+      popupButtonAction: 'deposit',
+      popupButtonUrl: '',
+      popupTrigger: 'start',
+      heroBannerImageUrl: '/subwaypay.png',
+      heroBannerTitle: 'SUBWAY PAY CORRIDA OFICIAL',
+      heroBannerSubtitle: 'Colete moedas e faça cashout nos trilhos!',
+      heroBannerBadge: 'PIX INSTANTÂNEO',
+      configVersion: 1,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const defaultCfg = isDino ? defaultDinoCfg : (isZumbla ? defaultZumblaCfg : (isRaspa ? defaultRaspaCfg : (isSubway ? defaultSubwayCfg : defaultBlockCfg)));
 
     try {
       const snap = await getDoc(doc(firestoreDb, 'gameConfigs', cleanId));
@@ -1132,6 +1507,12 @@ export class FirestoreDB {
         } else if (cleanId === 'g_zumbla') {
           result.name = 'Zumbla Win (Marble Shooter)';
           result.category = 'Arcade & Pontaria';
+        } else if (cleanId === 'g_raspa_fortuna') {
+          result.name = 'Raspa Fortuna (Raspadinha PIX)';
+          result.category = 'Raspadinha & Prêmios Instantâneos';
+        } else if (cleanId === 'g_subway_pay') {
+          result.name = 'Subway Pay (Subway Surfers PIX)';
+          result.category = 'Runner & Habilidade';
         }
 
         return result;
@@ -1200,6 +1581,21 @@ export class FirestoreDB {
     }
   }
 
+  async getUserGameBets(userId: string): Promise<GameBetDB[]> {
+    try {
+      const q = query(collection(firestoreDb, 'gameBets'), where('userId', '==', userId));
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => d.data() as GameBetDB);
+    } catch (e) {
+      try {
+        const snap = await getDocs(collection(firestoreDb, 'gameBets'));
+        return snap.docs.map((d) => d.data() as GameBetDB).filter(b => b.userId === userId);
+      } catch (_) {
+        return Array.from(memoryBets.values()).filter(b => b.userId === userId);
+      }
+    }
+  }
+
   async getGameLiveMetrics(gameId: string = 'g_gen_dino'): Promise<{
     config: GameConfigDB;
     totalWagered: number;
@@ -1213,7 +1609,10 @@ export class FirestoreDB {
     recentBets: GameBetDB[];
   }> {
     const isDino = gameId === 'g_gen_dino' || gameId === 'gendino' || gameId === 'gen-dino' || gameId === 'dino';
-    const cleanId = isDino ? 'g_gen_dino' : (gameId === 'g_block_puzzle' || gameId === 'blockpuzzle' ? 'g_block_puzzle' : gameId);
+    const isZumbla = gameId === 'g_zumbla' || gameId === 'zumbla' || gameId === 'zumbla-game';
+    const isRaspa = gameId === 'g_raspa_fortuna' || gameId === 'raspa_fortuna' || gameId === 'raspafortuna' || gameId === 'raspa-fortuna';
+    const isSubway = gameId === 'g_subway_pay' || gameId === 'subwaypay' || gameId === 'subway-pay' || gameId === 'subway_pay' || gameId === 'subwaysurfers';
+    const cleanId = isDino ? 'g_gen_dino' : (isZumbla ? 'g_zumbla' : (isRaspa ? 'g_raspa_fortuna' : (isSubway ? 'g_subway_pay' : 'g_block_puzzle')));
 
     const config = await this.getGameConfig(cleanId);
     const allBets = await this.getAllGameBets(200);
@@ -1222,6 +1621,15 @@ export class FirestoreDB {
     const gameBets = allBets.filter((b) => {
       if (isDino) {
         return b.gameId === 'g_gen_dino' || b.gameId === 'gendino' || b.gameId === 'gen-dino' || b.gameId === 'dino';
+      }
+      if (isZumbla) {
+        return b.gameId === 'g_zumbla' || b.gameId === 'zumbla';
+      }
+      if (isRaspa) {
+        return b.gameId === 'g_raspa_fortuna' || b.gameId === 'raspa_fortuna' || b.gameId === 'raspafortuna' || b.gameId === 'raspa-fortuna';
+      }
+      if (isSubway) {
+        return b.gameId === 'g_subway_pay' || b.gameId === 'subwaypay' || b.gameId === 'subway-pay' || b.gameId === 'subway_pay';
       }
       return b.gameId === 'g_block_puzzle' || b.gameId === 'blockpuzzle';
     });
@@ -1452,13 +1860,19 @@ export class FirestoreDB {
     }
   }
 
-  // --- DOTFY GATEWAY CONFIG ---
+  // --- DOTFY GATEWAY CONFIG (ENCRYPTED AT REST AES-256-GCM) ---
   async getDotfyConfig(): Promise<DotfyGatewayConfigDB | null> {
     try {
       const docRef = doc(firestoreDb, 'settings', 'dotfy');
       const snap = await getDoc(docRef);
       if (snap.exists()) {
-        return snap.data() as DotfyGatewayConfigDB;
+        const raw = snap.data() as DotfyGatewayConfigDB;
+        return {
+          ...raw,
+          activeApiKey: raw.activeApiKey ? decryptSensitiveData(raw.activeApiKey) : raw.activeApiKey,
+          secondaryApiKey: raw.secondaryApiKey ? decryptSensitiveData(raw.secondaryApiKey) : raw.secondaryApiKey,
+          webhookSecret: raw.webhookSecret ? decryptSensitiveData(raw.webhookSecret) : raw.webhookSecret
+        };
       }
     } catch (err) {
       console.warn('[FirestoreDB] Could not get dotfy config:', err);
@@ -1469,7 +1883,13 @@ export class FirestoreDB {
   async saveDotfyConfig(config: DotfyGatewayConfigDB): Promise<void> {
     try {
       const docRef = doc(firestoreDb, 'settings', 'dotfy');
-      await setDoc(docRef, sanitizeForFirestore(config), { merge: true });
+      const encryptedConfig: DotfyGatewayConfigDB = {
+        ...config,
+        activeApiKey: config.activeApiKey ? encryptSensitiveData(config.activeApiKey) : config.activeApiKey,
+        secondaryApiKey: config.secondaryApiKey ? encryptSensitiveData(config.secondaryApiKey) : config.secondaryApiKey,
+        webhookSecret: config.webhookSecret ? encryptSensitiveData(config.webhookSecret) : config.webhookSecret
+      };
+      await setDoc(docRef, sanitizeForFirestore(encryptedConfig), { merge: true });
     } catch (err) {
       console.warn('[FirestoreDB] Could not save dotfy config:', err);
     }
@@ -1533,14 +1953,27 @@ export class FirestoreDB {
       }
     }
 
-    // Export settings documents
+    // Export settings documents (credentials strictly encrypted at rest)
     try {
       const dotfySnap = await getDoc(doc(firestoreDb, 'settings', 'dotfy'));
       if (dotfySnap.exists()) {
-        backup.settings['dotfy'] = dotfySnap.data();
+        const rawDotfy = dotfySnap.data() as any;
+        backup.settings['dotfy'] = {
+          ...rawDotfy,
+          activeApiKey: rawDotfy.activeApiKey ? encryptSensitiveData(decryptSensitiveData(rawDotfy.activeApiKey)) : undefined,
+          secondaryApiKey: rawDotfy.secondaryApiKey ? encryptSensitiveData(decryptSensitiveData(rawDotfy.secondaryApiKey)) : undefined,
+          webhookSecret: rawDotfy.webhookSecret ? encryptSensitiveData(decryptSensitiveData(rawDotfy.webhookSecret)) : undefined
+        };
       } else {
         const localDotfy = await this.getDotfyConfig();
-        if (localDotfy) backup.settings['dotfy'] = localDotfy;
+        if (localDotfy) {
+          backup.settings['dotfy'] = {
+            ...localDotfy,
+            activeApiKey: localDotfy.activeApiKey ? encryptSensitiveData(localDotfy.activeApiKey) : undefined,
+            secondaryApiKey: localDotfy.secondaryApiKey ? encryptSensitiveData(localDotfy.secondaryApiKey) : undefined,
+            webhookSecret: localDotfy.webhookSecret ? encryptSensitiveData(localDotfy.webhookSecret) : undefined
+          };
+        }
       }
     } catch (e) {
       console.warn('[Export] Error reading settings/dotfy:', e);

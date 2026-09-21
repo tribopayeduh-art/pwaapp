@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   BarChart3,
+  Radio,
   Users,
   ArrowUpRight,
   CreditCard,
@@ -49,6 +50,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       icon: BarChart3,
       color: 'bg-[#007AFF] text-white',
       accent: 'text-[#007AFF]'
+    },
+    {
+      id: 'live' as AdminTabId,
+      label: 'Jogadores Ao Vivo',
+      icon: Radio,
+      color: 'bg-[#30D158] text-white',
+      accent: 'text-[#30D158]',
+      badgeText: 'AO VIVO'
     },
     {
       id: 'users' as AdminTabId,
@@ -210,7 +219,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                     </span>
                   )}
                   {item.badgeText !== undefined && (
-                    <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-emerald-100 text-emerald-700 tracking-wider">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#30D158]/15 text-[#248A3D] border border-[#30D158]/30 tracking-wider">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#30D158] animate-pulse" />
                       {item.badgeText}
                     </span>
                   )}

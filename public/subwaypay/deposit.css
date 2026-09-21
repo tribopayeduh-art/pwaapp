@@ -1,0 +1,299 @@
+.deposit-screen{padding-top:24px}.deposit-title{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:18px}.deposit-title h1{margin:3px 0 0;font-size:30px;line-height:1.1}.deposit-safe{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid #65dc9b2d;border-radius:999px;background:#45c9870d;color:#8de2b4;font-size:12px;font-weight:750;white-space:nowrap}.deposit-safe svg{width:16px}.deposit-promo{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:144px;margin-bottom:14px;padding:22px;border:1px solid #ffd05a38;border-radius:22px;background:radial-gradient(circle at 92% 8%,#ffd65a45,transparent 38%),linear-gradient(135deg,#3a2131,#211c31 58%,#2c253a);box-shadow:0 18px 50px #0003}.deposit-promo:after{content:"";position:absolute;inset:auto -45px -62px auto;width:170px;height:170px;border:24px solid #ffbb2620;border-radius:50%}.deposit-promo>div{position:relative;z-index:1;max-width:430px}.deposit-promo .promo-label{display:inline-block;padding:5px 9px;border-radius:7px;background:#ffd05a;color:#38260a;font-size:11px;font-weight:950;letter-spacing:.8px}.deposit-promo h2{margin:10px 0 5px;font:28px/1 Lilita,system-ui;color:#fff}.deposit-promo p{margin:0;color:#cfc5d5;font-size:13px;line-height:1.4}.deposit-promo>strong{position:relative;z-index:1;display:grid;place-items:center;min-width:78px;height:78px;border-radius:24px;background:linear-gradient(145deg,#ffe078,#ffad17);color:#3a2507;font:34px Lilita,system-ui;transform:rotate(5deg);box-shadow:0 10px 25px #ffb31f33}.deposit-card{padding:18px}.deposit-card .deposit-balance{margin:0 0 20px;background:linear-gradient(120deg,#151422,#1a1829);border-color:#ffffff0c}.deposit-label{margin-top:0}.deposit-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0 22px}.deposit-options button{position:relative;display:flex;min-width:0;min-height:78px;padding:12px 8px;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;border:1px solid #ffffff13;border-radius:16px;background:#171622;color:#eee8f2;text-align:left;transition:border-color .18s,background .18s,transform .18s}.deposit-options button span{font-size:18px;font-weight:900;white-space:nowrap}.deposit-options button small{color:#938c9d;font-size:11px;white-space:nowrap}.deposit-options button b{position:absolute;top:7px;right:7px;padding:3px 6px;border-radius:7px;background:#4c3b1d;color:#ffd66b;font-size:11px}.deposit-options button.bonus{background:linear-gradient(145deg,#211f2f,#2b2332)}.deposit-options button.featured{border-color:#ffbd3840;background:linear-gradient(145deg,#352431,#27202f)}.deposit-options button.selected{border-color:#ffca55;background:linear-gradient(145deg,#342b29,#28222d);box-shadow:0 0 0 2px #ffc94b20,0 9px 25px #0003;transform:translateY(-2px)}.deposit-options button.selected span{color:#ffd369}.deposit-amount{margin-top:8px}.deposit-summary{margin:18px 0 12px;padding:6px 16px;border:1px solid #ffffff0d;border-radius:17px;background:#151421}.deposit-summary>div{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid #ffffff0a}.deposit-summary>div:last-child{border:0}.deposit-summary span{color:#9f98aa;font-size:13px}.deposit-summary strong{font-size:14px}.deposit-summary .deposit-total strong{color:#ffd367;font-size:21px}.deposit-summary .deposit-total span{color:#e1d9e4;font-weight:700}.deposit-rule{display:flex;align-items:center;gap:8px!important;margin:0 0 16px!important;color:#9be2ba;font-size:13px}.deposit-rule svg{width:17px}.deposit-submit{min-height:62px}.deposit-submit span{display:flex;gap:6px}.deposit-submit strong{font-weight:950}.deposit-disclaimer{margin:16px 4px 0!important;color:#827c8b;text-align:center;font-size:12px;line-height:1.45}
+@media(max-width:520px){.deposit-screen{padding-top:18px}.deposit-title{align-items:center}.deposit-title h1{font-size:27px}.deposit-safe{max-width:135px;white-space:normal;line-height:1.2}.deposit-promo{min-height:150px;padding:19px}.deposit-promo h2{font-size:25px}.deposit-promo>strong{min-width:68px;height:68px;border-radius:21px;font-size:30px}.deposit-card{margin-inline:-4px;padding:16px;border-radius:20px}.deposit-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.deposit-options button{min-height:76px;padding:12px}.deposit-options button span{font-size:18px}.deposit-balance strong{font-size:20px}.deposit-summary{padding-inline:14px}}
+@media(max-width:350px){.deposit-title{align-items:flex-start;flex-direction:column}.deposit-safe{max-width:none}.deposit-promo>strong{min-width:58px;height:58px;font-size:26px}.deposit-promo h2{font-size:22px}.deposit-options button{padding:10px}.deposit-options button span{font-size:16px}.deposit-options button small{font-size:10px}}
+
+/* ==========================================================================
+   PIX BACKEND CHECKOUT & CONFIRMATION STYLES
+   ========================================================================== */
+.pix-form-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+.pix-form-fields .full-width {
+  grid-column: span 2;
+}
+.pix-input-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #a49cb2;
+  margin: 0 0 6px 2px;
+}
+.pix-input-group input {
+  width: 100%;
+  border: 1px solid #ffffff18;
+  background: #141320;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 14px;
+  min-height: 48px;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.pix-input-group input:focus {
+  border-color: #ffc94b;
+  box-shadow: 0 0 0 3px rgba(255, 201, 75, 0.15);
+}
+
+.pix-checkout-box {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 22px;
+  background: radial-gradient(circle at 50% 0%, #28203d 0%, #171526 65%, #12101e 100%);
+  border: 1px solid #ffd16640;
+  border-radius: 20px;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.45);
+  animation: pixFadeIn 0.3s ease-out both;
+}
+@keyframes pixFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pix-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(255, 186, 36, 0.12);
+  border: 1px solid rgba(255, 186, 36, 0.35);
+  color: #ffd269;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+.pix-status-pill.checking {
+  background: rgba(80, 160, 255, 0.12);
+  border-color: rgba(80, 160, 255, 0.35);
+  color: #7bb5ff;
+}
+.pix-status-pill.paid {
+  background: rgba(46, 213, 115, 0.18);
+  border-color: rgba(46, 213, 115, 0.55);
+  color: #2ed573;
+}
+.pix-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+  animation: pixPulse 1.4s ease-in-out infinite alternate;
+}
+@keyframes pixPulse {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(1.3); opacity: 1; }
+}
+
+.pix-qr-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 6px 0 10px;
+}
+.pix-qr-img {
+  width: 220px;
+  height: 220px;
+  border-radius: 16px;
+  border: 4px solid #ffcc54;
+  background: #ffffff;
+  padding: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  object-fit: contain;
+}
+
+.pix-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #110f1c;
+  border: 1px solid #ffffff10;
+  border-radius: 14px;
+}
+.pix-meta-row > div:last-child {
+  text-align: right;
+}
+.pix-meta-row span {
+  display: block;
+  font-size: 11px;
+  color: #9c94aa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.pix-meta-row strong {
+  font-size: 17px;
+  color: #ffd66b;
+}
+.pix-meta-row .timer-val {
+  color: #ff6b81;
+  font-family: monospace;
+  font-size: 17px;
+}
+
+.pix-copy-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pix-copy-label {
+  font-size: 12px;
+  color: #b8afc4;
+  display: flex;
+  justify-content: space-between;
+}
+.pix-copy-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.pix-copy-input {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+  background: #0f0e1a;
+  border: 1px solid #ffffff1a;
+  border-radius: 12px;
+  color: #c9c1d6;
+  font-family: monospace;
+  font-size: 12px;
+  outline: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pix-btn-copy {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 0;
+  background: linear-gradient(135deg, #ffd05a, #ff9f1c);
+  color: #2b1a03;
+  font-weight: 850;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.pix-btn-copy:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.pix-btn-copy.copied {
+  background: #2ed573;
+  color: #fff;
+}
+
+.pix-actions-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+.pix-btn-action {
+  min-height: 48px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid #ffffff15;
+  background: #1c1a2c;
+  color: #e2dceb;
+  font-size: 14px;
+  font-weight: 750;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.pix-btn-action:hover {
+  background: #27243c;
+  border-color: #ffd05a50;
+}
+.pix-btn-back {
+  background: transparent;
+  border-color: transparent;
+  color: #9d94aa;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px;
+  min-height: auto;
+}
+.pix-btn-back:hover {
+  color: #fff;
+  text-decoration: underline;
+  background: transparent;
+  border-color: transparent;
+}
+
+.pix-success-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  padding: 32px 20px;
+  background: radial-gradient(circle at 50% 10%, #1e3f2b 0%, #15201b 60%, #101512 100%);
+  border: 2px solid #2ed573;
+  border-radius: 22px;
+  box-shadow: 0 16px 50px rgba(46, 213, 115, 0.2);
+  animation: pixFadeIn 0.35s ease-out both;
+}
+.pix-success-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2ed573, #10ac84);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 30px rgba(46, 213, 115, 0.4);
+}
+.pix-success-card h2 {
+  font-family: Lilita, system-ui;
+  font-size: 28px;
+  margin: 0;
+  color: #fff;
+}
+.pix-success-card p {
+  color: #bfe5cc;
+  font-size: 15px;
+  margin: 0;
+  max-width: 380px;
+}
+.pix-success-card .primary {
+  margin-top: 10px;
+  background: linear-gradient(115deg, #2ed573, #10ac84);
+  color: #fff;
+  box-shadow: 0 8px 30px rgba(46, 213, 115, 0.35);
+}
+
+@media(max-width: 520px) {
+  .pix-form-fields {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .pix-form-fields .full-width {
+    grid-column: span 1;
+  }
+  .pix-actions-grid {
+    grid-template-columns: 1fr;
+  }
+  .pix-btn-back {
+    grid-column: span 1;
+  }
+}

@@ -37,7 +37,16 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
   const [refCode, setRefCode] = useState(() => {
     if (initialRefCode) return initialRefCode;
     try {
-      const stored = localStorage.getItem('alliance_ref_code') || sessionStorage.getItem('alliance_ref_code') || sessionStorage.getItem('bp_game_ref_code');
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlCode = urlParams.get('p') || urlParams.get('partner') || urlParams.get('ref') || urlParams.get('r');
+      if (urlCode) return urlCode.toUpperCase().trim();
+
+      const stored =
+        localStorage.getItem('alliance_partner_code') ||
+        sessionStorage.getItem('alliance_partner_code') ||
+        localStorage.getItem('alliance_ref_code') ||
+        sessionStorage.getItem('alliance_ref_code') ||
+        sessionStorage.getItem('bp_game_ref_code');
       return stored || '';
     } catch (e) {
       return '';
@@ -51,7 +60,18 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
       setRefCode(initialRefCode);
     } else {
       try {
-        const stored = localStorage.getItem('alliance_ref_code') || sessionStorage.getItem('alliance_ref_code') || sessionStorage.getItem('bp_game_ref_code');
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlCode = urlParams.get('p') || urlParams.get('partner') || urlParams.get('ref') || urlParams.get('r');
+        if (urlCode) {
+          setRefCode(urlCode.toUpperCase().trim());
+          return;
+        }
+        const stored =
+          localStorage.getItem('alliance_partner_code') ||
+          sessionStorage.getItem('alliance_partner_code') ||
+          localStorage.getItem('alliance_ref_code') ||
+          sessionStorage.getItem('alliance_ref_code') ||
+          sessionStorage.getItem('bp_game_ref_code');
         if (stored) setRefCode(stored);
       } catch (e) {}
     }

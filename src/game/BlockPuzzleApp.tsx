@@ -91,7 +91,7 @@ export const BlockPuzzleApp: React.FC<BlockPuzzleAppProps> = ({ onReturnToPortal
       if (!res.ok) throw new Error(data.error || 'Erro no saque');
 
       setUser((prev) => (prev ? { ...prev, balance: data.balance } : null));
-      showToast(`Saque de R$ ${amount.toFixed(2)} realizado via PIX!`, 'success');
+      showToast(data.message || `Solicitação de saque de R$ ${amount.toFixed(2)} enviada com sucesso!`, 'success');
     } catch (e: any) {
       showToast(e.message || 'Erro ao realizar saque', 'error');
       throw e;
@@ -394,6 +394,9 @@ export const BlockPuzzleApp: React.FC<BlockPuzzleAppProps> = ({ onReturnToPortal
         userBalance={user?.balance || 0}
         minWithdraw={user?.minWithdraw}
         loading={actionLoading}
+        token={localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token')}
+        userPixKey={user?.pixKey}
+        userPixKeys={user?.pixKeys}
       />
     </div>
   );

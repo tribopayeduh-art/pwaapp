@@ -211,6 +211,33 @@
         "sentBy": { "type": "string" }
       },
       "required": ["id", "title", "body", "createdAt"]
+    },
+    "influencerCommissionRequests": {
+      "title": "Influencer Commission Requests",
+      "description": "Withdrawal requests made by influencers to their affiliate managers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "affiliateId": { "type": "string" },
+        "affiliateUserId": { "type": "string" },
+        "influencerUserId": { "type": "string" },
+        "influencerName": { "type": "string" },
+        "influencerEmail": { "type": "string" },
+        "amount": { "type": "number" },
+        "approvedAmount": { "type": "number" },
+        "pixKey": { "type": "string" },
+        "pixKeyType": { "type": "string" },
+        "status": { "type": "string" },
+        "gameOrigin": { "type": "string" },
+        "totalDepositsBrought": { "type": "number" },
+        "paidDepositsCount": { "type": "number" },
+        "paidDepositsAmount": { "type": "number" },
+        "referralsCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "processedAt": { "type": "string" },
+        "rejectReason": { "type": "string" }
+      },
+      "required": ["id", "influencerUserId", "amount", "pixKey", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -281,6 +308,10 @@
     "/affiliateNotificationsFeed/{feedId}": {
       "schema": "affiliateNotificationsFeed",
       "description": "In-app affiliate notification feed (camelCase)"
+    },
+    "/influencerCommissionRequests/{requestId}": {
+      "schema": "influencerCommissionRequests",
+      "description": "Influencer commission withdrawal requests"
     }
   }
 }

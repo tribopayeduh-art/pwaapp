@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
-import { ArrowUpRight, Loader2, AlertCircle, ShieldCheck, Wallet, KeyRound, Plus, CheckCircle2 } from 'lucide-react';
+import { ArrowUpRight, Loader2, AlertCircle, ShieldCheck, Wallet, KeyRound, Plus, CheckCircle2, RotateCcw } from 'lucide-react';
 
 interface PixKeyItem {
   id: string;
@@ -15,11 +15,14 @@ interface WithdrawModalProps {
   onClose: () => void;
   onConfirmWithdraw: (amount: number, pixKeyId: string) => Promise<void>;
   userBalance: number;
+  affiliateBalance?: number;
   minWithdraw?: number;
   withdrawFee?: number;
   loading: boolean;
   token?: string | null;
   onOpenAddPixKey?: () => void;
+  userPixKey?: any;
+  userPixKeys?: any[];
 }
 
 export const WithdrawModal: React.FC<WithdrawModalProps> = ({
@@ -27,11 +30,14 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
   onClose,
   onConfirmWithdraw,
   userBalance,
+  affiliateBalance = 0,
   minWithdraw = 100,
   withdrawFee,
   loading,
   token,
   onOpenAddPixKey,
+  userPixKey,
+  userPixKeys,
 }) => {
   const limit = typeof minWithdraw === 'number' && !isNaN(minWithdraw) && minWithdraw >= 0 ? minWithdraw : 100;
   const fallbackFee = typeof withdrawFee === 'number' && !isNaN(withdrawFee) && withdrawFee >= 0 ? withdrawFee : 8.0;
@@ -44,6 +50,27 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
   const [manualPixKey, setManualPixKey] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
+  // Live real-time balances to ensure the user always sees their true balance
+  const [liveWalletBalance, setLiveWalletBalance] = useState<number>(
+    typeof userBalance === 'number' && !isNaN(userBalance) ? userBalance : 0
+  );
+  const [liveAffiliateBalance, setLiveAffiliateBalance] = useState<number>(
+    typeof affiliateBalance === 'number' && !isNaN(affiliateBalance) ? affiliateBalance : 0
+  );
+
+  // Keep balances in sync if props change
+  useEffect(() => {
+    if (typeof userBalance === 'number' && !isNaN(userBalance)) {
+      setLiveWalletBalance(userBalance);
+    }
+  }, [userBalance]);
+
+  useEffect(() => {
+    if (typeof affiliateBalance === 'number' && !isNaN(affiliateBalance)) {
+      setLiveAffiliateBalance(affiliateBalance);
+    }
+  }, [affiliateBalance]);
+
   // Keep liveFee in sync if prop changes
   useEffect(() => {
     if (typeof withdrawFee === 'number' && !isNaN(withdrawFee) && withdrawFee >= 0) {
@@ -51,60 +78,101 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     }
   }, [withdrawFee]);
 
+  // Seed keys immediately from user profile if available
+  useEffect(() => {
+    if (userPixKeys && Array.isArray(userPixKeys) && userPixKeys.length > 0) {
+      setPixKeys(userPixKeys);
+      setSelectedPixKeyId((prev) => prev || userPixKeys[0].id || userPixKeys[0].key);
+    } else if (userPixKey && userPixKey.key) {
+      setPixKeys([userPixKey]);
+      setSelectedPixKeyId((prev) => prev || userPixKey.id || userPixKey.key);
+    }
+  }, [userPixKey, userPixKeys]);
+
   useEffect(() => {
     if (isOpen) {
       setError(null);
       setAmount(limit.toString());
       fetchPixKeys();
-      fetchLatestFee();
+      fetchLatestFeeAndBalances();
     }
   }, [isOpen, token, limit]);
 
-  const fetchLatestFee = async () => {
-    const authToken = token || localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token');
+  // Re-sync keys whenever window regains focus or pix_keys_updated is fired
+  useEffect(() => {
+    const handleSync = () => {
+      fetchPixKeys();
+    };
+    window.addEventListener('pix_keys_updated', handleSync);
+    window.addEventListener('focus', handleSync);
+    return () => {
+      window.removeEventListener('pix_keys_updated', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
+  }, [token]);
+
+  const fetchLatestFeeAndBalances = async () => {
+    const authToken = token || localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token') || localStorage.getItem('auth_token');
     if (!authToken) return;
     try {
-      // 1. Try affiliates/info if the user is an affiliate
-      const affRes = await fetch('/api/affiliates/info', {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (affRes.ok) {
-        const affData = await affRes.json();
-        if (typeof affData.withdrawFee === 'number' && !isNaN(affData.withdrawFee)) {
-          setLiveFee(affData.withdrawFee);
-          return;
-        }
-      }
-      // 2. Fallback to auth/me to get the user's updated withdrawFee
+      // 1. Fetch user data for true wallet balance & fee
       const meRes = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (meRes.ok) {
         const meData = await meRes.json();
+        if (typeof meData.balance === 'number' && !isNaN(meData.balance)) {
+          setLiveWalletBalance(meData.balance);
+        }
         if (typeof meData.withdrawFee === 'number' && !isNaN(meData.withdrawFee)) {
           setLiveFee(meData.withdrawFee);
         }
+        if (Array.isArray(meData.pixKeys) && meData.pixKeys.length > 0) {
+          setPixKeys(meData.pixKeys);
+          setSelectedPixKeyId((prev) => prev || meData.pixKeys[0].id || meData.pixKeys[0].key);
+        }
+      }
+
+      // 2. Fetch affiliate info for commissions balance & fee
+      const affRes = await fetch('/api/affiliates/info', {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (affRes.ok) {
+        const affData = await affRes.json();
+        if (typeof affData.affiliateBalance === 'number' && !isNaN(affData.affiliateBalance)) {
+          setLiveAffiliateBalance(affData.affiliateBalance);
+        }
+        if (typeof affData.withdrawFee === 'number' && !isNaN(affData.withdrawFee)) {
+          setLiveFee(affData.withdrawFee);
+        }
       }
     } catch (_e) {
-      // Ignore transient errors and keep current fee
+      // Ignore transient errors and keep current states
     }
   };
 
+  const safeWallet = typeof liveWalletBalance === 'number' && !isNaN(liveWalletBalance) ? Math.max(0, liveWalletBalance) : 0;
+  const safeAffiliate = typeof liveAffiliateBalance === 'number' && !isNaN(liveAffiliateBalance) ? Math.max(0, liveAffiliateBalance) : 0;
+  const totalAvailableBalance = parseFloat((safeWallet + safeAffiliate).toFixed(2));
+
   const fetchPixKeys = async () => {
-    if (!token) return;
+    const authToken = token || localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token') || localStorage.getItem('auth_token');
+    if (!authToken) return;
     setLoadingKeys(true);
     try {
       const res = await fetch('/api/pix-keys', {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${authToken}`,
         },
       });
       const data = await res.json();
       if (res.ok && Array.isArray(data.pixKeys)) {
         setPixKeys(data.pixKeys);
         if (data.pixKeys.length > 0) {
-          // Default select the first key
-          setSelectedPixKeyId(data.pixKeys[0].id || data.pixKeys[0].key);
+          setSelectedPixKeyId((prev) => {
+            const exists = data.pixKeys.some((k: any) => (k.id || k.key) === prev);
+            return exists ? prev : (data.pixKeys[0].id || data.pixKeys[0].key);
+          });
         }
       }
     } catch (err) {
@@ -117,8 +185,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
   const presetAmounts = Array.from(new Set([limit, 50, 100, 200, 500, 1000].filter(a => a >= limit))).sort((a, b) => a - b);
 
   const handleSelectAllBalance = () => {
-    if (userBalance > 0) {
-      setAmount(userBalance.toFixed(2));
+    if (totalAvailableBalance > 0) {
+      setAmount(totalAvailableBalance.toFixed(2));
     }
   };
 
@@ -140,12 +208,15 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
       return;
     }
 
-    if (val > userBalance) {
+    if (val > totalAvailableBalance) {
       setError('Saldo insuficiente para realizar este saque.');
       return;
     }
 
     let finalPixKeyId = selectedPixKeyId;
+    if (!finalPixKeyId && pixKeys.length > 0) {
+      finalPixKeyId = pixKeys[0].id || pixKeys[0].key;
+    }
     if (!finalPixKeyId && manualPixKey.trim()) {
       finalPixKeyId = manualPixKey.trim();
     }
@@ -159,7 +230,12 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
       await onConfirmWithdraw(val, finalPixKeyId);
       onClose();
     } catch (err: any) {
-      setError(err?.message || 'Falha ao processar solicitação de saque.');
+      let msg = err?.message || 'Falha ao processar solicitação de saque.';
+      const lower = msg.toLowerCase();
+      if ((lower.includes('saldo insuficiente') && (lower.includes('dotfy') || lower.includes('gateway'))) || lower.includes('dotfy gateway')) {
+        msg = 'Os saques estão em manutenção temporária. Tente novamente em 30 minutos. Seu saldo na plataforma permanece intacto.';
+      }
+      setError(msg);
     }
   };
 
@@ -177,23 +253,33 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
         {/* Saldo Disponível Card */}
         <div className="bg-[#F5F5F5] border border-[#E5E5E5] p-3.5 rounded-2xl flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-white border border-[#E5E5E5] flex items-center justify-center text-[#111111]">
+            <div className="w-8 h-8 rounded-xl bg-white border border-[#E5E5E5] flex items-center justify-center text-[#111111] shadow-2xs">
               <Wallet className="w-4 h-4" />
             </div>
             <div>
               <span className="text-xs font-semibold text-[#737373] block">
                 Saldo Disponível
               </span>
-              <span className="text-base font-bold text-[#111111]">
-                R$ {userBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <span className="text-base font-bold text-[#111111] block leading-tight">
+                R$ {totalAvailableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
+              {safeAffiliate > 0 && safeWallet > 0 ? (
+                <span className="text-[10px] text-[#737373] block mt-0.5">
+                  Carteira: R$ {safeWallet.toFixed(2)} • Comissões: R$ {safeAffiliate.toFixed(2)}
+                </span>
+              ) : safeAffiliate > 0 ? (
+                <span className="text-[10px] text-emerald-700 font-medium block mt-0.5">
+                  Comissões disponíveis para resgate
+                </span>
+              ) : null}
             </div>
           </div>
 
           <button
             type="button"
             onClick={handleSelectAllBalance}
-            className="text-[11px] font-bold text-[#111111] bg-white border border-[#E5E5E5] px-2.5 py-1.5 rounded-xl hover:bg-[#ECECEC] transition-colors cursor-pointer"
+            disabled={totalAvailableBalance <= 0}
+            className="text-[11px] font-bold text-[#111111] bg-white border border-[#E5E5E5] px-2.5 py-1.5 rounded-xl hover:bg-[#ECECEC] transition-colors cursor-pointer disabled:opacity-40"
           >
             Sacar Tudo
           </button>
@@ -247,77 +333,142 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
               <KeyRound className="w-3.5 h-3.5 text-[#111111]" />
               <span>Chave PIX para Recebimento</span>
             </label>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={fetchPixKeys}
+                title="Atualizar lista de chaves"
+                className="text-xs text-slate-500 hover:text-slate-900 flex items-center gap-1 py-1 px-1.5 rounded-lg border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${loadingKeys ? 'animate-spin text-emerald-600' : ''}`} />
+                <span className="text-[11px] font-medium hidden sm:inline">Atualizar</span>
+              </button>
+              {onOpenAddPixKey && (
+                <button
+                  type="button"
+                  onClick={onOpenAddPixKey}
+                  className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 py-1 px-2 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Nova Chave</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          {loadingKeys ? (
+          {loadingKeys && pixKeys.length === 0 ? (
             <div className="p-4 text-center bg-[#F5F5F5] rounded-xl border border-[#E5E5E5] flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-[#111111]" />
               <span className="text-xs text-[#737373]">Carregando chaves cadastradas...</span>
             </div>
           ) : pixKeys.length > 0 ? (
-            <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
-              {pixKeys.map((item) => {
-                const keyId = item.id || item.key;
-                const isSelected = selectedPixKeyId === keyId;
-                return (
-                  <div
-                    key={keyId}
-                    onClick={() => setSelectedPixKeyId(keyId)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                      isSelected
-                        ? 'bg-white border-[#111111] shadow-xs'
-                        : 'bg-[#F5F5F5] border-[#E5E5E5] hover:border-[#A3A3A3]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                          isSelected ? 'border-[#111111] bg-[#111111]' : 'border-[#A3A3A3]'
-                        }`}
-                      >
-                        {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-[#111111] truncate">{item.name}</span>
-                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 bg-[#E5E5E5] text-[#111111] rounded">
-                            {item.type}
-                          </span>
+            <div className="space-y-2">
+              <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                {pixKeys.map((item) => {
+                  const keyId = item.id || item.key;
+                  const isSelected = selectedPixKeyId === keyId;
+                  return (
+                    <div
+                      key={keyId}
+                      onClick={() => {
+                        setSelectedPixKeyId(keyId);
+                        setManualPixKey('');
+                      }}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                        isSelected
+                          ? 'bg-white border-[#111111] shadow-xs ring-1 ring-[#111111]'
+                          : 'bg-[#F5F5F5] border-[#E5E5E5] hover:border-[#A3A3A3]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                            isSelected ? 'border-[#111111] bg-[#111111]' : 'border-[#A3A3A3]'
+                          }`}
+                        >
+                          {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                         </div>
-                        <p className="text-[11px] font-mono text-[#737373] truncate">{item.key}</p>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-[#111111] truncate">{item.name}</span>
+                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 bg-[#E5E5E5] text-[#111111] rounded">
+                              {item.type}
+                            </span>
+                          </div>
+                          <p className="text-[11px] font-mono text-[#737373] truncate">{item.key}</p>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 pl-2">
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Aprovada
+                        </span>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
 
-                    <div className="shrink-0 pl-2">
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        Aprovada
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="p-3.5 bg-[#FAFAFA] border border-dashed border-[#E5E5E5] rounded-xl text-center space-y-2">
-              <p className="text-xs text-[#737373]">Você não possui nenhuma chave PIX salva.</p>
-              {onOpenAddPixKey ? (
-                <button
-                  type="button"
-                  onClick={onOpenAddPixKey}
-                  className="h-8 px-3 bg-[#111111] text-white rounded-lg text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Cadastrar Chave PIX Agora</span>
-                </button>
-              ) : (
+              {/* Opção para digitar chave alternativa se desejar */}
+              <div className="pt-1">
                 <input
                   type="text"
                   value={manualPixKey}
-                  onChange={(e) => setManualPixKey(e.target.value)}
-                  placeholder="Informe sua Chave PIX (CPF, Email, Telefone)"
-                  className="w-full h-10 px-3 bg-white border border-[#E5E5E5] rounded-lg text-xs text-[#111111]"
+                  onChange={(e) => {
+                    setManualPixKey(e.target.value);
+                    if (e.target.value.trim()) {
+                      setSelectedPixKeyId('');
+                    } else if (pixKeys.length > 0) {
+                      setSelectedPixKeyId(pixKeys[0].id || pixKeys[0].key);
+                    }
+                  }}
+                  placeholder="Ou informe outra chave PIX (CPF, Telefone, E-mail)"
+                  className="w-full h-8 px-2.5 bg-white border border-[#E5E5E5] focus:border-[#111111] rounded-lg text-xs text-[#111111] placeholder:text-slate-400 font-mono transition-all"
                 />
-              )}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3.5 bg-[#FAFAFA] border border-dashed border-[#E5E5E5] rounded-xl text-center space-y-3">
+              <p className="text-xs text-[#737373]">
+                {loadingKeys ? 'Buscando chaves salvas...' : 'Nenhuma chave PIX salva encontrada.'}
+              </p>
+              
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {onOpenAddPixKey && (
+                  <button
+                    type="button"
+                    onClick={onOpenAddPixKey}
+                    className="h-8 px-3 bg-[#111111] hover:bg-black text-white rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Cadastrar Chave Oficial</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={fetchPixKeys}
+                  className="h-8 px-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1 transition-all cursor-pointer"
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 ${loadingKeys ? 'animate-spin' : ''}`} />
+                  <span>Recarregar</span>
+                </button>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200 text-left">
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Ou digite a sua Chave PIX agora para sacar direto:
+                </label>
+                <input
+                  type="text"
+                  value={manualPixKey}
+                  onChange={(e) => {
+                    setManualPixKey(e.target.value);
+                    setSelectedPixKeyId('');
+                  }}
+                  placeholder="Ex: CPF, E-mail, Celular ou Chave Aleatória"
+                  className="w-full h-10 px-3 bg-white border border-[#CCCCCC] focus:border-[#111111] focus:ring-1 focus:ring-[#111111] rounded-lg text-xs text-[#111111] placeholder:text-slate-400 font-mono transition-all"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -355,7 +506,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
             <span>Política de Proteção Antifraude</span>
           </div>
           <p className="leading-snug text-zinc-500">
-            O Cashout automático instantâneo via gateway é exclusivo para Afiliados Hub ativos e Administradores. Solicitações de contas de jogos e influenciadores são direcionadas para conferência e aprovação manual da administração.
+            O Cashout automático instantâneo via gateway é exclusivo para Afiliados Hub ativos e Administradores. Solicitações de contas de jogos e influenciadores são direcionadas para conferência e aprovação manual do próprio Afiliado Hub responsável.
           </p>
         </div>
 
