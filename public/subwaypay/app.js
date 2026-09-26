@@ -105,11 +105,97 @@ function toast(text){const el=document.querySelector('#toast');el.textContent=te
 function renderView(){const user=current();const view=location.hash.slice(1)||'login';if(view!=='depositar'){if(window.activePixPollTimer){clearInterval(window.activePixPollTimer);window.activePixPollTimer=null;}if(window.activePixCountdownTimer){clearInterval(window.activePixCountdownTimer);window.activePixCountdownTimer=null;}}document.querySelector('#account').hidden=!user;nav.hidden=!user;if(!user){renderAuth(view==='cadastro');return}document.querySelectorAll('[data-balance]').forEach(el=>el.textContent=money(user.balance));document.querySelector('.avatar').textContent=user.name.charAt(0).toUpperCase();nav.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(['login','cadastro'].includes(view)){location.hash='jogar';return}if(view==='depositar')deposit();else if(view==='sacar')withdraw();else if(view==='indicar')referral();else if(view==='perfil')profile();else home()}
 function render(){renderView();if(window.lucide)lucide.createIcons({attrs:{"aria-hidden":"true","stroke-width":1.8}})}
 function renderAuth(register){app.innerHTML=`<section class="auth auth-mobile"><div class="auth-art"><img class="auth-logo" src="jogar/assets/preload/splash.png" alt="Subway Surfers"><div class="auth-game-icon"><img src="jogar/assets/images/app-icon-144.png" alt=""></div></div><div class="auth-tabs" role="tablist"><a href="#login" class="${register?'':'active'}">Entrar</a><a href="#cadastro" class="${register?'active':''}">Criar conta</a></div><div class="auth-title"><span class="eyebrow">SUBWAY PAY</span><h1>${register?'Crie sua conta':'Bem-vindo de volta'}</h1><p>${register?'Cadastre-se com seus dados para começar a jogar.':'Entre com sua conta para continuar sua corrida.'}</p></div><form class="card auth-card" id="auth-form">${register?'<label for="name">Nome completo</label><div class="auth-field"><i data-lucide="user-round"></i><input id="name" name="name" autocomplete="name" required minlength="2" maxlength="60" placeholder="Digite seu nome"></div>':''}<label for="email">E-mail</label><div class="auth-field"><i data-lucide="mail"></i><input id="email" name="email" type="email" autocomplete="email" required maxlength="120" placeholder="voce@exemplo.com"></div><label for="password">Senha</label><div class="auth-field"><i data-lucide="lock-keyhole"></i><input id="password" name="password" type="password" autocomplete="${register?'new-password':'current-password'}" required minlength="6" placeholder="Pelo menos 6 caracteres"><button type="button" class="password-toggle" data-target="password" aria-label="Mostrar senha"><i data-lucide="eye"></i></button></div>${register?'<label for="confirm">Confirmar senha</label><div class="auth-field"><i data-lucide="shield-check"></i><input id="confirm" name="confirm" type="password" autocomplete="new-password" required minlength="6" placeholder="Repita sua senha"><button type="button" class="password-toggle" data-target="confirm" aria-label="Mostrar senha"><i data-lucide="eye"></i></button></div>':''}<p class="error" id="auth-error" role="alert"></p><button class="primary auth-submit" type="submit"><i data-lucide="${register?'user-plus':'log-in'}"></i>${register?'Criar minha conta':'Entrar na conta'}</button></form><p class="auth-privacy"><i data-lucide="shield-check"></i> Acesso seguro e oficial Subway Pay.</p></section>`;document.querySelectorAll('.password-toggle').forEach(button=>button.onclick=()=>{const input=document.querySelector('#'+button.dataset.target),show=input.type==='password';input.type=show?'text':'password';button.setAttribute('aria-label',show?'Ocultar senha':'Mostrar senha');button.innerHTML=`<i data-lucide="${show?'eye-off':'eye'}"></i>`;lucide.createIcons({attrs:{"aria-hidden":"true"}})});document.querySelector('#auth-form').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),email=f.get('email').trim().toLowerCase(),password=f.get('password'),error=document.querySelector('#auth-error'),button=e.target.querySelector('.auth-submit');error.textContent='';button.disabled=true;const origBtnHtml=button.innerHTML;button.innerHTML=`<i data-lucide="loader-2" class="spinIcon"></i> ${register?'Criando conta...':'Entrando...'}`;if(window.lucide)lucide.createIcons();try{if(register){if(password!==f.get('confirm'))throw Error('As senhas precisam ser iguais.');const name=f.get('name').trim();if(name.length<2)throw Error('Informe seu nome completo.');const refCode=localStorage.getItem('subway_ref_code')||sessionStorage.getItem('subway-demo-referrer')||'';const res=await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json','X-Game-Origin':'g_subway_pay','X-Game-Id':'g_subway_pay'},body:JSON.stringify({name,email,password,phone:'Não informado',refCode,registeredGame:'g_subway_pay',acquisitionGame:'g_subway_pay',game:'g_subway_pay',gameId:'g_subway_pay'})});const data=await res.json();if(!res.ok){throw Error(data.error||data.message||'Erro ao criar conta na plataforma.');}if(data.token){localStorage.setItem('pg_auth_token',data.token);localStorage.setItem('paygateway_token',data.token);localStorage.setItem('token',data.token);}const serverUser=data.user||{};let existing=users.find(u=>u.email===email);if(existing){existing.id=serverUser.id||existing.id;existing.name=serverUser.name||name;existing.balance=typeof serverUser.balance==='number'?serverUser.balance:0;existing.referralCode=serverUser.referralCode||'';existing.registeredGame='g_subway_pay';}else{users.push({id:serverUser.id||('u_'+Date.now()),email,name:serverUser.name||name,balance:typeof serverUser.balance==='number'?serverUser.balance:0,referralCode:serverUser.referralCode||'',registeredGame:'g_subway_pay'});}persist();}else{const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json','X-Game-Origin':'g_subway_pay','X-Game-Id':'g_subway_pay'},body:JSON.stringify({email,password,game:'g_subway_pay',acquisitionGame:'g_subway_pay'})});const data=await res.json();if(!res.ok){throw Error(data.error||data.message||'E-mail ou senha incorretos.');}if(data.token){localStorage.setItem('pg_auth_token',data.token);localStorage.setItem('paygateway_token',data.token);localStorage.setItem('token',data.token);}const serverUser=data.user||{};let existing=users.find(u=>u.email===email);if(existing){existing.id=serverUser.id||existing.id;existing.name=serverUser.name||existing.name;existing.balance=typeof serverUser.balance==='number'?serverUser.balance:existing.balance;existing.referralCode=serverUser.referralCode||existing.referralCode||'';existing.registeredGame='g_subway_pay';}else{users.push({id:serverUser.id||('u_'+Date.now()),email,name:serverUser.name||'Jogador',balance:typeof serverUser.balance==='number'?serverUser.balance:0,referralCode:serverUser.referralCode||'',registeredGame:'g_subway_pay'});}persist();}session=email;localStorage.setItem('subway-demo-session',JSON.stringify(session));location.hash='jogar';render();toast(register?'Conta criada com sucesso! Bem-vindo ao Subway Pay.':'Login realizado com sucesso!')}catch(err){error.textContent=err.message}finally{button.disabled=false;button.innerHTML=origBtnHtml;if(window.lucide)lucide.createIcons();}}}
-function home(){const u=current();app.innerHTML=`<section class="layout"><div class="balance"><span class="eyebrow">Seu saldo disponível</span><h1>${money(u.balance)}</h1><div class="actions"><button class="pill gold" data-view="depositar"><i data-lucide="arrow-down-left"></i> Depositar</button><button class="pill" data-view="sacar"><i data-lucide="arrow-up-right"></i> Sacar</button><button class="pill" data-view="indicar"><i data-lucide="users"></i> Indicar</button></div></div><section class="card"><div class="game-cover"><div class="game-cover-copy"><span class="cover-label">CORRIDA OFICIAL</span><h2>Jogando Valente</h2><p>Colete moedas nos trilhos e resgate seu lucro a qualquer momento com Cashout.</p></div><img src="jogar/assets/preload/splash.png" alt="Subway Surfers"></div><div class="badges"><span class="badge"><i data-lucide="target"></i> Meta = 4x</span><span class="badge blue"><i data-lucide="zap"></i> Jogando Valente</span></div><label for="entry">VALOR DE ENTRADA</label><div class="quick"><button data-amount="10">R$10</button><button data-amount="30">R$30</button><button data-amount="60">R$60</button></div><div class="amount"><span>R$</span><input id="entry" aria-label="Valor de entrada" type="number" min="10" max="400" step="1" value="${entry}" inputmode="decimal"></div><div class="stats"><div><span>Meta de ganho</span><strong id="target">${money(entry*4)}</strong></div><div><span>Mín. entrada</span><strong>R$ 10,00</strong></div><div><span>Máx. entrada</span><strong>R$ 400,00</strong></div></div><div class="notice" id="entry-status"></div><button class="primary" id="start-game"></button></section><p class="demo">Multiplique suas moedas e faça o Cashout a qualquer momento nos trilhos.</p></section>`;const input=document.querySelector('#entry');input.oninput=()=>{entry=Number(input.value);document.querySelector('#target').textContent=money(entry*4);updateEntry()};document.querySelectorAll('[data-amount]').forEach(b=>b.onclick=()=>{entry=Number(b.dataset.amount);input.value=entry;input.oninput()});document.querySelector('#start-game').onclick=()=>{if(!Number.isFinite(entry)||entry<10||entry>400){toast('Informe um valor entre R$10 e R$400.');return}const qStr=window.location.search||`?email=${encodeURIComponent(u.email)}&name=${encodeURIComponent(u.name)}&balance=${encodeURIComponent(u.balance)}`;const active=read('subway-demo-round',null);if(active?.status==='active'&&active.email===u.email){toast('Retomando sua corrida.');location.href='jogar/'+qStr;return}if(u.balance<entry){if(window.parent&&window.parent!==window){window.parent.postMessage({event:'deposit',needed:entry},'*');}toast('Saldo insuficiente. Gere um PIX para jogar valente!');location.hash='depositar';return}u.balance=Math.round((u.balance-entry)*100)/100;persist();localStorage.setItem('subway-demo-round',JSON.stringify({id:(crypto.randomUUID?crypto.randomUUID():'rnd_'+Date.now()),email:u.email,entry,status:'active'}));localStorage.setItem('realBetPage','true');location.href='jogar/'+qStr};updateEntry()}
-function updateEntry(){const u=current(),valid=Number.isFinite(entry)&&entry>=10&&entry<=400,status=document.querySelector('#entry-status'),button=document.querySelector('#start-game');status.textContent=!valid?'Informe uma entrada entre R$10 e R$400.':u.balance<entry?'Saldo insuficiente para jogar. Gere um PIX para adicionar saldo.':'Entrada confirmada. O valor será debitado ao iniciar a corrida.';button.innerHTML=!valid?'<i data-lucide="sliders-horizontal"></i> Ajustar valor':u.balance<entry?'<i data-lucide="wallet"></i> Gerar PIX':'<i data-lucide="play"></i> Jogando Valente';if(window.lucide)lucide.createIcons({attrs:{"aria-hidden":"true"}})}
+function home(){const u=current();app.innerHTML=`<section class="layout"><div class="balance"><span class="eyebrow">Seu saldo disponível</span><h1>${money(u.balance)}</h1><div class="actions"><button class="pill gold" data-view="depositar"><i data-lucide="arrow-down-left"></i> Depositar</button><button class="pill" data-view="sacar"><i data-lucide="arrow-up-right"></i> Sacar</button><button class="pill" data-view="indicar"><i data-lucide="users"></i> Indicar</button></div></div><section class="card"><div class="game-cover"><div class="game-cover-copy"><span class="cover-label">CORRIDA OFICIAL</span><h2>Jogando Valente</h2><p>Colete moedas nos trilhos e resgate seu lucro a qualquer momento com Cashout.</p></div><img src="jogar/assets/preload/splash.png" alt="Subway Surfers"></div><div class="badges"><span class="badge"><i data-lucide="target"></i> Meta = 4x</span><span class="badge blue"><i data-lucide="zap"></i> Jogando Valente</span></div><label for="entry">VALOR DE ENTRADA</label><div class="quick"><button data-amount="10">R$10</button><button data-amount="30">R$30</button><button data-amount="60">R$60</button></div><div class="amount"><span>R$</span><input id="entry" aria-label="Valor de entrada" type="number" min="10" max="400" step="1" value="${entry}" inputmode="decimal"></div><div class="stats"><div><span>Meta de ganho</span><strong id="target">${money(entry*4)}</strong></div><div><span>Mín. entrada</span><strong>R$ 10,00</strong></div><div><span>Máx. entrada</span><strong>R$ 400,00</strong></div></div><div class="notice" id="entry-status"></div><button class="primary" id="start-game"></button></section><p class="demo">Multiplique suas moedas e faça o Cashout a qualquer momento nos trilhos.</p></section>`;const input=document.querySelector('#entry');input.oninput=()=>{entry=Number(input.value);document.querySelector('#target').textContent=money(entry*4);updateEntry()};document.querySelectorAll('[data-amount]').forEach(b=>b.onclick=()=>{entry=Number(b.dataset.amount);input.value=entry;input.oninput()});document.querySelector('#start-game').onclick=async ()=>{
+  if(u.balance<entry||u.balance<=0){
+    sessionStorage.setItem('subway_needed_deposit', String(entry));
+    localStorage.removeItem('subway-demo-round');
+    toast('Saldo insuficiente. Redirecionando para a área de depósito...');
+    location.hash='depositar';
+    renderView();
+    if(window.lucide)lucide.createIcons({attrs:{"aria-hidden":"true","stroke-width":1.8}});
+    return;
+  }
+  if(!Number.isFinite(entry)||entry<10||entry>400){
+    toast('Informe um valor entre R$10 e R$400.');
+    return;
+  }
+  const active=read('subway-demo-round',null);
+  if(active?.status==='active'&&active.email===u.email){
+    toast('Retomando sua corrida.');
+    const qStr=window.location.search||`?email=${encodeURIComponent(u.email)}&name=${encodeURIComponent(u.name)}&balance=${encodeURIComponent(u.balance)}`;
+    location.href='jogar/'+qStr;
+    return;
+  }
+  const btn=document.querySelector('#start-game');
+  const origBtnText=btn.innerHTML;
+  btn.disabled=true;
+  btn.innerHTML='<i data-lucide="loader-2" class="spinIcon"></i> Iniciando corrida...';
+  if(window.lucide)lucide.createIcons();
+  try{
+    const token=localStorage.getItem('pg_auth_token')||localStorage.getItem('paygateway_token')||localStorage.getItem('token');
+    const startRes=await fetch('/api/game/subway-pay/start',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        ...(token?{'Authorization':`Bearer ${token}`}:{}),
+        'X-Session-Email':u.email
+      },
+      body:JSON.stringify({
+        betAmount:entry,
+        entry,
+        email:u.email,
+        token
+      })
+    });
+    const startData=await startRes.json();
+    if(!startRes.ok){
+      if(startData.code==='INSUFFICIENT_BALANCE'||startData.error?.includes('insuficiente')){
+        toast('Saldo insuficiente. Gere um PIX para adicionar saldo.');
+        location.hash='depositar';
+        renderView();
+        return;
+      }
+      throw new Error(startData.error||'Falha ao confirmar aposta.');
+    }
+    const newBal=typeof startData.balance==='number'?startData.balance:Math.round((u.balance-entry)*100)/100;
+    u.balance=newBal;
+    persist();
+    const newRound={
+      id:startData.betId||(crypto.randomUUID?crypto.randomUUID():'rnd_'+Date.now()),
+      betId:startData.betId,
+      email:u.email,
+      entry,
+      status:'active'
+    };
+    localStorage.setItem('subway-demo-round',JSON.stringify(newRound));
+    localStorage.setItem('realBetPage','true');
+    if(window.parent&&window.parent!==window){
+      window.parent.postMessage({
+        source:'subway-pay-shell',
+        event:'balance',
+        balance:u.balance
+      },'*');
+    }
+    const qParams=new URLSearchParams(window.location.search);
+    qParams.set('email',u.email);
+    qParams.set('name',u.name);
+    qParams.set('balance',String(u.balance));
+    if(token)qParams.set('token',token);
+    location.href='jogar/?'+qParams.toString();
+  }catch(err){
+    toast(err.message||'Erro ao iniciar corrida.');
+    btn.disabled=false;
+    btn.innerHTML=origBtnText;
+    if(window.lucide)lucide.createIcons();
+  }
+};updateEntry()}
+function updateEntry(){const u=current(),valid=Number.isFinite(entry)&&entry>=10&&entry<=400,status=document.querySelector('#entry-status'),button=document.querySelector('#start-game');status.textContent=!valid?'Informe uma entrada entre R$10 e R$400.':u.balance<entry?'Saldo insuficiente para jogar. Faça um depósito para adicionar saldo.':'Entrada confirmada. O valor será debitado ao iniciar a corrida.';button.innerHTML=!valid?'<i data-lucide="sliders-horizontal"></i> Ajustar valor':u.balance<entry?'<i data-lucide="wallet"></i> Depositar agora':'<i data-lucide="play"></i> Jogando Valente';if(window.lucide)lucide.createIcons({attrs:{"aria-hidden":"true"}})}
 function deposit(){
   const u = current();
   const multiplier = value => value === 200 ? 5 : value >= 100 ? 2 : 1;
+  const neededDeposit = Number(sessionStorage.getItem('subway_needed_deposit') || 0);
+  sessionStorage.removeItem('subway_needed_deposit');
+  const initialDepositVal = (neededDeposit >= 10 && neededDeposit <= 1000) ? neededDeposit : 100;
 
   if (window.activePixPollTimer) { clearInterval(window.activePixPollTimer); window.activePixPollTimer = null; }
   if (window.activePixCountdownTimer) { clearInterval(window.activePixCountdownTimer); window.activePixCountdownTimer = null; }
@@ -145,18 +231,18 @@ function deposit(){
           <form id="deposit-form">
             <label class="deposit-label">Escolha o valor de recarga</label>
             <div class="deposit-options">
-              <button type="button" data-deposit="20"><span>R$ 20</span><small>Valor inicial</small></button>
-              <button type="button" data-deposit="30"><span>R$ 30</span><small>Sem bônus</small></button>
-              <button type="button" data-deposit="75"><span>R$ 75</span><small>Sem bônus</small></button>
-              <button type="button" data-deposit="100" class="selected bonus"><span>R$ 100</span><small>Receba R$ 200</small><b>2x</b></button>
-              <button type="button" data-deposit="150" class="bonus"><span>R$ 150</span><small>Receba R$ 300</small><b>2x</b></button>
-              <button type="button" data-deposit="200" class="bonus featured"><span>R$ 200</span><small>Receba R$ 1.000</small><b>5x</b></button>
+              <button type="button" data-deposit="20" class="${initialDepositVal === 20 ? 'selected' : ''}"><span>R$ 20</span><small>Valor inicial</small></button>
+              <button type="button" data-deposit="30" class="${initialDepositVal === 30 ? 'selected' : ''}"><span>R$ 30</span><small>Sem bônus</small></button>
+              <button type="button" data-deposit="75" class="${initialDepositVal === 75 ? 'selected' : ''}"><span>R$ 75</span><small>Sem bônus</small></button>
+              <button type="button" data-deposit="100" class="${initialDepositVal === 100 ? 'selected ' : ''}bonus"><span>R$ 100</span><small>Receba R$ 200</small><b>2x</b></button>
+              <button type="button" data-deposit="150" class="${initialDepositVal === 150 ? 'selected ' : ''}bonus"><span>R$ 150</span><small>Receba R$ 300</small><b>2x</b></button>
+              <button type="button" data-deposit="200" class="${initialDepositVal === 200 ? 'selected ' : ''}bonus featured"><span>R$ 200</span><small>Receba R$ 1.000</small><b>5x</b></button>
             </div>
 
             <label for="deposit-value">Outro valor entre R$ 10 e R$ 1.000</label>
             <div class="amount deposit-amount">
               <span>R$</span>
-              <input id="deposit-value" name="value" type="number" inputmode="decimal" value="100" min="10" max="1000" step="1" required>
+              <input id="deposit-value" name="value" type="number" inputmode="decimal" value="${initialDepositVal}" min="10" max="1000" step="1" required>
             </div>
 
             <div class="deposit-summary">
@@ -210,6 +296,7 @@ function deposit(){
     });
 
     input.oninput = update;
+    update();
 
     document.querySelector('#deposit-form').onsubmit = async (e) => {
       e.preventDefault();

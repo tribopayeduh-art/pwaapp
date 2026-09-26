@@ -113,8 +113,15 @@ export const SubwayPayPlayerView: React.FC<Props> = ({
         onShowToast(`Depósito de R$ ${creditedAmount.toFixed(2)} confirmado via PIX!`, 'success');
       }
       if (data.event === 'deposit') {
-        if (onDeposit) onDeposit();
-        else onShowToast('Abra a tela de depósito PIX.', 'info');
+        // Subway Pay has its own native integrated deposit screen, do not open platform modal
+        if (mode === 'runner') {
+          switchMode('lobby');
+        }
+        try {
+          if (iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.location.hash = 'depositar';
+          }
+        } catch (_) {}
       }
       if (data.event === 'exit') {
         onBack();
@@ -181,15 +188,41 @@ export const SubwayPayPlayerView: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {onDeposit && (
-            <button
-              type="button"
-              onClick={onDeposit}
-              className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md"
-            >
-              Depositar PIX
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (mode === 'runner') {
+                const base = GAME_ASSETS.subwayPay.app;
+                const token =
+                  typeof window !== 'undefined'
+                    ? localStorage.getItem('pg_auth_token') ||
+                      localStorage.getItem('paygateway_token') ||
+                      localStorage.getItem('token') ||
+                      ''
+                    : '';
+                const separator = base.includes('?') ? '&' : '?';
+                const params = new URLSearchParams();
+                params.set('embedded', '1');
+                if (token) params.set('token', token);
+                if (user?.email) params.set('email', user.email);
+                if (user?.name) params.set('name', user.name);
+                if (typeof user?.balance === 'number') params.set('balance', String(user.balance));
+                setMode('lobby');
+                setLoaded(false);
+                setFailed(false);
+                setIframeSrc(`${base}${separator}${params.toString()}#depositar`);
+              } else {
+                try {
+                  if (iframeRef.current?.contentWindow) {
+                    iframeRef.current.contentWindow.location.hash = 'depositar';
+                  }
+                } catch (_) {}
+              }
+            }}
+            className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md"
+          >
+            Depositar agora
+          </button>
           <button
             type="button"
             onClick={handleReload}

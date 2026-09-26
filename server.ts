@@ -3028,7 +3028,75 @@ async function startServer() {
         return res.status(400).json({ error: 'Este saque já foi aprovado.' });
       }
 
-      await dbService.updateTransactionStatus(id, 'approved');
+      // Solicit withdrawal immediately on Dotfy if API key is configured
+      const apiKeyToUse = await getEffectiveDotfyApiKey();
+      let dotfyWithdrawalId: string | undefined = undefined;
+      let dotfyStatusMsg = '';
+
+      if (apiKeyToUse && tx.amount > 0) {
+        try {
+          const targetUser = await dbService.getUserById(tx.userId);
+          const rawKey = (tx as any).pixKey || targetUser?.pixKey || ((targetUser as any)?.pixKeys && (targetUser as any).pixKeys[0]?.key);
+          const rawType = (tx as any).pixType || (targetUser as any)?.pixKeyType || ((targetUser as any)?.pixKeys && (targetUser as any).pixKeys[0]?.type) || 'CPF';
+
+          if (rawKey) {
+            const cleanKey = String(rawKey).trim();
+            const cleanType = String(rawType).trim().toUpperCase();
+
+            // Resolve or register PIX key on Dotfy
+            const keyResolution = await resolveDotfyPixKey(
+              apiKeyToUse,
+              cleanKey,
+              cleanType,
+              targetUser?.name || 'Beneficiário Saque'
+            );
+
+            if (keyResolution.pixKeyId) {
+              const dotfyPayload = {
+                amount: parseFloat(tx.amount.toFixed(2)),
+                pixKeyId: keyResolution.pixKeyId
+              };
+
+              console.log('[Dotfy Admin Auto-Withdrawal Soliciting]', dotfyPayload);
+
+              const dotfyResponse = await fetch(`${DOTFY_BASE_URL}/api/withdrawals`, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${apiKeyToUse}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify(dotfyPayload)
+              });
+
+              const responseText = await dotfyResponse.text();
+              let responseData: any = {};
+              try { responseData = JSON.parse(responseText); } catch (_) { responseData = { message: responseText }; }
+
+              if (dotfyResponse.ok && (responseData?.withdrawal || responseData?.id)) {
+                const wdResult = responseData.withdrawal || responseData;
+                dotfyWithdrawalId = wdResult.id;
+                dotfyStatusMsg = ` • Solicitado imediatamente na Dotfy (ID: ${wdResult.id})`;
+              } else {
+                console.warn('[Dotfy Admin Withdrawal Warning]', dotfyResponse.status, responseData);
+                const warnMsg = responseData?.message || responseData?.error || `HTTP ${dotfyResponse.status}`;
+                dotfyStatusMsg = ` • Aprovado no painel (Aviso Dotfy: ${warnMsg})`;
+              }
+            } else {
+              console.warn('[Dotfy Admin Withdrawal Key Warning]', keyResolution.error);
+              dotfyStatusMsg = ` • Aprovado no painel (Chave PIX não vinculada na Dotfy: ${keyResolution.error || 'Inválida'})`;
+            }
+          }
+        } catch (dotfyErr: any) {
+          console.error('[Dotfy Admin Auto-Withdrawal Error]', dotfyErr);
+          dotfyStatusMsg = ` • Aprovado no painel (Erro de conexão com Dotfy)`;
+        }
+      }
+
+      await dbService.updateTransactionStatus(id, 'approved', {
+        ...(dotfyWithdrawalId ? { dotfyWithdrawalId } : {}),
+        processedAt: new Date().toISOString(),
+        approvedByName: req.user?.name || 'Administrador'
+      });
 
       // Dispara push notification para o solicitante do saque
       sendPushNotification(tx.userId, {
@@ -3042,10 +3110,15 @@ async function startServer() {
         adminId: req.user?.id,
         withdrawalId: id,
         amount: tx.amount,
-        targetUserId: tx.userId
+        targetUserId: tx.userId,
+        dotfyWithdrawalId
       });
 
-      res.json({ success: true, message: 'Saque aprovado com sucesso!' });
+      res.json({
+        success: true,
+        message: `Saque aprovado com sucesso!${dotfyStatusMsg}`,
+        dotfyWithdrawalId
+      });
     } catch (err: any) {
       console.error('Error approving withdrawal:', err);
       res.status(500).json({ error: 'Erro ao aprovar saque.' });
@@ -6030,6 +6103,287 @@ CREATE TABLE IF NOT EXISTS system_settings (
       });
     } catch (e) {
       res.status(500).json({ error: 'Erro ao carregar configurações do Subway Pay' });
+    }
+  });
+
+  // SUBWAY PAY: STATE / BALANCE
+  app.get(['/api/game/subway-pay/state', '/api/game/subwaypay/state', '/api/subwaypay/state'], async (req: Request, res: Response) => {
+    try {
+      let user: UserDB | null = null;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1]?.trim();
+        if (token && token !== 'null' && token !== 'undefined') {
+          const uid = await resolveUserIdFromToken(token);
+          if (uid) user = await dbService.getUserById(uid);
+        }
+      }
+      if (!user && req.query.token && typeof req.query.token === 'string') {
+        const uid = await resolveUserIdFromToken(req.query.token);
+        if (uid) user = await dbService.getUserById(uid);
+      }
+      if (!user) {
+        const email = (req.query.email as string) || (req.headers['x-session-email'] as string);
+        if (email) {
+          const allUsers = await dbService.getAllUsers();
+          user = allUsers.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim()) || null;
+        }
+      }
+
+      const config = await dbService.getGameConfig('g_subway_pay');
+      res.json({
+        success: true,
+        user: user ? {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          balance: typeof user.balance === 'number' ? user.balance : 0,
+          isInfluencer: Boolean(user.isInfluencer),
+        } : null,
+        balance: user && typeof user.balance === 'number' ? user.balance : 0,
+        config: {
+          minBet: config.minBet || 10.0,
+          maxBet: config.maxBet || 400.0,
+          maxMultiplier: config.maxMultiplier || 4.0,
+          minCashoutMultiplier: (config as any).minCashoutMultiplier ?? 2.0,
+        }
+      });
+    } catch (err) {
+      console.error('Subway state error:', err);
+      res.status(500).json({ error: 'Erro ao carregar estado do Subway Pay.' });
+    }
+  });
+
+  // SUBWAY PAY: START RUN (Deduct Bet from DB Balance)
+  app.post(['/api/game/subway-pay/start', '/api/game/subwaypay/start', '/api/subwaypay/start', '/api/subwaypay/bet'], async (req: Request, res: Response) => {
+    try {
+      let user: UserDB | null = null;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1]?.trim();
+        if (token && token !== 'null' && token !== 'undefined') {
+          const uid = await resolveUserIdFromToken(token);
+          if (uid) user = await dbService.getUserById(uid);
+        }
+      }
+      if (!user) {
+        const rawToken = (req.query.token as string) || req.body?.token;
+        if (rawToken && typeof rawToken === 'string' && rawToken !== 'null' && rawToken !== 'undefined') {
+          const uid = await resolveUserIdFromToken(rawToken);
+          if (uid) user = await dbService.getUserById(uid);
+        }
+      }
+      if (!user) {
+        const email = req.body?.email || (req.query.email as string) || (req.headers['x-session-email'] as string);
+        if (email) {
+          const allUsers = await dbService.getAllUsers();
+          user = allUsers.find(u => u.email.toLowerCase().trim() === String(email).toLowerCase().trim()) || null;
+        }
+      }
+
+      if (!user) {
+        return res.status(401).json({ error: 'Jogador não autenticado. Faça login para jogar valendo.' });
+      }
+
+      if (isHubAffiliateUser(user)) {
+        return res.status(403).json({ error: 'Contas de Afiliado Hub não possuem permissão para realizar apostas.' });
+      }
+
+      const { betAmount, entry } = req.body;
+      const numBet = parseFloat(betAmount || entry);
+      if (isNaN(numBet) || numBet <= 0) {
+        return res.status(400).json({ error: 'Valor de aposta inválido.' });
+      }
+
+      const gameConfig = await dbService.getGameConfig('g_subway_pay');
+      if (gameConfig.status === 'inactive') {
+        return res.status(400).json({ error: 'O jogo Subway Pay está temporariamente em manutenção.' });
+      }
+
+      const minB = gameConfig.minBet || 10.0;
+      const maxB = gameConfig.maxBet || 400.0;
+      if (numBet < minB) {
+        return res.status(400).json({ error: `Aposta mínima para Subway Pay é de R$ ${minB.toFixed(2)}.` });
+      }
+      if (numBet > maxB) {
+        return res.status(400).json({ error: `Aposta máxima para Subway Pay é de R$ ${maxB.toFixed(2)}.` });
+      }
+
+      const currentBalance = typeof user.balance === 'number' && !isNaN(user.balance) ? user.balance : 0;
+      if (currentBalance < numBet) {
+        return res.status(400).json({
+          error: 'Saldo insuficiente para iniciar a corrida. Gere um PIX para adicionar saldo.',
+          code: 'INSUFFICIENT_BALANCE',
+          balance: currentBalance,
+          needed: numBet
+        });
+      }
+
+      // Deduct bet from DB balance immediately
+      const newBalance = parseFloat((currentBalance - numBet).toFixed(2));
+      await dbService.updateUserBalance(user.id, newBalance);
+
+      const isUserInfluencer = Boolean(user.isInfluencer);
+      const betId = 'subway_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+      const newGameBet: GameBetDB = {
+        id: betId,
+        userId: user.id,
+        userName: user.name || user.email.split('@')[0],
+        gameId: 'g_subway_pay',
+        betAmount: numBet,
+        multiplier: 1.0,
+        payoutAmount: 0,
+        profitAmount: 0,
+        status: 'active',
+        difficulty: isUserInfluencer ? 'easy' : (gameConfig.difficulty || 'medium'),
+        rtpPercent: isUserInfluencer ? 99.5 : (gameConfig.rtpPercent || 96.0),
+        createdAt: new Date().toISOString(),
+      };
+      await dbService.recordGameBet(newGameBet);
+
+      // Record wager transaction for history transparency
+      const betTx: TransactionDB = {
+        id: 'tx_subway_' + crypto.randomBytes(8).toString('hex'),
+        userId: user.id,
+        type: 'withdrawal',
+        amount: numBet,
+        status: 'approved',
+        paymentMethod: 'SubwayPay',
+        description: `Entrada Subway Pay (Aposta: R$ ${numBet.toFixed(2)})`,
+        createdAt: new Date().toISOString(),
+      };
+      await dbService.createTransaction(betTx);
+
+      // Accumulate real game statistics in GameConfig
+      gameConfig.totalWagered = parseFloat(((gameConfig.totalWagered || 0) + numBet).toFixed(2));
+      gameConfig.totalBetsCount = (gameConfig.totalBetsCount || 0) + 1;
+      gameConfig.ggr = parseFloat((gameConfig.totalWagered - (gameConfig.totalPayout || 0)).toFixed(2));
+      await dbService.saveGameConfig(gameConfig);
+
+      res.json({
+        success: true,
+        betId,
+        balance: newBalance,
+        betAmount: numBet,
+        isInfluencerMode: isUserInfluencer,
+      });
+    } catch (err) {
+      console.error('Subway start error:', err);
+      res.status(500).json({ error: 'Erro ao processar entrada no Subway Pay.' });
+    }
+  });
+
+  // SUBWAY PAY: SETTLE RUN (Loss or Cashout/Win DB Balance update)
+  app.post(['/api/game/subway-pay/settle', '/api/game/subwaypay/settle', '/api/subwaypay/settle'], async (req: Request, res: Response) => {
+    try {
+      let user: UserDB | null = null;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1]?.trim();
+        if (token && token !== 'null' && token !== 'undefined') {
+          const uid = await resolveUserIdFromToken(token);
+          if (uid) user = await dbService.getUserById(uid);
+        }
+      }
+      if (!user) {
+        const rawToken = (req.query.token as string) || req.body?.token;
+        if (rawToken && typeof rawToken === 'string' && rawToken !== 'null' && rawToken !== 'undefined') {
+          const uid = await resolveUserIdFromToken(rawToken);
+          if (uid) user = await dbService.getUserById(uid);
+        }
+      }
+      if (!user) {
+        const email = req.body?.email || (req.query.email as string) || (req.headers['x-session-email'] as string);
+        if (email) {
+          const allUsers = await dbService.getAllUsers();
+          user = allUsers.find(u => u.email.toLowerCase().trim() === String(email).toLowerCase().trim()) || null;
+        }
+      }
+
+      if (!user) {
+        return res.status(401).json({ error: 'Jogador não autenticado.' });
+      }
+
+      const { betId, outcome, coins, entry } = req.body;
+      const numCoins = Math.max(0, parseInt(coins) || 0);
+      const isCashout = outcome === 'cashout' || outcome === 'win';
+
+      let existingBet: GameBetDB | null = null;
+      if (betId && typeof betId === 'string') {
+        existingBet = await dbService.getGameBetById(betId);
+      }
+
+      const betAmount = existingBet ? existingBet.betAmount : (parseFloat(entry) || 10.0);
+      const currentBalance = typeof user.balance === 'number' && !isNaN(user.balance) ? user.balance : 0;
+
+      if (!isCashout) {
+        // Loss: Bet was already deducted at start. Update bet status to lost
+        if (existingBet && existingBet.status === 'active') {
+          await dbService.updateGameBet(existingBet.id, {
+            payoutAmount: 0,
+            profitAmount: -existingBet.betAmount,
+            status: 'lost'
+          });
+        }
+        return res.json({
+          success: true,
+          outcome: 'loss',
+          payout: 0,
+          balance: currentBalance
+        });
+      }
+
+      // Cashout / Win: Calculate payout
+      // Cap multiplier at 4.0x
+      const multiplier = Math.min(4.0, (numCoins / 100) * 2);
+      const rawPayout = betAmount * multiplier;
+      const cleanPayout = parseFloat(rawPayout.toFixed(2));
+
+      let newBalance = currentBalance;
+      if (cleanPayout > 0) {
+        newBalance = parseFloat((currentBalance + cleanPayout).toFixed(2));
+        await dbService.updateUserBalance(user.id, newBalance);
+
+        // Record win transaction
+        const winTx: TransactionDB = {
+          id: 'tx_subway_win_' + crypto.randomBytes(8).toString('hex'),
+          userId: user.id,
+          type: 'deposit',
+          amount: cleanPayout,
+          status: 'approved',
+          paymentMethod: 'SubwayPay',
+          description: `Cashout Corrida Subway Pay (${multiplier.toFixed(2)}x - R$ ${cleanPayout.toFixed(2)})`,
+          createdAt: new Date().toISOString(),
+        };
+        await dbService.createTransaction(winTx);
+
+        // Update GameConfig
+        const gameConfig = await dbService.getGameConfig('g_subway_pay');
+        gameConfig.totalPayout = parseFloat(((gameConfig.totalPayout || 0) + cleanPayout).toFixed(2));
+        gameConfig.ggr = parseFloat(((gameConfig.totalWagered || 0) - gameConfig.totalPayout).toFixed(2));
+        await dbService.saveGameConfig(gameConfig);
+      }
+
+      if (existingBet && existingBet.status === 'active') {
+        await dbService.updateGameBet(existingBet.id, {
+          payoutAmount: cleanPayout,
+          profitAmount: parseFloat((cleanPayout - existingBet.betAmount).toFixed(2)),
+          multiplier,
+          status: 'cashed_out'
+        });
+      }
+
+      res.json({
+        success: true,
+        outcome: 'cashout',
+        payout: cleanPayout,
+        multiplier,
+        balance: newBalance
+      });
+    } catch (err) {
+      console.error('Subway settle error:', err);
+      res.status(500).json({ error: 'Erro ao liquidar corrida Subway Pay.' });
     }
   });
 
@@ -9903,11 +10257,74 @@ CREATE TABLE IF NOT EXISTS system_settings (
         });
       }
 
+      // Solicit withdrawal immediately on Dotfy if API key is configured
+      const apiKeyToUse = await getEffectiveDotfyApiKey();
+      let dotfyWithdrawalId: string | undefined = undefined;
+      let dotfyStatusMsg = '';
+
+      if (apiKeyToUse && tx.amount > 0) {
+        try {
+          const rawKey = (tx as any).pixKey || targetUser?.pixKey || ((targetUser as any)?.pixKeys && (targetUser as any).pixKeys[0]?.key);
+          const rawType = (tx as any).pixType || (targetUser as any)?.pixKeyType || ((targetUser as any)?.pixKeys && (targetUser as any).pixKeys[0]?.type) || 'CPF';
+
+          if (rawKey) {
+            const cleanKey = String(rawKey).trim();
+            const cleanType = String(rawType).trim().toUpperCase();
+
+            // Resolve or register PIX key on Dotfy
+            const keyResolution = await resolveDotfyPixKey(
+              apiKeyToUse,
+              cleanKey,
+              cleanType,
+              targetUser?.name || 'Beneficiário Saque'
+            );
+
+            if (keyResolution.pixKeyId) {
+              const dotfyPayload = {
+                amount: parseFloat(tx.amount.toFixed(2)),
+                pixKeyId: keyResolution.pixKeyId
+              };
+
+              console.log('[Dotfy Affiliate Auto-Withdrawal Soliciting]', dotfyPayload);
+
+              const dotfyResponse = await fetch(`${DOTFY_BASE_URL}/api/withdrawals`, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${apiKeyToUse}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify(dotfyPayload)
+              });
+
+              const responseText = await dotfyResponse.text();
+              let responseData: any = {};
+              try { responseData = JSON.parse(responseText); } catch (_) { responseData = { message: responseText }; }
+
+              if (dotfyResponse.ok && (responseData?.withdrawal || responseData?.id)) {
+                const wdResult = responseData.withdrawal || responseData;
+                dotfyWithdrawalId = wdResult.id;
+                dotfyStatusMsg = ` • Solicitado imediatamente na Dotfy (ID: ${wdResult.id})`;
+              } else {
+                console.warn('[Dotfy Affiliate Withdrawal Warning]', dotfyResponse.status, responseData);
+                const warnMsg = responseData?.message || responseData?.error || `HTTP ${dotfyResponse.status}`;
+                dotfyStatusMsg = ` • Aprovado no painel (Aviso Dotfy: ${warnMsg})`;
+              }
+            } else {
+              dotfyStatusMsg = ` • Aprovado no painel (Chave PIX não vinculada na Dotfy: ${keyResolution.error || 'Inválida'})`;
+            }
+          }
+        } catch (dotfyErr: any) {
+          console.error('[Dotfy Affiliate Auto-Withdrawal Error]', dotfyErr);
+          dotfyStatusMsg = ` • Aprovado no painel (Erro de conexão com Dotfy)`;
+        }
+      }
+
       // Mark status as approved
       await dbService.updateTransactionStatus(id, 'approved', {
         approvedByUserId: userId,
         approvedByName: caller.name,
         processedAt: new Date().toISOString(),
+        ...(dotfyWithdrawalId ? { dotfyWithdrawalId } : {}),
       });
 
       // Push notification to the player
@@ -9924,11 +10341,13 @@ CREATE TABLE IF NOT EXISTS system_settings (
         playerId: tx.userId,
         approvedByUserId: userId,
         approvedByName: caller.name,
+        dotfyWithdrawalId,
       });
 
       return res.json({
         success: true,
-        message: `Saque de R$ ${tx.amount.toFixed(2)} do jogador ${targetUser.name} aprovado com sucesso pelo Afiliado Hub!`
+        message: `Saque de R$ ${tx.amount.toFixed(2)} do jogador ${targetUser.name} aprovado com sucesso pelo Afiliado Hub!${dotfyStatusMsg}`,
+        dotfyWithdrawalId
       });
     } catch (err) {
       console.error('Approve player withdrawal error:', err);

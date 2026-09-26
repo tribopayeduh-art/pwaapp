@@ -1,0 +1,36 @@
+#cashout {
+  position: fixed;
+  left: 50%;
+  bottom: max(18px, calc(env(safe-area-inset-bottom) + 10px));
+  transform: translateX(-50%);
+  z-index: 100020;
+  width: min(300px, calc(100vw - 54px));
+  min-height: 74px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 20px;
+  background: transparent url('./assets/ui/cashout-button.webp') center / 100% 100% no-repeat !important;
+  box-shadow: 0 12px 32px #ffae1b55;
+  color: #211753;
+  font-size: 20px;
+  font-weight: 950;
+  text-shadow: 0 1px 0 #fff6a8;
+  letter-spacing: .01em;
+  animation: cashout-enter .28s ease-out both;
+}
+
+#cashout[hidden] { display: none !important; }
+#cashout svg { width: 26px; height: 26px; stroke-width: 2.6; }
+#cashout:active { transform: translate(-50%, 3px) scale(.97); }
+
+@keyframes cashout-enter {
+  from { opacity: 0; transform: translate(-50%, 14px) scale(.94); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+@media (max-height: 500px) {
+  #cashout { bottom: max(8px, env(safe-area-inset-bottom)); width: min(270px, calc(100vw - 70px)); min-height: 60px; font-size: 18px; }
+}

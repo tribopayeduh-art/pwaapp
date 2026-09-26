@@ -128,7 +128,7 @@ try {
     .catch(() => {});
 } catch (_) {}
 
-if (hudValue) hudValue.textContent = money(round.entry);
+if (hudValue) hudValue.textContent = money(0);
 
 function finish(outcome) {
   if (finished || (outcome === 'cashout' && !cashoutUnlocked)) return;
@@ -142,6 +142,44 @@ function finish(outcome) {
   engine?.pause?.();
   localStorage.setItem('subway-demo-users', JSON.stringify(currUsers));
   localStorage.setItem('subway-demo-round', JSON.stringify(round));
+
+  // Notify server to settle run & record loss or cashout
+  try {
+    const token = localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token');
+    fetch('/api/game/subway-pay/settle', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        'X-Session-Email': round.email
+      },
+      body: JSON.stringify({
+        betId: round.betId || round.id,
+        outcome: outcome,
+        coins: coins,
+        entry: round.entry,
+        email: round.email,
+        token: token
+      })
+    }).then(r => r.json()).then(data => {
+      if (data && typeof data.balance === 'number') {
+        const u = currUsers.find(x => x.email === round.email);
+        if (u) {
+          u.balance = data.balance;
+          localStorage.setItem('subway-demo-users', JSON.stringify(currUsers));
+        }
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            source: 'subway-pay-shell',
+            event: 'balance',
+            balance: data.balance,
+            outcome: outcome,
+            round: round
+          }, '*');
+        }
+      }
+    }).catch(err => console.warn('Subway settle error:', err));
+  } catch (_) {}
 
   // Notify parent window (iframe container)
   try {
@@ -165,8 +203,21 @@ function finish(outcome) {
   const resDet = document.querySelector('#result-detail');
   if (resTitle) resTitle.textContent = outcome === 'loss' ? 'Você perdeu' : outcome === 'win' ? 'Você ganhou!' : 'Cashout realizado!';
   if (resIcon) resIcon.setAttribute('data-lucide', outcome === 'loss' ? 'heart-crack' : 'trophy');
-  if (resVal) resVal.textContent = outcome === 'loss' ? money(round.entry) : money(round.payout || round.entry);
-  if (resDet) resDet.textContent = outcome === 'loss' ? 'A corrida terminou. Sua entrada foi consumida.' : 'Parabéns! Valor creditado instantaneamente no seu saldo.';
+  if (resVal) resVal.textContent = outcome === 'loss' ? ('-' + money(round.entry)) : money(round.payout || round.entry);
+  if (resDet) resDet.textContent = outcome === 'loss' ? 'A corrida terminou. Sua entrada foi consumida do saldo.' : 'Parabéns! Valor creditado instantaneamente no seu saldo.';
+
+  const retryBtn = document.querySelector('#result-retry');
+  if (retryBtn) {
+    const activeU = currUsers.find(u => u.email === round.email);
+    if (!activeU || activeU.balance < round.entry || activeU.balance <= 0) {
+      retryBtn.innerHTML = '<i data-lucide="wallet"></i> Depositar agora';
+      retryBtn.onclick = (e) => {
+        e.preventDefault();
+        try { sessionStorage.setItem('subway_needed_deposit', String(round.entry)); } catch (_) {}
+        location.href = '../#depositar';
+      };
+    }
+  }
 
   if (dialog && typeof dialog.showModal === 'function') {
     dialog.showModal();
@@ -228,14 +279,53 @@ document.querySelector('#result-home')?.addEventListener('click', () => {
   location.href = '../#jogar';
 });
 
-document.querySelector('#result-retry')?.addEventListener('click', () => {
+document.querySelector('#result-retry')?.addEventListener('click', async () => {
   const currUsers = read('subway-demo-users', []);
   const activeU = currUsers.find(u => u.email === sessionEmail);
   const entryVal = (round && round.entry) || 10;
-  if (!activeU || activeU.balance < entryVal) {
+  if (!activeU || activeU.balance < entryVal || activeU.balance <= 0) {
     location.href = '../#depositar';
     return;
   }
+
+  // Deduct from server before restarting run
+  try {
+    const token = localStorage.getItem('pg_auth_token') || localStorage.getItem('paygateway_token') || localStorage.getItem('token');
+    const startRes = await fetch('/api/game/subway-pay/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        'X-Session-Email': activeU.email
+      },
+      body: JSON.stringify({
+        betAmount: entryVal,
+        entry: entryVal,
+        email: activeU.email,
+        token: token
+      })
+    });
+    const startData = await startRes.json();
+    if (startRes.ok && typeof startData.balance === 'number') {
+      activeU.balance = startData.balance;
+      const newRound = {
+        id: startData.betId || ('rnd_' + Date.now()),
+        betId: startData.betId,
+        email: sessionEmail,
+        entry: entryVal,
+        status: 'active'
+      };
+      localStorage.setItem('subway-demo-users', JSON.stringify(currUsers));
+      localStorage.setItem('subway-demo-round', JSON.stringify(newRound));
+
+      const qParams = new URLSearchParams(window.location.search);
+      qParams.set('balance', String(activeU.balance));
+      window.location.search = qParams.toString();
+      return;
+    }
+  } catch (_) {}
+
+  // Fallback offline deduction
   activeU.balance = Math.round((activeU.balance - entryVal) * 100) / 100;
   localStorage.setItem('subway-demo-users', JSON.stringify(currUsers));
   const newRound = {
@@ -245,13 +335,15 @@ document.querySelector('#result-retry')?.addEventListener('click', () => {
     status: 'active'
   };
   localStorage.setItem('subway-demo-round', JSON.stringify(newRound));
-  location.reload();
+  const qParams = new URLSearchParams(window.location.search);
+  qParams.set('balance', String(activeU.balance));
+  window.location.search = qParams.toString();
 });
 
 setInterval(() => {
   if (finished || !engine) return;
   const coins = Math.max(0, Number(getCoins()) || 0);
-  const value = typeof SubwayRound !== 'undefined' ? SubwayRound.payout(round.entry, coins) : round.entry;
+  const value = coins === 0 ? 0 : (typeof SubwayRound !== 'undefined' ? SubwayRound.payout(round.entry, coins) : 0);
   if (hudValue) hudValue.textContent = money(value);
   if (hudScore) hudScore.textContent = Math.max(0, Math.floor(Number(engine?.stats?.score) || 0)).toString().padStart(6, '0');
   cashoutUnlocked = typeof SubwayRound !== 'undefined' ? SubwayRound.canCashout(round.entry, coins) : false;

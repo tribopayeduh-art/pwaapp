@@ -32015,7 +32015,7 @@ var globalDifficulty="B1C2";
 					key: "Escape"
 				}), "realtime" === a.a.leaderboard && (this.ranking = new y.a, this.view.addChild(this.ranking)), this.view.visible = !1, this.resize(), s.a.resize.onResize.connect(() => {
 					this.game.pause(), this.resize()
-				}), window.SubwayBridge?.attach?.(this.game, () => this.game.stats.coins))
+				}))
 
 				// ORIGINAL
 				/*}), this.btnPause.onTap = this.onBtnPausePress.bind(this), this.view.addChild(this.btnPause), "realtime" === a.a.leaderboard && (this.ranking = new y.a, this.view.addChild(this.ranking)), this.view.visible = !1, this.resize(), s.a.resize.onResize.connect(() => {
@@ -32040,7 +32040,6 @@ var globalDifficulty="B1C2";
 				this.paused && this.paused.close(), this.close(), this.message && (this.message.text = ""), this.updateCount = 1, this.removeAllItemBoost()
 			}
 			async run() {
-				window.SubwayBridge?.attach?.(this.game, () => this.game.stats.coins);
 				await Object(b.a)(.2), this.build(), this.boostGauge && this.boostGauge.lowlightAll(), this.ranking && this.ranking.clear(), this.updateCount = 1, this.distance.setText(this.game.stats.score, 6), this.open(), s.a.ui.mainLayer.addChild(this.view), s.a.ui.mainLayer.addChild(this.paused), this.message && (this.message.text = ""), this.paused.close(), s.a.user.boosts.consumables.headstart > 0 && this.addItemBoost(p.b.HEADSTART, !0), s.a.user.boosts.consumables.scoreBooster > 0 && this.addItemBoost(p.b.MULTIPLIER, !0), this.organizeBoosts(!1)
 			}
 			pause() {
@@ -32976,10 +32975,6 @@ gameover(){this.close();this.paused.close();window.SubwayBridge?.lose();}
                 c.baseSpeed.max = 320;
                 break;
             // Adicione mais casos conforme necessário
-        }
-        if (typeof window !== 'undefined' && window.SubwayConfig) {
-            if (window.SubwayConfig.baseSpeed) c.baseSpeed.min = Number(window.SubwayConfig.baseSpeed);
-            if (window.SubwayConfig.maxSpeed) c.baseSpeed.max = Number(window.SubwayConfig.maxSpeed);
         }
 
 

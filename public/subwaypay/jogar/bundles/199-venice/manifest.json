@@ -9,22 +9,6 @@
         "animate": {},
         "misc": {}
     },
-    "audio-basic": {
-        "image": {},
-        "fonts": {},
-        "audio": {
-            "audio-basic/theme.wav": {
-                "shortcut": "theme.wav",
-                "mp3": "audio-basic/theme.mp3",
-                "ogg": "audio-basic/theme.ogg"
-            }
-        },
-        "model": {},
-        "json": {},
-        "atlas": {},
-        "animate": {},
-        "misc": {}
-    },
     "game-basic": {
         "image": {},
         "fonts": {},
@@ -89,6 +73,19 @@
                     "high": "game-idle/train-start@2x.png",
                     "default": "game-idle/train-start.png",
                     "low": "game-idle/train-start@0.5x.png"
+                }
+            },
+            "game-idle/trains-tex.png": {
+                "shortcut": "trains-tex.png",
+                "webp": {
+                    "high": "game-idle/trains-tex@2x.webp",
+                    "default": "game-idle/trains-tex.webp",
+                    "low": "game-idle/trains-tex@0.5x.webp"
+                },
+                "standard": {
+                    "high": "game-idle/trains-tex@2x.png",
+                    "default": "game-idle/trains-tex.png",
+                    "low": "game-idle/trains-tex@0.5x.png"
                 }
             }
         },
