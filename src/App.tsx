@@ -283,9 +283,7 @@ export default function App() {
 
   const isUserAdmin = (u: User | null | undefined): boolean => {
     if (!u) return false;
-    const cleanEmail = (u.email || '').toLowerCase().trim();
-    const isSuperAdminEmail = cleanEmail === 'admin.eduh@gmail.com' || cleanEmail === 'tribopayeduh@gmail.com';
-    return u.role === 'admin' || u.role === 'superadmin' || isSuperAdminEmail;
+    return u.role === 'admin' || u.role === 'superadmin';
   };
 
   const handleOpenAdmin = () => {

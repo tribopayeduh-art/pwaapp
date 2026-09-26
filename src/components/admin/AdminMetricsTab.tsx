@@ -75,23 +75,39 @@ export const AdminMetricsTab: React.FC<AdminMetricsTabProps> = ({
       clearInterval(interval);
     };
   }, [token]);
-  const netProfit = metrics?.netProfit ?? 10230.0;
-  const marginPercent = metrics?.profitMarginPercent ?? 85.4;
-  const totalDeposits = metrics?.totalDepositsAmount ?? 11980.0;
-  const gameGgr = metrics?.gameGgr ?? 6447.0;
-  const affiliateBalance = metrics?.totalAffiliateBalance ?? 1240.0;
-  const affiliateCommissionsPaid = metrics?.totalAffiliateCommissionsPaid ?? 8962.08;
-  const todaySales = metrics?.todaySalesAmount ?? 1450.0;
-  const todaySalesPercent = metrics?.todaySalesPercentChange ?? 12.5;
-  const newUsers = metrics?.totalUsers ?? 128;
-  const newUsersToday = metrics?.newUsersToday ?? 14;
-  const totalUserBalance = metrics?.totalBalance ?? 4250.0;
-  const approvedWithdrawals = metrics?.approvedWithdrawalsAmount ?? 8540.0;
-  const pendingWithdrawalsAmount = metrics?.pendingWithdrawalsAmount ?? 320.0;
-  const pendingWithdrawalsCount = metrics?.pendingWithdrawalsCount ?? 2;
+  const netProfit = metrics?.netProfit ?? 0;
+  const marginPercent = metrics?.profitMarginPercent ?? 0;
+  const totalDeposits = metrics?.totalDepositsAmount ?? 0;
+  const gameGgr = metrics?.gameGgr ?? 0;
+  const affiliateBalance = metrics?.totalAffiliateBalance ?? 0;
+  const affiliateCommissionsPaid = metrics?.totalAffiliateCommissionsPaid ?? 0;
+  const todaySales = metrics?.todaySalesAmount ?? 0;
+  const todaySalesPercent = metrics?.todaySalesPercentChange ?? 0;
+  const newUsers = metrics?.totalUsers ?? 0;
+  const newUsersToday = metrics?.newUsersToday ?? 0;
+  const totalUserBalance = metrics?.totalBalance ?? 0;
+  const approvedWithdrawals = metrics?.approvedWithdrawalsAmount ?? 0;
+  const pendingWithdrawalsAmount = metrics?.pendingWithdrawalsAmount ?? 0;
+  const pendingWithdrawalsCount = metrics?.pendingWithdrawalsCount ?? 0;
 
+  const chart = metrics?.chartData || [];
+  const chartCeiling = Math.max(1, ...chart.map(day => Math.max(day.deposits, day.withdrawals)));
   return (
     <div className="space-y-6">
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5" aria-label="Fluxo financeiro dos últimos sete dias">
+        <div className="flex items-baseline justify-between gap-3 mb-5">
+          <div><h2 className="text-base font-semibold text-zinc-900">Fluxo financeiro</h2><p className="text-xs text-zinc-500">Depósitos e saques · últimos 7 dias</p></div>
+          <div className="flex gap-3 text-xs text-zinc-600"><span>● Entradas</span><span className="text-zinc-400">● Saídas</span></div>
+        </div>
+        {chart.length ? <div className="grid grid-cols-7 gap-2 sm:gap-4 items-end h-36">
+          {chart.map(day => <div key={day.date} className="flex h-full flex-col items-center justify-end gap-2 min-w-0" title={`${day.date}: entradas R$ ${day.deposits.toFixed(2)}, saídas R$ ${day.withdrawals.toFixed(2)}`}>
+            <div className="w-full flex items-end justify-center gap-1 h-28 border-b border-zinc-200">
+              <div className="w-3 sm:w-5 rounded-t bg-zinc-800" style={{height:`${Math.max(day.deposits ? 3 : 0,day.deposits/chartCeiling*100)}%`}} />
+              <div className="w-3 sm:w-5 rounded-t bg-zinc-400" style={{height:`${Math.max(day.withdrawals ? 3 : 0,day.withdrawals/chartCeiling*100)}%`}} />
+            </div><span className="text-[10px] text-zinc-500 truncate max-w-full">{day.date.slice(5)}</span>
+          </div>)}
+        </div> : <p className="text-sm text-zinc-500">Sem dados no período.</p>}
+      </section>
       {/* 1. HERO SUMMARY SECTION: Apple Card Inspired Financial Snapshot */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Card 1: Lucro Líquido & Margem Geral */}

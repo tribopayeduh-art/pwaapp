@@ -1080,3 +1080,17 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   .auth-desktop-security { display: none; }
   .auth-form-pane { overflow-y: auto; padding-block: 28px; }
 }
+
+/* Quiet management surfaces and compact mobile controls. */
+.admin-refined, .partner-refined, .affiliate-hub-view { --panel-ink:#18181b; --panel-line:#e4e4e7; }
+.admin-refined button, .partner-refined button, .affiliate-hub-view button { transition:background-color .16s ease, transform .16s ease; }
+.admin-refined button:active, .partner-refined button:active, .affiliate-hub-view button:active { transform:scale(.98); }
+.admin-refined button:focus-visible, .partner-refined button:focus-visible, .affiliate-hub-view button:focus-visible { outline:2px solid #52525b; outline-offset:2px; }
+.partner-refined { background:#f5f5f7; color:#18181b; }
+.partner-refined header { box-shadow:none; }
+.partner-refined .bg-gradient-to-r, .affiliate-hub-view .bg-gradient-to-r { background-image:none!important; background-color:#27272a!important; }
+.partner-refined .text-emerald-600, .partner-refined .text-amber-500 { color:#52525b!important; }
+.partner-refined .bg-emerald-50, .partner-refined .bg-amber-50 { background:#f4f4f5!important; }
+.partner-refined .border-emerald-200, .partner-refined .border-amber-200 { border-color:#e4e4e7!important; }
+@media(max-width:640px){ .admin-refined button, .partner-refined button, .affiliate-hub-view button { min-height:36px; } .partner-refined header { padding:12px 14px; } .partner-refined h1 { font-size:1rem; } .affiliate-hub-view { padding-inline:14px; } }
+@media(prefers-reduced-motion:reduce){ .admin-refined *, .partner-refined *, .affiliate-hub-view * { animation-duration:.01ms!important; transition-duration:.01ms!important; } }

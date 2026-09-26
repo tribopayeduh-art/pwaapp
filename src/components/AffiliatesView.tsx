@@ -53,12 +53,8 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
 
   const isAdmin = useMemo(() => {
     const role = currentUser?.role?.toLowerCase();
-    const email = currentUser?.email?.toLowerCase().trim();
     return role === 'admin' || 
-      role === 'superadmin' || 
-      email === 'admin.eduh@gmail.com' || 
-      email === 'tribopayeduh@gmail.com' ||
-      (typeof window !== 'undefined' && localStorage.getItem('alliance_user_role') === 'admin');
+      role === 'superadmin';
   }, [currentUser]);
 
   const isApprovedPartner = useMemo(() => {

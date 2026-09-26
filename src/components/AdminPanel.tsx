@@ -1197,7 +1197,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#F2F2F7] flex overflow-hidden font-sans text-slate-900 select-none">
+    <div className="admin-refined fixed inset-0 z-50 bg-[#F2F2F7] flex overflow-hidden font-sans text-slate-900 select-none">
       {/* 1. iOS Authentic Sidebar */}
       <AdminSidebar
         activeTab={activeTab}

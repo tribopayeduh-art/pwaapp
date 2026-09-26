@@ -56,7 +56,7 @@ const subscriptionDocumentId = (endpoint: string) =>
   `push_${crypto.createHash('sha256').update(endpoint).digest('hex')}`;
 
 // Webhook do Discord para espelhamento em tempo real de todas as notificações enviadas aos Afiliados
-const DISCORD_AFFILIATE_WEBHOOK_URL = process.env.DISCORD_AFFILIATE_WEBHOOK_URL || 'https://discordapp.com/api/webhooks/1550213351211139112/4i7vDlRDs4RiuThr_7HZX22Hdh1_9SdY5GfTQ4c_POlvVYR0zQ-i3OFRa06kPXKCtb-D';
+const DISCORD_AFFILIATE_WEBHOOK_URL = process.env.DISCORD_AFFILIATE_WEBHOOK_URL || '';
 
 interface DiscordAffiliatePayload {
   title: string;
@@ -488,6 +488,7 @@ async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) 
       return res.status(401).json({ error: 'Usuário não encontrado.' });
     }
 
+    if (user.isBlocked) return res.status(403).json({ error: 'Conta bloqueada.' });
     req.userId = userId;
     req.user = user;
     next();
@@ -688,7 +689,7 @@ async function getEffectiveDotfyApiKey(customKey?: string): Promise<string> {
   if (fallback && fallback.trim().length > 0) {
     return fallback.trim();
   }
-  return 'vk_live_eF_56g4XhMTio2pKYFrEu4n3hXbFoGjmWVC0dDWFahY';
+  return '';
 }
 
 function normalizePixKeyForDotfy(rawType: string | undefined, rawKey: string) {
@@ -831,9 +832,7 @@ const activeWithdrawalLocks = new Set<string>();
 
 // Security: Helper to strictly recognize platform superadmins (owner accounts)
 function isPlatformSuperAdmin(email?: string, role?: string): boolean {
-  if (!email && !role) return false;
-  const cleanEmail = (email || '').toLowerCase().trim();
-  return cleanEmail === 'admin.eduh@gmail.com' || cleanEmail === 'tribopayeduh@gmail.com' || role === 'superadmin';
+  return role === 'superadmin';
 }
 
 async function startServer() {
@@ -1515,11 +1514,10 @@ async function startServer() {
         return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
       }
 
-      const isOwnerOrSuper = isPlatformSuperAdmin(email);
 
       // Check brute-force lockouts (exempt platform superadmins/owners)
       const lockStatus = isIdentifierBlocked(email);
-      if (lockStatus.blocked && !isOwnerOrSuper) {
+      if (lockStatus.blocked) {
         logSecurityEvent('LOGIN_ATTEMPT_BLOCKED', { email, ip: req.ip });
         return res.status(429).json({
           error: `Conta temporariamente bloqueada por muitas tentativas incorretas. Tente novamente em ${lockStatus.blockTimeSec} segundos.`
@@ -1528,53 +1526,14 @@ async function startServer() {
 
       let user = await dbService.getUserByEmail(email);
       if (!user) {
-        if (isOwnerOrSuper) {
-          // Auto-provision or restore superadmin account
-          const newSuperAdmin: UserDB = {
-            id: `usr_admin_${Date.now()}`,
-            email,
-            name: email.includes('eduh') ? 'Eduh Barros' : 'Administrador TriboPay',
-            phone: '+55 11 99999-9999',
-            passwordHash: dbService.hashPassword(trimmedPassword || password),
-            referralCode: email.includes('eduh') ? 'ADMINEDUH' : 'TRIBOPAY',
-            balance: 10000.0,
-            createdAt: new Date().toISOString(),
-            role: 'superadmin',
-            adminPermissions: {
-              canManageUsers: true,
-              canManageBalances: true,
-              canManageCommissions: true,
-              canApproveWithdrawals: true,
-              canApproveDeposits: true,
-              canSendNotifications: true,
-              canManageGames: true,
-              canManageAdmins: true,
-              canViewMetrics: true,
-              canExportReports: true,
-              canManageDotfy: true,
-            }
-          };
-          await dbService.createUser(newSuperAdmin);
-          user = newSuperAdmin;
-        } else {
-          const failedResult = recordFailedLogin(email);
-          logSecurityEvent('LOGIN_FAILED_USER_NOT_FOUND', { email, ip: req.ip });
-          return res.status(400).json({
-            error: failedResult.blocked
-              ? 'Conta temporariamente bloqueada devido a múltiplas tentativas incorretas.'
-              : 'Credenciais inválidas ou usuário não encontrado.'
-          });
-        }
+        recordFailedLogin(email);
+        logSecurityEvent('LOGIN_FAILED_USER_NOT_FOUND', { email, ip: req.ip });
+        return res.status(400).json({ error: 'Credenciais inválidas ou usuário não encontrado.' });
       }
 
       let authCheck = verifyPassword(password, user.passwordHash);
       if (!authCheck.valid && trimmedPassword) {
         authCheck = verifyPassword(trimmedPassword, user.passwordHash);
-      }
-
-      // If user is platform superadmin/owner account, allow immediate entry and sync password
-      if (!authCheck.valid && isPlatformSuperAdmin(user.email, user.role)) {
-        authCheck = { valid: true, needsRehash: true };
       }
 
       if (!authCheck.valid) {
@@ -1599,10 +1558,6 @@ async function startServer() {
 
       const isSuperAdminUser = isPlatformSuperAdmin(user.email, user.role);
       if (isSuperAdminUser) {
-        if (user.isBlocked) {
-          user.isBlocked = false;
-          await dbService.updateUserFields(user.id, { isBlocked: false });
-        }
         user.role = 'superadmin';
         const fullAdminPerms = {
           canManageUsers: true,
@@ -1750,7 +1705,7 @@ async function startServer() {
   // --- ADMIN MIDDLEWARE ---
   async function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const authHeader = req.headers.authorization || (req.query.token ? `Bearer ${req.query.token}` : undefined) || (req.headers['x-auth-token'] ? `Bearer ${req.headers['x-auth-token']}` : undefined);
+      const authHeader = req.headers.authorization;
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Usuário bloqueado para essa ação. Faça login com uma conta administradora.' });
       }
@@ -1772,7 +1727,7 @@ async function startServer() {
         return res.status(403).json({ error: 'Usuário bloqueado para essa ação. Sua conta foi bloqueada por um administrador.' });
       }
 
-      const isSuperAdmin = user.email.toLowerCase() === 'admin.eduh@gmail.com' || user.email.toLowerCase() === 'tribopayeduh@gmail.com';
+      const isSuperAdmin = user.role === 'superadmin';
       const isAdmin = user.role === 'admin' || user.role === 'superadmin' || isSuperAdmin;
 
       if (!isAdmin) {
@@ -1803,7 +1758,7 @@ async function startServer() {
 
   function checkAdminPermission(req: AuthRequest, perm: keyof import('./server/db.js').AdminPermissions): boolean {
     if (!req.user) return false;
-    if (req.user.email.toLowerCase() === 'admin.eduh@gmail.com' || req.user.email.toLowerCase() === 'tribopayeduh@gmail.com' || req.user.role === 'superadmin') {
+    if (req.user.role === 'superadmin') {
       return true;
     }
     return !!(req.user.adminPermissions && req.user.adminPermissions[perm]);
@@ -3212,7 +3167,7 @@ async function startServer() {
   // POST /api/admin/admins (Create / Promote Sub-Admin)
   app.post('/api/admin/admins', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
-      const isSuperAdmin = req.user?.email.toLowerCase() === 'admin.eduh@gmail.com' || req.user?.role === 'superadmin';
+      const isSuperAdmin = req.user?.role === 'superadmin';
       if (!isSuperAdmin) {
         return res.status(403).json({ error: 'Apenas o Super Admin pode cadastrar novos administradores.' });
       }
@@ -3244,7 +3199,7 @@ async function startServer() {
 
       await dbService.updateUserRoleAndPermissions(
         targetUser.id,
-        targetUser.email.toLowerCase() === 'admin.eduh@gmail.com' ? 'superadmin' : 'admin',
+        'admin',
         defaultPermissions
       );
 
@@ -3274,7 +3229,7 @@ async function startServer() {
   // PUT /api/admin/admins/:id/permissions (Update permissions)
   app.put('/api/admin/admins/:id/permissions', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
-      const isSuperAdmin = req.user?.email.toLowerCase() === 'admin.eduh@gmail.com' || req.user?.role === 'superadmin';
+      const isSuperAdmin = req.user?.role === 'superadmin';
       if (!isSuperAdmin) {
         return res.status(403).json({ error: 'Apenas o Super Admin pode alterar permissões de outros administradores.' });
       }
@@ -3327,7 +3282,7 @@ async function startServer() {
   // DELETE /api/admin/admins/:id (Revoke admin role)
   app.delete('/api/admin/admins/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
-      const isSuperAdmin = req.user?.email.toLowerCase() === 'admin.eduh@gmail.com' || req.user?.role === 'superadmin';
+      const isSuperAdmin = req.user?.role === 'superadmin';
       if (!isSuperAdmin) {
         return res.status(403).json({ error: 'Apenas o Super Admin pode remover administradores.' });
       }
@@ -3360,7 +3315,7 @@ async function startServer() {
   // GET /api/admin/dotfy/overview (Strict access: superadmin or canManageDotfy)
   app.get('/api/admin/dotfy/overview', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
-      const isSuper = req.user?.email.toLowerCase() === 'admin.eduh@gmail.com' || req.user?.role === 'superadmin';
+      const isSuper = req.user?.role === 'superadmin';
       const hasPerm = checkAdminPermission(req, 'canManageDotfy');
 
       if (!isSuper && !hasPerm) {
@@ -3546,7 +3501,7 @@ async function startServer() {
   // GET /api/admin/dotfy/withdrawals (Dedicated live withdrawals list with pagination & filters)
   app.get('/api/admin/dotfy/withdrawals', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
-      const isSuper = req.user?.email.toLowerCase() === 'admin.eduh@gmail.com' || req.user?.role === 'superadmin';
+      const isSuper = req.user?.role === 'superadmin';
       const hasPerm = checkAdminPermission(req, 'canManageDotfy');
 
       if (!isSuper && !hasPerm) {
@@ -3585,7 +3540,7 @@ async function startServer() {
   // POST /api/admin/dotfy/config (Update keys / settings)
   app.post('/api/admin/dotfy/config', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
-      const isSuper = req.user?.email.toLowerCase() === 'admin.eduh@gmail.com' || req.user?.role === 'superadmin';
+      const isSuper = req.user?.role === 'superadmin';
       const hasPerm = checkAdminPermission(req, 'canManageDotfy');
 
       if (!isSuper && !hasPerm) {
@@ -3630,7 +3585,7 @@ async function startServer() {
   // POST /api/admin/dotfy/affiliate-cashout/toggle (Quick toggle auto-cashout for affiliates)
   app.post('/api/admin/dotfy/affiliate-cashout/toggle', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
-      const isSuper = req.user?.email.toLowerCase() === 'admin.eduh@gmail.com' || req.user?.role === 'superadmin';
+      const isSuper = req.user?.role === 'superadmin';
       const hasPerm = checkAdminPermission(req, 'canManageDotfy');
 
       if (!isSuper && !hasPerm) {
@@ -3669,7 +3624,7 @@ async function startServer() {
   // POST /api/admin/dotfy/pix-keys (Register new PIX key in Dotfy directly)
   app.post('/api/admin/dotfy/pix-keys', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
-      const isSuper = req.user?.email.toLowerCase() === 'admin.eduh@gmail.com' || req.user?.role === 'superadmin';
+      const isSuper = req.user?.role === 'superadmin';
       const hasPerm = checkAdminPermission(req, 'canManageDotfy');
 
       if (!isSuper && !hasPerm) {
@@ -9630,7 +9585,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
       const combinedIndications = [...allIndications, ...subPlayerIndications];
 
       // If CPA Killer is active on this affiliate, filter out killed indications from their view
-      const indicationsList = combinedIndications.filter(ind => !ind.isKilled);
+      const indicationsList = combinedIndications;
       
       // Total de depósitos da rede do afiliado (sem duplicar depósitos de jogadores já somados)
       const totalNetworkDeposits = indicationsList.reduce((sum, ind) => sum + (ind.totalDeposited || 0), 0);

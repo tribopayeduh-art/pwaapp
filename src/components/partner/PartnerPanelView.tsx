@@ -384,7 +384,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
   const metrics = data.metrics;
 
   return (
-    <div className="w-full pb-20 animate-fade-in bg-zinc-50/40 min-h-screen">
+    <div className="partner-refined w-full pb-20 animate-fade-in bg-zinc-50/40 min-h-screen">
       {/* Top Header Bar */}
       <header className="bg-white border-b border-zinc-200/80 sticky top-0 z-30 px-4 lg:px-8 py-3.5 shadow-xs">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">

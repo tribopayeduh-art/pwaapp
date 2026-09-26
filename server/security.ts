@@ -170,7 +170,7 @@ export function resolveDotfyApiKey(): string {
   if (vault.DOTFY_API_KEY && vault.DOTFY_API_KEY.trim()) {
     return vault.DOTFY_API_KEY.trim();
   }
-  return 'vk_live_eF_56g4XhMTio2pKYFrEu4n3hXbFoGjmWVC0dDWFahY';
+  return '';
 }
 
 /**

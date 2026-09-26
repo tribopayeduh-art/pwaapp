@@ -11,9 +11,7 @@ interface AuthRequest extends Request {
 
 // Security: Helper to check if a user is superadmin
 function isSuperAdminUser(email?: string, role?: string): boolean {
-  if (!email && !role) return false;
-  const cleanEmail = (email || '').toLowerCase().trim();
-  return cleanEmail === 'admin.eduh@gmail.com' || cleanEmail === 'tribopayeduh@gmail.com' || role === 'superadmin';
+  return role === 'superadmin';
 }
 
 export function createPartnerRouter(
