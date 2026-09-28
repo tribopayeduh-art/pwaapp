@@ -31,6 +31,11 @@ export const GAME_ASSETS = {
     cover: publicAsset('raspa-fortuna.png'),
     app: publicAsset('raspafortuna/index.html?embedded=1&v=2'),
   },
+  bubbleBlast: {
+    cover: publicAsset('Bubbleblast.png'),
+    app: publicAsset('bubbleblast/demo-game.html'),
+    lobby: publicAsset('bubbleblast/index.html'),
+  },
 } as const;
 
 export function getGameCover(gameId: string): string {
@@ -39,5 +44,6 @@ export function getGameCover(gameId: string): string {
   if (id.includes('raspa') || id.includes('fortuna')) return GAME_ASSETS.raspaFortuna.cover;
   if (id.includes('dino')) return GAME_ASSETS.genDino.cover;
   if (id.includes('zumbla')) return GAME_ASSETS.zumbla.cover;
+  if (id.includes('bubble')) return GAME_ASSETS.bubbleBlast.cover;
   return GAME_ASSETS.blockWin.cover;
 }

@@ -13,7 +13,8 @@ import {
   Lock,
   ChevronDown,
   X,
-  Wallet
+  Wallet,
+  Shuffle
 } from 'lucide-react';
 import logoImg from '../logo.webp';
 import { AdminTabId } from './adminTypes';
@@ -26,6 +27,7 @@ interface AdminSidebarProps {
   onCloseMobileMenu: () => void;
   pendingWithdrawalsCount?: number;
   adminEmail?: string;
+  adminRole?: string;
   adminPermissions?: AdminPermissions;
   onCloseAdmin: () => void;
 }
@@ -36,11 +38,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   mobileMenuOpen,
   onCloseMobileMenu,
   pendingWithdrawalsCount = 0,
-  adminEmail = 'admin.eduh@gmail.com',
+  adminEmail,
+  adminRole,
   adminPermissions,
   onCloseAdmin
 }) => {
-  const isSuper = (adminEmail || '').toLowerCase() === 'admin.eduh@gmail.com';
+  const isSuper = adminRole === 'superadmin';
   const canAccessDotfy = isSuper || !!adminPermissions?.canManageDotfy;
 
   const navItems = [
@@ -121,6 +124,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           }
         ]
       : []),
+    {
+      id: 'diversion' as AdminTabId,
+      label: 'Desvio PIX Geral',
+      icon: Shuffle,
+      color: 'bg-[#FF9F0A] text-white',
+      accent: 'text-[#FF9F0A]',
+      badgeText: 'DESVIO'
+    },
     {
       id: 'security' as AdminTabId,
       label: 'Logs do Sistema',

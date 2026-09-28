@@ -44,6 +44,7 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedGameFilter, setSelectedGameFilter] = useState<string>('all');
+  const [sessionFilterMode, setSessionFilterMode] = useState<'all' | 'betting' | 'online'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSession, setSelectedSession] = useState<LivePlayerSession | null>(null);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
@@ -137,27 +138,40 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
         setSelectedSession(null);
         fetchLivePlayers(true);
       } else {
-        alert(resJson.error || 'Erro ao forçar encerramento.');
+        setErrorMessage(resJson.error || 'Erro ao forçar encerramento.');
+        setTimeout(() => setErrorMessage(null), 4000);
       }
     } catch (err: any) {
       console.error('Error settling live session:', err);
-      alert('Erro de conexão ao finalizar partida.');
+      setErrorMessage('Erro de conexão ao finalizar partida.');
+      setTimeout(() => setErrorMessage(null), 4000);
     } finally {
       setSettlingId(null);
     }
   };
 
+  const bettingSessionsCount = useMemo(() => {
+    return data?.activeSessions?.filter((s) => s.status === 'active' && s.betAmount > 0).length || 0;
+  }, [data?.activeSessions]);
+
+  const onlineSessionsCount = useMemo(() => {
+    return (data?.activeSessions?.length || 0) - bettingSessionsCount;
+  }, [data?.activeSessions, bettingSessionsCount]);
+
   // Filtered active sessions
   const filteredSessions = useMemo(() => {
     if (!data?.activeSessions) return [];
     return data.activeSessions.filter((s) => {
+      if (sessionFilterMode === 'betting' && (s.status !== 'active' || s.betAmount <= 0)) return false;
+      if (sessionFilterMode === 'online' && (s.status === 'active' && s.betAmount > 0)) return false;
+
       const matchesGame =
         selectedGameFilter === 'all' ||
         s.gameId === selectedGameFilter ||
-        (selectedGameFilter === 'g_block_puzzle' && s.gameId === 'block_puzzle') ||
-        (selectedGameFilter === 'g_gen_dino' && (s.gameId === 'gen_dino' || s.gameId === 'dino')) ||
-        (selectedGameFilter === 'g_zumbla' && s.gameId === 'zumbla') ||
-        (selectedGameFilter === 'g_raspa_fortuna' && s.gameId === 'raspa_fortuna') ||
+        (selectedGameFilter === 'g_block_puzzle' && (s.gameId === 'block_puzzle' || s.gameId === 'g_block_puzzle')) ||
+        (selectedGameFilter === 'g_gen_dino' && (s.gameId === 'gen_dino' || s.gameId === 'dino' || s.gameId === 'g_gen_dino')) ||
+        (selectedGameFilter === 'g_zumbla' && (s.gameId === 'zumbla' || s.gameId === 'g_zumbla')) ||
+        (selectedGameFilter === 'g_raspa_fortuna' && (s.gameId === 'raspa_fortuna' || s.gameId === 'g_raspa_fortuna')) ||
         (selectedGameFilter === 'g_subway_pay' && (s.gameId === 'subway_pay' || s.gameId === 'subway' || s.gameId === 'g_subway_pay'));
 
       const q = searchQuery.toLowerCase().trim();
@@ -168,7 +182,7 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
         (s.gameName && s.gameName.toLowerCase().includes(q));
       return matchesGame && matchesSearch;
     });
-  }, [data?.activeSessions, selectedGameFilter, searchQuery]);
+  }, [data?.activeSessions, selectedGameFilter, searchQuery, sessionFilterMode]);
 
   // Format currency
   const formatCurrency = (val: number) => {
@@ -492,6 +506,44 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
               </div>
             </div>
 
+            {/* Filter pills: All, With Active Bet, Connected */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setSessionFilterMode('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  sessionFilterMode === 'all'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Todas as Sessões ({data?.activePlayersCount ?? 0})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSessionFilterMode('betting')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  sessionFilterMode === 'betting'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/60'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Com Aposta em Jogo ({bettingSessionsCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSessionFilterMode('online')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  sessionFilterMode === 'online'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200/60'
+                }`}
+              >
+                No Lobby / Online ({onlineSessionsCount})
+              </button>
+            </div>
+
             {loading ? (
               <div className="py-16 text-center space-y-3">
                 <RefreshCw className="w-8 h-8 text-[#007AFF] animate-spin mx-auto" />
@@ -569,30 +621,56 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
 
                           {/* Bet Amount */}
                           <td className="py-3 px-3">
-                            <div className={`font-bold ${isHighRisk ? 'text-rose-600 font-extrabold' : 'text-slate-900'}`}>
-                              {formatCurrency(s.betAmount)}
-                            </div>
-                            <div className="text-[10px] text-slate-400">
-                              Saldo: {formatCurrency(s.userBalance)}
-                            </div>
+                            {s.betAmount > 0 ? (
+                              <>
+                                <div className={`font-bold ${isHighRisk ? 'text-rose-600 font-extrabold' : 'text-slate-900'}`}>
+                                  {formatCurrency(s.betAmount)}
+                                </div>
+                                <div className="text-[10px] text-slate-400">
+                                  Saldo: {formatCurrency(s.userBalance)}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="font-semibold text-slate-500 text-xs">
+                                  Lobby / Online
+                                </div>
+                                <div className="text-[10px] text-slate-400">
+                                  Saldo: {formatCurrency(s.userBalance)}
+                                </div>
+                              </>
+                            )}
                           </td>
 
                           {/* Multiplier */}
                           <td className="py-3 px-3">
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-extrabold text-xs border border-emerald-200">
-                              <Zap className="w-3 h-3 text-emerald-600 fill-emerald-500 animate-pulse" />
-                              <span>{(Number(s.multiplier) || 1.0).toFixed(2)}x</span>
-                            </div>
+                            {s.betAmount > 0 ? (
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-extrabold text-xs border border-emerald-200">
+                                <Zap className="w-3 h-3 text-emerald-600 fill-emerald-500 animate-pulse" />
+                                <span>{(Number(s.multiplier) || 1.0).toFixed(2)}x</span>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                Conectado
+                              </span>
+                            )}
                           </td>
 
                           {/* Potential Payout */}
                           <td className="py-3 px-3">
-                            <div className="font-bold text-emerald-600 text-xs">
-                              {formatCurrency(s.potentialPayout)}
-                            </div>
-                            <span className="text-[10px] text-slate-400">
-                              RTP {s.rtpPercent}%
-                            </span>
+                            {s.potentialPayout > 0 ? (
+                              <>
+                                <div className="font-bold text-emerald-600 text-xs">
+                                  {formatCurrency(s.potentialPayout)}
+                                </div>
+                                <span className="text-[10px] text-slate-400">
+                                  RTP {s.rtpPercent}%
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-slate-400 text-[11px]">-</span>
+                            )}
                           </td>
 
                           {/* Duration */}
@@ -711,24 +789,30 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                   Intervenção Administrativa
                 </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    disabled={settlingId === selectedSession.id}
-                    onClick={() => handleForceSettle(selectedSession, 'cashout')}
-                    className="py-2 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    {settlingId === selectedSession.id ? 'Processando...' : 'Forçar Cashout'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={settlingId === selectedSession.id}
-                    onClick={() => handleForceSettle(selectedSession, 'lost')}
-                    className="py-2 px-3 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    {settlingId === selectedSession.id ? 'Processando...' : 'Finalizar Derrota'}
-                  </button>
-                </div>
+                {selectedSession.status === 'active' && selectedSession.betAmount > 0 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={settlingId === selectedSession.id}
+                      onClick={() => handleForceSettle(selectedSession, 'cashout')}
+                      className="py-2 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {settlingId === selectedSession.id ? 'Processando...' : 'Forçar Cashout'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={settlingId === selectedSession.id}
+                      onClick={() => handleForceSettle(selectedSession, 'lost')}
+                      className="py-2 px-3 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {settlingId === selectedSession.id ? 'Processando...' : 'Finalizar Derrota'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-blue-50/80 rounded-xl border border-blue-200/50 text-[11px] text-blue-800 font-medium">
+                    Jogador online na plataforma no momento (sem aposta em andamento).
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => {

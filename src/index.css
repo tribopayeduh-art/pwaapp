@@ -825,30 +825,30 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 
 /* Full desktop workspace for every Alliance Hub section. */
 @media (min-width:1024px) {
-  .alliance-app-shell { height:calc(100vh - 32px); min-height:760px; }
-  .alliance-app-shell > header { min-height:72px; padding-inline:30px; }
+  .alliance-app-shell { height:calc(100vh - 20px); min-height:760px; width:calc(100vw - 32px); }
+  .alliance-app-shell > header { min-height:72px; padding-inline:36px; }
   .alliance-main-content { background:#f7f8fa; }
-  .home-view,.finance-view,.more-view { width:100%; max-width:1320px; margin:0 auto; padding:28px 32px 110px!important; }
-  .home-view { display:grid; grid-template-columns:minmax(0,.85fr) minmax(480px,1.15fr); align-items:start; gap:20px!important; }
+  .home-view,.finance-view,.more-view { width:100%; max-width:1720px; margin:0 auto; padding:24px 32px 110px!important; }
+  .home-view { display:grid; grid-template-columns:minmax(0,.82fr) minmax(520px,1.18fr); align-items:start; gap:24px!important; }
   .home-view > div:first-child { grid-column:1/-1; padding:3px 2px 0; }
   .home-view > div:nth-child(2) { grid-column:1; grid-row:2; height:100%; min-height:300px; }
-  .home-view > div:nth-child(3) { grid-column:2; grid-row:2; margin:0; padding:20px; border:1px solid #e5e7eb; border-radius:24px; background:white; box-shadow:0 18px 50px rgba(15,23,42,.055); }
+  .home-view > div:nth-child(3) { grid-column:2; grid-row:2; margin:0; padding:24px; border:1px solid #e5e7eb; border-radius:24px; background:white; box-shadow:0 18px 50px rgba(15,23,42,.055); }
   .home-activity-list { display:grid; grid-template-columns:1fr 1fr; gap:9px!important; }
   .home-activity-card { min-height:82px; }
 
-  .finance-view { display:grid; grid-template-columns:minmax(360px,.75fr) minmax(0,1.25fr); gap:20px!important; align-items:start; }
+  .finance-view { display:grid; grid-template-columns:minmax(380px,.75fr) minmax(0,1.25fr); gap:24px!important; align-items:start; }
   .finance-view > div:first-child { grid-column:1/-1; }
   .finance-view > div:nth-child(2) { grid-column:1; }
   .finance-view > div:nth-child(n+3) { grid-column:2; }
   .finance-view > div { min-width:0; }
 
-  .games-view { padding:24px 28px 110px!important; }
-  .games-view > div.relative.mx-auto { max-width:1220px!important; }
-  .games-view section[aria-label="Jogos em destaque"] { padding:22px; }
-  .games-view section[aria-label="Jogos em destaque"] > div:nth-child(2) { height:470px!important; max-width:980px; margin-inline:auto; }
-  .games-view section article { max-width:310px!important; width:34%!important; }
+  .games-view { padding:24px 32px 110px!important; }
+  .games-view > div.relative.mx-auto { max-width:1720px!important; }
+  .games-view section[aria-label="Jogos em destaque"] { padding:24px; }
+  .games-view section[aria-label="Jogos em destaque"] > div:nth-child(2) { height:470px!important; max-width:1100px; margin-inline:auto; }
+  .games-view section article { max-width:330px!important; width:34%!important; }
 
-  .more-view { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px!important; align-items:start; }
+  .more-view { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px!important; align-items:start; }
   .more-view > div:first-child { grid-column:1/-1; }
   .more-view > div { min-width:0; }
 
@@ -857,7 +857,7 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   .alliance-app-shell nav.fixed button { flex-direction:row; gap:7px; }
   .alliance-app-shell nav.fixed button span { margin:0; font-size:11px; }
 
-  .desktop-context-strip { width:calc(100% - 64px); max-width:1320px; min-height:72px; margin:22px auto 0; padding:12px 16px; display:grid; grid-template-columns:minmax(180px,1.4fr) repeat(3,minmax(135px,.8fr)) auto; align-items:center; gap:10px; border:1px solid #e5e7eb; border-radius:20px; background:rgba(255,255,255,.88); box-shadow:0 13px 36px rgba(15,23,42,.045); backdrop-filter:blur(18px); }
+  .desktop-context-strip { width:calc(100% - 48px); max-width:1720px; min-height:72px; margin:18px auto 0; padding:12px 16px; display:grid; grid-template-columns:minmax(180px,1.4fr) repeat(3,minmax(135px,.8fr)) auto; align-items:center; gap:10px; border:1px solid #e5e7eb; border-radius:20px; background:rgba(255,255,255,.88); box-shadow:0 13px 36px rgba(15,23,42,.045); backdrop-filter:blur(18px); }
   .desktop-context-strip > div { min-width:0; padding:0 12px; border-left:1px solid #eceff3; }
   .desktop-context-strip > div:first-child { border:0; }
   .desktop-context-strip > div:not(:first-child):not(.desktop-live-pill) { display:flex; align-items:center; gap:9px; }

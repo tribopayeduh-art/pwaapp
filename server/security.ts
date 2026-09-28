@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -363,6 +363,19 @@ export function getSession(token: string): SessionData | null {
 
 export function destroySession(token: string): boolean {
   return activeSessions.delete(token);
+}
+
+export function getActiveOnlineUserSessions(withinMs: number = 15 * 60 * 1000): SessionData[] {
+  const now = Date.now();
+  const online: SessionData[] = [];
+  const seenUsers = new Set<string>();
+  for (const session of activeSessions.values()) {
+    if (now - session.lastActiveAt <= withinMs && !seenUsers.has(session.userId)) {
+      seenUsers.add(session.userId);
+      online.push(session);
+    }
+  }
+  return online;
 }
 
 // Periodic cleanup of stale sessions (every 6 hours)

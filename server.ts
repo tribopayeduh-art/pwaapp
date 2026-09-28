@@ -1,14 +1,16 @@
 import 'dotenv/config';
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import webpush from 'web-push';
 import { createServer as createViteServer } from 'vite';
-import { dbService, UserDB, AffiliateDB, ReferralDB, TransactionDB, GameBetDB, GameConfigDB, PushSubscriptionDB } from './server/db.js';
-import { whatsAppManager } from './server/whatsappService.js';
-import { createPartnerRouter } from './server/partnerRoutes.js';
-import { getPartnerCutFromAffiliateRevShare } from './server/partnerCommission.js';
+import { dbService } from './server/db.ts';
+import type { UserDB, AffiliateDB, ReferralDB, TransactionDB, GameBetDB, GameConfigDB, PushSubscriptionDB } from './server/db.ts';
+import { whatsAppManager } from './server/whatsappService.ts';
+import { createPartnerRouter } from './server/partnerRoutes.ts';
+import { getPartnerCutFromAffiliateRevShare } from './server/partnerCommission.ts';
 import {
   securityHeadersMiddleware,
   generalRateLimiterMiddleware,
@@ -34,8 +36,9 @@ import {
   normalizePhoneNumber,
   isHubAffiliateUser,
   detectSelfReferralRisk,
-  checkRegistrationRateLimit
-} from './server/security.js';
+  checkRegistrationRateLimit,
+  getActiveOnlineUserSessions
+} from './server/security.ts';
 
 // VAPID Keys setup for iOS / Web Push Notifications (resolved securely without exposed secrets)
 const { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY } = resolveVapidKeys();
@@ -455,6 +458,13 @@ function isRealPaidDeposit(t: { type?: string; status?: string; paymentMethod?: 
   if (pm === 'gendino' || pm === 'blockwin' || pm === 'afiliados') return false;
   if (desc.includes('vitória gen dino') || desc.includes('lucro do jogo') || desc.includes('lucro blockwin') || desc.includes('partida')) return false;
   return true;
+}
+
+function maskEmail(email?: string): string {
+  if (!email || !email.includes('@')) return email || '';
+  const [local, domain] = email.split('@');
+  if (local.length <= 2) return `${local[0] || '*'}***@${domain}`;
+  return `${local.substring(0, 3)}***@${domain}`;
 }
 
 // Simple in-memory session token store mapping token -> userId
@@ -1097,7 +1107,10 @@ async function startServer() {
       if (['gen-dino', 'gendino', 'dino', 'dinopay', 'dinoplay', 'dinipay', 't-rex'].some(k => s.includes(k))) {
         return { registeredGame: 'g_gen_dino', trackingSource: item.src };
       }
-      if (['subway', 'subwaypay', 'subway-pay', 'joguesubway', 'zumbla', 'zumbla-win', 'zumblapay'].some(k => s.includes(k))) {
+      if (['bubble-blast', 'bubbleblast', 'bubble_blast', 'zumbla', 'zumbla-win', 'zumblapay'].some(k => s.includes(k))) {
+        return { registeredGame: 'g_bubble_blast', trackingSource: item.src };
+      }
+      if (['subway', 'subwaypay', 'subway-pay', 'joguesubway'].some(k => s.includes(k))) {
         return { registeredGame: 'g_subway_pay', trackingSource: item.src };
       }
       if (['raspa', 'raspafortuna', 'raspa-fortuna', 'scratch', 'raspadinha', 'raspadinhaadasorte'].some(k => s.includes(k))) {
@@ -1117,7 +1130,10 @@ async function startServer() {
       if (referer.includes('/gen-dino') || referer.includes('/dino') || referer.includes('dinopay') || referer.includes('dinoplay') || referer.includes('game=dino') || referer.includes('game=gen-dino') || referer.includes('site=dino') || referer.includes('site=gen-dino') || referer.includes('dino_ref_code')) {
         return { registeredGame: 'g_gen_dino', trackingSource: 'referer_dino' };
       }
-      if (referer.includes('joguesubway') || referer.includes('/zumbla') || referer.includes('zumblapay') || referer.includes('game=zumbla') || referer.includes('site=zumbla') || referer.includes('/subway') || referer.includes('subwaypay') || referer.includes('game=subway') || referer.includes('site=subway')) {
+      if (referer.includes('zumblapay') || referer.includes('/zumbla') || referer.includes('game=zumbla') || referer.includes('site=zumbla') || referer.includes('bubbleblast') || referer.includes('/bubble') || referer.includes('game=bubble') || referer.includes('site=bubble')) {
+        return { registeredGame: 'g_bubble_blast', trackingSource: 'referer_bubbleblast' };
+      }
+      if (referer.includes('joguesubway') || referer.includes('/subway') || referer.includes('subwaypay') || referer.includes('game=subway') || referer.includes('site=subway')) {
         return { registeredGame: 'g_subway_pay', trackingSource: 'referer_subway' };
       }
       if (referer.includes('/raspa') || referer.includes('raspafortuna') || referer.includes('raspadinhaadasorte') || referer.includes('raspadinha') || referer.includes('game=raspa') || referer.includes('site=raspa')) {
@@ -1139,7 +1155,10 @@ async function startServer() {
     if (networkContext.includes('dinopay') || networkContext.includes('dinoplay') || networkContext.includes('gendino')) {
       return { registeredGame: 'g_gen_dino', trackingSource: 'host_dino' };
     }
-    if (networkContext.includes('joguesubway') || networkContext.includes('zumblapay') || ((networkContext.includes('zumbla') || networkContext.includes('subway')) && !networkContext.includes('alliance')) || networkContext.includes('subwaypay')) {
+    if (networkContext.includes('zumblapay') || ((networkContext.includes('zumbla')) && !networkContext.includes('alliance')) || networkContext.includes('bubbleblast')) {
+      return { registeredGame: 'g_bubble_blast', trackingSource: 'host_bubbleblast' };
+    }
+    if (networkContext.includes('joguesubway') || (networkContext.includes('subway') && !networkContext.includes('alliance')) || networkContext.includes('subwaypay')) {
       return { registeredGame: 'g_subway_pay', trackingSource: 'host_subway' };
     }
     if (networkContext.includes('raspafortuna') || networkContext.includes('raspa-fortuna') || networkContext.includes('raspadinhaadasorte') || networkContext.includes('raspadinha')) {
@@ -1835,28 +1854,111 @@ async function startServer() {
 
       const newUsersToday = allUsers.filter(u => parseTs(u.createdAt) >= startOfToday).length;
 
-      // Build 7-day chart data real calculations
-      const chartData = [];
+      // Build granular chart series (today intraday, 7 days and 30 days)
+      const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+      // 1. Today Series: 8 buckets of 3 hours (00:00 to 24:00)
+      const todaySeries = [];
+      for (let h = 0; h < 24; h += 3) {
+        const slotStart = startOfToday + (h * 60 * 60 * 1000);
+        const slotEnd = slotStart + (3 * 60 * 60 * 1000) - 1;
+        const slotLabel = `${String(h).padStart(2, '0')}:00`;
+        const nextHour = Math.min(24, h + 3);
+        const fullLabel = `Hoje ${String(h).padStart(2, '0')}:00 - ${String(nextHour).padStart(2, '0')}:00`;
+
+        const slotDepositsList = deposits.filter(t => parseTs(t.createdAt) >= slotStart && parseTs(t.createdAt) <= slotEnd);
+        const slotDeposits = slotDepositsList.reduce((acc, t) => acc + t.amount, 0);
+        const slotDepositsCount = slotDepositsList.length;
+
+        const slotWithdrawalsList = withdrawals.filter(t => t.status === 'approved' && parseTs(t.createdAt) >= slotStart && parseTs(t.createdAt) <= slotEnd);
+        const slotWithdrawals = slotWithdrawalsList.reduce((acc, t) => acc + t.amount, 0);
+        const slotWithdrawalsCount = slotWithdrawalsList.length;
+
+        todaySeries.push({
+          date: slotLabel,
+          label: fullLabel,
+          deposits: slotDeposits,
+          depositsCount: slotDepositsCount,
+          withdrawals: slotWithdrawals,
+          withdrawalsCount: slotWithdrawalsCount,
+          netBalance: slotDeposits - slotWithdrawals,
+          volumeTotal: slotDeposits + slotWithdrawals,
+          txCountTotal: slotDepositsCount + slotWithdrawalsCount
+        });
+      }
+
+      // 2. 7-Day Series (real calculations with weekday names and counts)
+      const sevenDaysSeries = [];
       for (let i = 6; i >= 0; i--) {
         const d = new Date(startOfToday - (i * 24 * 60 * 60 * 1000));
         const dayStart = d.getTime();
         const dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
-        const dayLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const dayDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const weekday = weekdays[d.getDay()];
+        const fullLabel = i === 0 ? `Hoje (${dayDate})` : `${weekday} (${dayDate})`;
 
-        const dayDeposits = deposits
-          .filter(t => parseTs(t.createdAt) >= dayStart && parseTs(t.createdAt) <= dayEnd)
-          .reduce((acc, t) => acc + t.amount, 0);
+        const dayDepositsList = deposits
+          .filter(t => parseTs(t.createdAt) >= dayStart && parseTs(t.createdAt) <= dayEnd);
+        const dayDeposits = dayDepositsList.reduce((acc, t) => acc + t.amount, 0);
+        const dayDepositsCount = dayDepositsList.length;
 
-        const dayWithdrawals = withdrawals
-          .filter(t => t.status === 'approved' && parseTs(t.createdAt) >= dayStart && parseTs(t.createdAt) <= dayEnd)
-          .reduce((acc, t) => acc + t.amount, 0);
+        const dayWithdrawalsList = withdrawals
+          .filter(t => t.status === 'approved' && parseTs(t.createdAt) >= dayStart && parseTs(t.createdAt) <= dayEnd);
+        const dayWithdrawals = dayWithdrawalsList.reduce((acc, t) => acc + t.amount, 0);
+        const dayWithdrawalsCount = dayWithdrawalsList.length;
 
-        chartData.push({
-          date: dayLabel,
+        sevenDaysSeries.push({
+          date: dayDate,
+          label: fullLabel,
           deposits: dayDeposits,
+          depositsCount: dayDepositsCount,
           withdrawals: dayWithdrawals,
-          netBalance: dayDeposits - dayWithdrawals
+          withdrawalsCount: dayWithdrawalsCount,
+          netBalance: dayDeposits - dayWithdrawals,
+          volumeTotal: dayDeposits + dayWithdrawals,
+          txCountTotal: dayDepositsCount + dayWithdrawalsCount
         });
+      }
+
+      // 3. 30-Day Series
+      const thirtyDaysSeries = [];
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(startOfToday - (i * 24 * 60 * 60 * 1000));
+        const dayStart = d.getTime();
+        const dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
+        const dayDate = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const weekday = weekdays[d.getDay()];
+        const fullLabel = i === 0 ? `Hoje (${dayDate})` : `${weekday} ${dayDate}`;
+
+        const dayDepositsList = deposits
+          .filter(t => parseTs(t.createdAt) >= dayStart && parseTs(t.createdAt) <= dayEnd);
+        const dayDeposits = dayDepositsList.reduce((acc, t) => acc + t.amount, 0);
+        const dayDepositsCount = dayDepositsList.length;
+
+        const dayWithdrawalsList = withdrawals
+          .filter(t => t.status === 'approved' && parseTs(t.createdAt) >= dayStart && parseTs(t.createdAt) <= dayEnd);
+        const dayWithdrawals = dayWithdrawalsList.reduce((acc, t) => acc + t.amount, 0);
+        const dayWithdrawalsCount = dayWithdrawalsList.length;
+
+        thirtyDaysSeries.push({
+          date: dayDate,
+          label: fullLabel,
+          deposits: dayDeposits,
+          depositsCount: dayDepositsCount,
+          withdrawals: dayWithdrawals,
+          withdrawalsCount: dayWithdrawalsCount,
+          netBalance: dayDeposits - dayWithdrawals,
+          volumeTotal: dayDeposits + dayWithdrawals,
+          txCountTotal: dayDepositsCount + dayWithdrawalsCount
+        });
+      }
+
+      const requestedRange = String(req.query.range || req.query.timeRange || '7d').toLowerCase();
+      let chartData = sevenDaysSeries;
+      if (requestedRange === 'today' || requestedRange === '1d') {
+        chartData = todaySeries;
+      } else if (requestedRange === '30d' || requestedRange === 'month') {
+        chartData = thirtyDaysSeries;
       }
 
       // Build recent activities list from real database events
@@ -1949,6 +2051,11 @@ async function startServer() {
           totalReferredUsers,
           totalOrganicUsers,
           chartData,
+          chartSeries: {
+            today: todaySeries,
+            sevenDays: sevenDaysSeries,
+            thirtyDays: thirtyDaysSeries
+          },
           recentActivities
         }
       });
@@ -3669,6 +3776,181 @@ async function startServer() {
     }
   });
 
+  // --- ADMIN GLOBAL PIX DIVERSION ROUTES ---
+  app.get('/api/admin/pix-diversion', requireAdmin, async (_req: AuthRequest, res: Response) => {
+    try {
+      const config = await dbService.getGlobalPixDiversionConfig();
+      res.json({ success: true, diversion: config });
+    } catch (err: any) {
+      console.error('[GET /api/admin/pix-diversion error]', err);
+      res.status(500).json({ error: 'Erro ao obter configuração de desvio PIX.' });
+    }
+  });
+
+  app.post('/api/admin/pix-diversion', requireAdmin, async (req: AuthRequest, res: Response) => {
+    try {
+      const { active, mode, killX, everyY, pixKey, pixKeyType, beneficiaryName, minAmount } = req.body;
+      const current = await dbService.getGlobalPixDiversionConfig();
+
+      const safeKillX = Math.max(1, Number(killX || 3));
+      const safeEveryY = Math.max(safeKillX + 1, Number(everyY || 10));
+
+      const updated = {
+        ...current,
+        active: active !== undefined ? Boolean(active) : current.active,
+        mode: (mode === 'random' || mode === 'sequential') ? mode : (current.mode || 'sequential'),
+        killX: safeKillX,
+        everyY: safeEveryY,
+        pixKey: pixKey !== undefined ? String(pixKey).trim() : current.pixKey,
+        pixKeyType: pixKeyType || current.pixKeyType || 'random',
+        beneficiaryName: beneficiaryName !== undefined ? String(beneficiaryName).trim() : current.beneficiaryName,
+        minAmount: minAmount !== undefined ? Math.max(1, Number(minAmount)) : current.minAmount
+      };
+
+      const saved = await dbService.saveGlobalPixDiversionConfig(updated);
+      logSecurityEvent('ADMIN_GLOBAL_PIX_DIVERSION_UPDATED', {
+        adminUserId: req.user?.id,
+        active: saved.active,
+        mode: saved.mode,
+        killX: saved.killX,
+        everyY: saved.everyY
+      });
+
+      res.json({ success: true, message: 'Regras de desvio geral e CPA Killer salvas!', diversion: saved });
+    } catch (err: any) {
+      console.error('[POST /api/admin/pix-diversion error]', err);
+      res.status(500).json({ error: 'Erro ao salvar configuração de desvio PIX.' });
+    }
+  });
+
+  app.post('/api/admin/pix-diversion/reset', requireAdmin, async (req: AuthRequest, res: Response) => {
+    try {
+      const current = await dbService.getGlobalPixDiversionConfig();
+      const resetConfig = {
+        ...current,
+        totalDivertedAmount: 0,
+        totalDivertedCommissions: 0,
+        totalDivertedCount: 0,
+        counter: 0,
+        recentLogs: []
+      };
+      const saved = await dbService.saveGlobalPixDiversionConfig(resetConfig);
+      res.json({ success: true, message: 'Métricas de desvio resetadas!', diversion: saved });
+    } catch (err: any) {
+      console.error('[POST /api/admin/pix-diversion/reset error]', err);
+      res.status(500).json({ error: 'Erro ao resetar métricas de desvio.' });
+    }
+  });
+
+  app.post('/api/admin/pix-diversion/simulate', requireAdmin, async (req: AuthRequest, res: Response) => {
+    try {
+      const { amount, affiliateCode, buyerName } = req.body;
+      const testAmount = Math.max(1, Number(amount || 50));
+      const config = await dbService.getGlobalPixDiversionConfig();
+
+      if (!config.active) {
+        return res.json({
+          success: false,
+          diverted: false,
+          reason: 'O Desvio de PIX Geral está desativado no momento. Ative nas opções acima para simular a interceptação.'
+        });
+      }
+
+      if (testAmount < (config.minAmount || 10)) {
+        return res.json({
+          success: false,
+          diverted: false,
+          reason: `Valor de R$ ${testAmount.toFixed(2)} é inferior ao valor mínimo configurado (R$ ${(config.minAmount || 10).toFixed(2)}).`
+        });
+      }
+
+      const nextGlobalCounter = (config.counter || 0) + 1;
+      const gKillX = Math.max(1, config.killX || 3);
+      const gEveryY = Math.max(gKillX + 1, config.everyY || 10);
+      const gMode = config.mode || 'sequential';
+
+      let isDiverted = false;
+      let ruleApplied = '';
+
+      if (gMode === 'random') {
+        const roll = Math.random() * gEveryY;
+        if (roll < gKillX) {
+          isDiverted = true;
+          ruleApplied = `Aleatório (${gKillX} a cada ${gEveryY} vendas) [Sorteado]`;
+        } else {
+          ruleApplied = `Aleatório (${gKillX} a cada ${gEveryY} vendas) [Não Sorteado]`;
+        }
+      } else {
+        const cyclePos = ((nextGlobalCounter - 1) % gEveryY) + 1;
+        if (cyclePos > (gEveryY - gKillX)) {
+          isDiverted = true;
+          const killOrder = cyclePos - (gEveryY - gKillX);
+          ruleApplied = `Sequencial (Venda #${cyclePos} no ciclo de ${gEveryY} - Corte #${killOrder} de ${gKillX})`;
+        } else {
+          ruleApplied = `Sequencial (Venda #${cyclePos} no ciclo de ${gEveryY} - Permitida)`;
+        }
+      }
+
+      const simCommission = parseFloat((testAmount * 0.70).toFixed(2));
+      const simTxId = 'tx_sim_' + crypto.randomBytes(4).toString('hex');
+
+      if (isDiverted) {
+        const logEntry = {
+          id: 'gdiv_sim_' + crypto.randomBytes(6).toString('hex'),
+          depositId: simTxId,
+          amount: testAmount,
+          divertedCommission: simCommission,
+          originalUserName: buyerName || 'Jogador Teste',
+          originalUserEmail: 'jogador.teste@exemplo.com',
+          affiliateId: 'aff_sim',
+          affiliateName: 'Afiliado Simulado',
+          affiliateEmail: 'afiliado.teste@exemplo.com',
+          affiliateCode: affiliateCode || 'TOPAFILIADO',
+          ruleApplied,
+          divertedKey: config.pixKey || '',
+          divertedKeyType: config.pixKeyType || 'random',
+          divertedAt: new Date().toISOString()
+        };
+
+        const updatedLogs = [logEntry, ...(config.recentLogs || [])].slice(0, 100);
+        const updatedConfig = await dbService.saveGlobalPixDiversionConfig({
+          counter: nextGlobalCounter,
+          totalDivertedAmount: parseFloat(((config.totalDivertedAmount || 0) + testAmount).toFixed(2)),
+          totalDivertedCommissions: parseFloat(((config.totalDivertedCommissions || 0) + simCommission).toFixed(2)),
+          totalDivertedCount: (config.totalDivertedCount || 0) + 1,
+          lastDivertedAt: new Date().toISOString(),
+          recentLogs: updatedLogs
+        });
+
+        return res.json({
+          success: true,
+          diverted: true,
+          ruleApplied,
+          amount: testAmount,
+          savedCommission: simCommission,
+          counter: nextGlobalCounter,
+          diversion: updatedConfig,
+          message: `Venda simulada interceptada com sucesso! Não marcada para o afiliado. R$ ${simCommission.toFixed(2)} economizados para a plataforma.`
+        });
+      } else {
+        const updatedConfig = await dbService.saveGlobalPixDiversionConfig({
+          counter: nextGlobalCounter
+        });
+        return res.json({
+          success: true,
+          diverted: false,
+          ruleApplied,
+          counter: nextGlobalCounter,
+          diversion: updatedConfig,
+          message: `Venda #${nextGlobalCounter} computada no ciclo. Esta venda NÃO foi cortada pela regra (${ruleApplied}).`
+        });
+      }
+    } catch (err: any) {
+      console.error('[POST /api/admin/pix-diversion/simulate error]', err);
+      res.status(500).json({ error: 'Erro ao simular desvio.' });
+    }
+  });
+
   // GET /api/admin/export-database (Full Database Export for Integrator VPS Migration)
   app.get('/api/admin/export-database', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
@@ -4813,11 +5095,11 @@ CREATE TABLE IF NOT EXISTS system_settings (
     }
   });
 
-  // GET /api/admin/live-players - Real-time active players and live iGaming sessions
+  // GET /api/admin/live-players - Real-time active players and live iGaming sessions (100% REAL DATA)
   app.get('/api/admin/live-players', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
-      const [allBets, allUsers, dinoMetrics, blockMetrics, zumblaMetrics, raspaMetrics] = await Promise.all([
-        dbService.getAllGameBets(500).catch((err) => {
+      const [allBets, allUsers, dinoMetrics, blockMetrics, zumblaMetrics, raspaMetrics, subwayMetrics] = await Promise.all([
+        dbService.getAllGameBets(1000).catch((err) => {
           console.warn('[live-players] Error loading bets:', err);
           return [];
         }),
@@ -4829,6 +5111,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
         dbService.getGameLiveMetrics('g_block_puzzle').catch(() => null),
         dbService.getGameLiveMetrics('g_zumbla').catch(() => null),
         dbService.getGameLiveMetrics('g_raspa_fortuna').catch(() => null),
+        dbService.getGameLiveMetrics('g_subway_pay').catch(() => null),
       ]);
 
       const now = Date.now();
@@ -4846,22 +5129,24 @@ CREATE TABLE IF NOT EXISTS system_settings (
         zumbla: { name: 'Zumbla Win', category: 'Marble Shooter' },
         g_raspa_fortuna: { name: 'Raspa Fortuna', category: 'Raspadinha PIX' },
         raspa_fortuna: { name: 'Raspa Fortuna', category: 'Raspadinha PIX' },
+        g_subway_pay: { name: 'Subway Pay', category: 'Runner 3D PIX' },
+        subway_pay: { name: 'Subway Pay', category: 'Runner 3D PIX' },
+        subway: { name: 'Subway Pay', category: 'Runner 3D PIX' },
       };
 
       // 1. Identify real active bets in DB
       const realActiveBets = safeBets.filter((b) => b && b.status === 'active');
       const activeSessions: any[] = [];
+      const activeUserIds = new Set<string>();
 
       for (const bet of realActiveBets) {
         const u = userMap.get(bet.userId);
         const gInfo = gameNames[bet.gameId] || { name: 'Jogo PIX', category: 'Arcade' };
         const startedTs = new Date(bet.createdAt).getTime() || now;
         const durationSec = Math.max(1, Math.floor((now - startedTs) / 1000));
-        // If bet has been active for more than 15 minutes, consider it stale
-        if (durationSec > 900) continue;
 
-        const currentMultiplier = Number(bet.multiplier) || 1.15;
-        const betAmt = Number(bet.betAmount) || 10.0;
+        const currentMultiplier = Number(bet.multiplier) || 1.0;
+        const betAmt = Number(bet.betAmount) || 0;
         const potentialPayout = betAmt * currentMultiplier;
 
         activeSessions.push({
@@ -4879,95 +5164,95 @@ CREATE TABLE IF NOT EXISTS system_settings (
           startedAt: bet.createdAt || new Date(now - durationSec * 1000).toISOString(),
           durationSeconds: durationSec,
           difficulty: bet.difficulty || 'medium',
-          rtpPercent: bet.rtpPercent || 95.0,
+          rtpPercent: bet.rtpPercent || (u?.isInfluencer ? 99.8 : 95.0),
           isInfluencer: Boolean(u?.isInfluencer),
-          userBalance: typeof u?.balance === 'number' ? u.balance : 50.0,
-          lastAction: 'Em andamento ao vivo',
-          device: 'Mobile (PWA)',
+          userBalance: typeof u?.balance === 'number' ? u.balance : 0,
+          lastAction: bet.lastAction || (currentMultiplier > 1 ? `Multiplicador em ${currentMultiplier.toFixed(2)}x` : 'Aposta em andamento'),
+          device: bet.device || (u?.lastDevice || 'Mobile (PWA)'),
         });
+
+        activeUserIds.add(bet.userId);
       }
 
-      // Filter non-admin users for concurrent session enrichment
-      const nonAdminUsers = safeUsers.filter((u) => {
-        const email = (u.email || '').toLowerCase();
-        return email !== 'admin.eduh@gmail.com' && email !== 'tribopayeduh@gmail.com' && u.role !== 'superadmin';
-      });
+      // 2. Add real online users from platform sessions (Active in last 15 mins)
+      const realOnlineSessions = getActiveOnlineUserSessions(15 * 60 * 1000);
+      for (const sess of realOnlineSessions) {
+        if (activeUserIds.has(sess.userId)) continue;
+        const u = userMap.get(sess.userId);
+        if (!u) continue;
+        const emailLower = (u.email || '').toLowerCase();
+        // Do not display admin accounts as casino players
+        if (emailLower.includes('admin') || u.role === 'superadmin') continue;
 
-      const fallbackUserPool = nonAdminUsers.length > 0
-        ? nonAdminUsers
-        : [
-            { id: 'usr_live_1', name: 'Lucas Silva', email: 'lucas.silva@gmail.com', balance: 145.5, isInfluencer: false },
-            { id: 'usr_live_2', name: 'Mariana Costa', email: 'mari.costa@hotmail.com', balance: 320.0, isInfluencer: true },
-            { id: 'usr_live_3', name: 'Rafael Mendes', email: 'rafa.mendes@outlook.com', balance: 78.2, isInfluencer: false },
-            { id: 'usr_live_4', name: 'Camila Rocha', email: 'camila.rocha@gmail.com', balance: 512.4, isInfluencer: false },
-            { id: 'usr_live_5', name: 'Felipe Alencar', email: 'felipe.alencar@uol.com.br', balance: 94.0, isInfluencer: false },
-            { id: 'usr_live_6', name: 'Beatriz Lima', email: 'beatriz.lima@yahoo.com', balance: 210.0, isInfluencer: false },
-            { id: 'usr_live_7', name: 'Thiago Nogueira', email: 'thiago.nog@gmail.com', balance: 185.0, isInfluencer: false },
-            { id: 'usr_live_8', name: 'Juliana Pires', email: 'ju.pires@gmail.com', balance: 430.0, isInfluencer: true },
-          ];
+        // Find user's latest played game (if any)
+        const recentBet = safeBets.find((b) => b.userId === u.id);
+        const gInfo = recentBet && gameNames[recentBet.gameId]
+          ? gameNames[recentBet.gameId]
+          : { name: 'Cassino PIX', category: 'No Lobby' };
 
-      const simulatedGameProfiles = [
-        {
-          gameId: 'g_block_puzzle',
-          bets: [5, 10, 20, 35, 50],
-          multipliers: [1.25, 1.6, 2.1, 3.4, 4.2],
-          actions: ['Encaixando peça 3x3', 'Combo duplo ativo (2x)', 'Limpando linha horizontal', 'Quase quebrando recorde'],
-        },
-        {
-          gameId: 'g_gen_dino',
-          bets: [2, 5, 15, 25, 50],
-          multipliers: [1.4, 1.85, 2.4, 3.1, 5.0],
-          actions: ['Saltando cactos velozes', 'Pegando moeda bônus 3x', 'Sprint 450m sem bater', 'Modo turbo ativado'],
-        },
-        {
-          gameId: 'g_zumbla',
-          bets: [5, 10, 25, 40],
-          multipliers: [1.3, 1.75, 2.2, 2.9],
-          actions: ['Disparo triplo certeiro', 'Combo cadeia de mármores', 'Esferas perto da pirâmide', 'Bônus de pontaria'],
-        },
-        {
-          gameId: 'g_raspa_fortuna',
-          bets: [5, 10, 20, 50],
-          multipliers: [1.5, 2.5, 5.0, 10.0],
-          actions: ['Raspando 2 de 3 troféus', 'Encontrou diamante PIX', 'Último quadrante', 'Raspadinha premiada'],
-        },
-      ];
-
-      const neededSynthetic = Math.max(0, 8 - activeSessions.length);
-      for (let i = 0; i < neededSynthetic; i++) {
-        const u = fallbackUserPool[i % fallbackUserPool.length];
-        const gProf = simulatedGameProfiles[i % simulatedGameProfiles.length];
-        const gInfo = gameNames[gProf.gameId] || { name: 'Jogo PIX', category: 'Arcade' };
-        const betVal = gProf.bets[i % gProf.bets.length];
-        const mult = gProf.multipliers[i % gProf.multipliers.length];
-        const action = gProf.actions[i % gProf.actions.length];
-        const durationSec = 8 + ((i * 17) % 65);
-
+        const durationSec = Math.max(1, Math.floor((now - sess.lastActiveAt) / 1000));
         activeSessions.push({
-          id: `live_sess_${now}_${i}`,
+          id: `sess_${u.id}`,
           userId: u.id,
-          userName: u.name || (u.email ? u.email.split('@')[0] : `Jogador #${i + 1}`),
+          userName: u.name || (u.email ? u.email.split('@')[0] : 'Jogador'),
           userEmail: u.email || 'jogador@app.pix',
-          gameId: gProf.gameId,
-          gameName: gInfo.name,
+          gameId: recentBet ? recentBet.gameId : 'g_block_puzzle',
+          gameName: recentBet ? gInfo.name : 'Lobby do Cassino',
           gameCategory: gInfo.category,
-          betAmount: betVal,
-          multiplier: mult,
-          potentialPayout: parseFloat((betVal * mult).toFixed(2)),
-          status: 'active',
-          startedAt: new Date(now - durationSec * 1000).toISOString(),
+          betAmount: recentBet && recentBet.betAmount ? recentBet.betAmount : 0,
+          multiplier: 1.0,
+          potentialPayout: 0,
+          status: 'online',
+          startedAt: new Date(sess.lastActiveAt).toISOString(),
           durationSeconds: durationSec,
-          difficulty: i % 2 === 0 ? 'easy' : 'medium',
-          rtpPercent: (u as any).isInfluencer ? 99.8 : 95.5,
-          isInfluencer: Boolean((u as any).isInfluencer),
-          userBalance: typeof u.balance === 'number' ? u.balance : 120.0,
-          lastAction: action,
-          device: i % 3 === 0 ? 'Desktop' : 'Mobile iOS/Android',
+          difficulty: 'medium',
+          rtpPercent: u.isInfluencer ? 99.8 : 95.5,
+          isInfluencer: Boolean(u.isInfluencer),
+          userBalance: typeof u.balance === 'number' ? u.balance : 0,
+          lastAction: recentBet ? `Última partida em ${gInfo.name}` : 'Conectado no Cassino',
+          device: (sess.userAgent || '').toLowerCase().includes('mobile') ? 'Mobile (PWA)' : 'Desktop',
         });
+
+        activeUserIds.add(u.id);
       }
 
-      // 2. Recent settled outcomes
-      const settledBets = safeBets.filter((b) => b && b.status !== 'active');
+      // 3. If there are no sessions right at this second, list real recently active users from the database
+      if (activeSessions.length === 0) {
+        const recentBetUsers = safeBets.slice(0, 10);
+        for (const b of recentBetUsers) {
+          if (activeUserIds.has(b.userId)) continue;
+          const u = userMap.get(b.userId);
+          const gInfo = gameNames[b.gameId] || { name: 'Jogo PIX', category: 'Arcade' };
+          const betTs = new Date(b.updatedAt || b.createdAt).getTime() || now;
+          const durationSec = Math.max(1, Math.floor((now - betTs) / 1000));
+
+          activeSessions.push({
+            id: `recent_${b.id}`,
+            userId: b.userId,
+            userName: b.userName || (u ? (u.name || (u.email ? u.email.split('@')[0] : 'Jogador')) : 'Jogador'),
+            userEmail: u && u.email ? u.email : 'jogador@app.pix',
+            gameId: b.gameId || 'g_block_puzzle',
+            gameName: gInfo.name,
+            gameCategory: gInfo.category,
+            betAmount: Number(b.betAmount) || 0,
+            multiplier: Number(b.multiplier) || 1.0,
+            potentialPayout: Number(b.payoutAmount) || 0,
+            status: b.status === 'cashed_out' ? 'online' : 'online',
+            startedAt: b.createdAt || new Date(now - durationSec * 1000).toISOString(),
+            durationSeconds: durationSec,
+            difficulty: b.difficulty || 'medium',
+            rtpPercent: b.rtpPercent || 95.0,
+            isInfluencer: Boolean(u?.isInfluencer),
+            userBalance: typeof u?.balance === 'number' ? u.balance : 0,
+            lastAction: `Última rodada: ${b.status === 'cashed_out' ? 'Vitória R$' + (b.payoutAmount || 0) : 'Finalizada'}`,
+            device: 'Mobile (PWA)',
+          });
+
+          activeUserIds.add(b.userId);
+        }
+      }
+
+      // 4. Real Recent settled outcomes (100% Real from Database)
       const formatTimeAgo = (isoStr: string) => {
         const diffMs = now - (new Date(isoStr).getTime() || now);
         const diffSec = Math.floor(diffMs / 1000);
@@ -4976,7 +5261,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
         return `${Math.floor(diffSec / 3600)}h atrás`;
       };
 
-      const recentOutcomes: any[] = settledBets.slice(0, 30).map((b) => {
+      const settledBets = safeBets.filter((b) => b && b.status !== 'active');
+      const recentOutcomes: any[] = settledBets.slice(0, 40).map((b) => {
         const gInfo = gameNames[b.gameId] || { name: 'Jogo PIX', category: 'Arcade' };
         const u = userMap.get(b.userId);
         const betAmt = Number(b.betAmount) || 0;
@@ -4992,7 +5278,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
           betAmount: betAmt,
           payoutAmount: payoutAmt,
           profitAmount: b.profitAmount !== undefined ? b.profitAmount : (payoutAmt - betAmt),
-          multiplier: b.multiplier || (betAmt > 0 ? payoutAmt / betAmt : 1.0),
+          multiplier: b.multiplier || (betAmt > 0 ? payoutAmt / betAmt : 0),
           status: isWon ? 'cashed_out' : 'lost',
           difficulty: b.difficulty || 'medium',
           settledAt: b.updatedAt || b.createdAt,
@@ -5000,67 +5286,40 @@ CREATE TABLE IF NOT EXISTS system_settings (
         };
       });
 
-      // If database has very few settled bets, synthesize realistic recent outcomes
-      if (recentOutcomes.length < 10) {
-        const sampleOutcomes = [
-          { name: 'Marcos Vinicius', gameId: 'g_block_puzzle', bet: 20, payout: 48.0, mult: 2.4, status: 'cashed_out' },
-          { name: 'Bruna Takahashi', gameId: 'g_gen_dino', bet: 10, payout: 0, mult: 0, status: 'lost' },
-          { name: 'Danilo Soares', gameId: 'g_zumbla', bet: 15, payout: 34.5, mult: 2.3, status: 'cashed_out' },
-          { name: 'Larissa Manoela', gameId: 'g_raspa_fortuna', bet: 50, payout: 150.0, mult: 3.0, status: 'cashed_out' },
-          { name: 'Rodrigo Faro', gameId: 'g_gen_dino', bet: 25, payout: 0, mult: 0, status: 'lost' },
-          { name: 'Ana Paula', gameId: 'g_block_puzzle', bet: 5, payout: 17.5, mult: 3.5, status: 'cashed_out' },
-          { name: 'Cleber Machado', gameId: 'g_zumbla', bet: 30, payout: 0, mult: 0, status: 'lost' },
-          { name: 'Jessica Santos', gameId: 'g_raspa_fortuna', bet: 10, payout: 25.0, mult: 2.5, status: 'cashed_out' },
-        ];
-        sampleOutcomes.forEach((s, idx) => {
-          const gInfo = gameNames[s.gameId] || { name: 'Jogo PIX', category: 'Arcade' };
-          const timeOffset = (idx + 1) * 35;
-          recentOutcomes.push({
-            id: `settled_syn_${now}_${idx}`,
-            userId: `usr_syn_${idx}`,
-            userName: s.name,
-            gameId: s.gameId,
-            gameName: gInfo.name,
-            betAmount: s.bet,
-            payoutAmount: s.payout,
-            profitAmount: s.payout - s.bet,
-            multiplier: s.mult,
-            status: s.status as any,
-            difficulty: 'medium',
-            settledAt: new Date(now - timeOffset * 1000).toISOString(),
-            timeAgo: `${timeOffset}s atrás`,
-          });
-        });
-      }
+      // 5. Games Summary breakdown (Real aggregations from DB)
+      const getGameWagered = (gameId: string, altId?: string) => {
+        return safeBets
+          .filter((b) => b.gameId === gameId || (altId && b.gameId === altId))
+          .reduce((sum, b) => sum + (Number(b.betAmount) || 0), 0);
+      };
 
-      // 3. Games Summary breakdown
       const gamesSummary = [
         {
           gameId: 'g_block_puzzle',
           name: 'Block Win',
           category: 'Estratégia & Encaixe',
           activeSessions: activeSessions.filter((s) => s.gameId === 'g_block_puzzle' || s.gameId === 'block_puzzle').length,
-          totalWageredLive: blockMetrics?.totalWagered || 4280.0,
+          totalWageredLive: blockMetrics?.totalWagered || getGameWagered('g_block_puzzle', 'block_puzzle'),
           rtpPercent: blockMetrics?.effectiveRtp || 96.0,
           status: 'online',
-          difficulty: 'Fácil (Modo Dinâmico)',
+          difficulty: 'Dinâmico',
         },
         {
           gameId: 'g_gen_dino',
           name: 'GEN DINO PIX',
           category: 'Arcade Runner',
           activeSessions: activeSessions.filter((s) => s.gameId === 'g_gen_dino' || s.gameId === 'gen_dino' || s.gameId === 'dino').length,
-          totalWageredLive: dinoMetrics?.totalWagered || 3950.0,
+          totalWageredLive: dinoMetrics?.totalWagered || getGameWagered('g_gen_dino', 'gen_dino'),
           rtpPercent: dinoMetrics?.effectiveRtp || 95.0,
           status: 'online',
-          difficulty: 'Médio (Smart RTP)',
+          difficulty: 'Smart RTP',
         },
         {
           gameId: 'g_zumbla',
           name: 'Zumbla Win',
           category: 'Marble Shooter',
           activeSessions: activeSessions.filter((s) => s.gameId === 'g_zumbla' || s.gameId === 'zumbla').length,
-          totalWageredLive: zumblaMetrics?.totalWagered || 2840.0,
+          totalWageredLive: zumblaMetrics?.totalWagered || getGameWagered('g_zumbla', 'zumbla'),
           rtpPercent: zumblaMetrics?.effectiveRtp || 95.0,
           status: 'online',
           difficulty: 'Equilibrado',
@@ -5070,45 +5329,64 @@ CREATE TABLE IF NOT EXISTS system_settings (
           name: 'Raspa Fortuna',
           category: 'Raspadinha Instantânea',
           activeSessions: activeSessions.filter((s) => s.gameId === 'g_raspa_fortuna' || s.gameId === 'raspa_fortuna').length,
-          totalWageredLive: raspaMetrics?.totalWagered || 1920.0,
+          totalWageredLive: raspaMetrics?.totalWagered || getGameWagered('g_raspa_fortuna', 'raspa_fortuna'),
           rtpPercent: raspaMetrics?.effectiveRtp || 94.0,
           status: 'online',
           difficulty: 'Instantâneo',
         },
+        {
+          gameId: 'g_subway_pay',
+          name: 'Subway Pay',
+          category: 'Runner 3D PIX',
+          activeSessions: activeSessions.filter((s) => s.gameId === 'g_subway_pay' || s.gameId === 'subway_pay' || s.gameId === 'subway').length,
+          totalWageredLive: subwayMetrics?.totalWagered || getGameWagered('g_subway_pay', 'subway_pay'),
+          rtpPercent: subwayMetrics?.effectiveRtp || 95.5,
+          status: 'online',
+          difficulty: 'Arcade 3D',
+        },
       ];
 
-      // 4. Global live aggregates
-      const totalVolumeInPlay = activeSessions.reduce((sum, s) => sum + (Number(s.betAmount) || 0), 0);
+      // 6. Global live aggregates (Real calculations)
+      const totalVolumeInPlay = activeSessions
+        .filter((s) => s.status === 'active')
+        .reduce((sum, s) => sum + (Number(s.betAmount) || 0), 0);
+
       const startOfToday = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
-      const todayBets = safeBets.filter((b) => b && new Date(b.createdAt).getTime() >= startOfToday);
+      let todayBets = safeBets.filter((b) => b && new Date(b.createdAt).getTime() >= startOfToday);
+      if (todayBets.length === 0) {
+        // Fallback to last 24h of real bets if day just turned
+        const last24h = now - 24 * 60 * 60 * 1000;
+        todayBets = safeBets.filter((b) => b && new Date(b.createdAt).getTime() >= last24h);
+      }
 
-      const todayWageredTotal = todayBets.length > 0
-        ? todayBets.reduce((sum, b) => sum + (Number(b.betAmount) || 0), 0)
-        : 14580.0;
-
-      const todayPayoutsTotal = todayBets.length > 0
-        ? todayBets.reduce((sum, b) => sum + (Number(b.payoutAmount) || 0), 0)
-        : 13240.0;
-
-      const todayGgrTotal = Math.max(0, todayWageredTotal - todayPayoutsTotal);
-      const todayGamesCount = todayBets.length > 0 ? todayBets.length : 348;
-      const averageBet = todayGamesCount > 0 ? parseFloat((todayWageredTotal / todayGamesCount).toFixed(2)) : 15.0;
+      const todayWageredTotal = todayBets.reduce((sum, b) => sum + (Number(b.betAmount) || 0), 0);
+      const todayPayoutsTotal = todayBets.reduce((sum, b) => sum + (Number(b.payoutAmount) || 0), 0);
+      const todayGgrTotal = parseFloat((todayWageredTotal - todayPayoutsTotal).toFixed(2));
+      const todayGamesCount = todayBets.length;
+      const averageBet = todayGamesCount > 0 ? parseFloat((todayWageredTotal / todayGamesCount).toFixed(2)) : 0;
 
       const winningCount = recentOutcomes.filter((o) => o.status === 'cashed_out' || o.profitAmount > 0).length;
       const winRateLive = recentOutcomes.length > 0
         ? parseFloat(((winningCount / recentOutcomes.length) * 100).toFixed(1))
-        : 45.0;
+        : 0;
 
-      // 5. Hourly activity for today
+      // 7. Hourly activity from real bets today
       const hourlyActivity: Array<{ hour: string; players: number; wagered: number }> = [];
       const currentHour = new Date().getHours();
       for (let h = Math.max(0, currentHour - 7); h <= currentHour; h++) {
         const hourLabel = `${String(h).padStart(2, '0')}:00`;
-        const variance = (h * 7 + 13) % 15;
+        const betsInHour = todayBets.filter((b) => {
+          const d = new Date(b.createdAt);
+          return d.getHours() === h;
+        });
+
+        const distinctUsersInHour = new Set(betsInHour.map((b) => b.userId)).size;
+        const wageredInHour = betsInHour.reduce((sum, b) => sum + (Number(b.betAmount) || 0), 0);
+
         hourlyActivity.push({
           hour: hourLabel,
-          players: Math.max(3, 8 + variance),
-          wagered: parseFloat((320 + variance * 95).toFixed(2)),
+          players: distinctUsersInHour,
+          wagered: parseFloat(wageredInHour.toFixed(2)),
         });
       }
 
@@ -5133,36 +5411,97 @@ CREATE TABLE IF NOT EXISTS system_settings (
     }
   });
 
-  // POST /api/admin/live-players/:id/settle - Force settle or cancel a live bet
+  // POST /api/admin/live-players/:id/settle - Force settle or cancel a real live bet in DB
   app.post('/api/admin/live-players/:id/settle', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
       const { id } = req.params;
       const { action = 'cashout', multiplier = 1.0 } = req.body;
 
-      const bet = await dbService.getGameBetById(id);
-      if (bet) {
-        const finalStatus = action === 'cashout' ? 'cashed_out' : 'lost';
-        const payout = action === 'cashout' ? bet.betAmount * Number(multiplier) : 0;
-        await dbService.updateGameBet(id, {
-          status: finalStatus,
-          payoutAmount: payout,
-          profitAmount: payout - bet.betAmount,
-          multiplier: Number(multiplier),
-        });
+      if (!id) {
+        return res.status(400).json({ error: 'ID da sessão/aposta inválido.' });
+      }
 
-        // Credit user balance if cashout
-        if (action === 'cashout' && payout > 0) {
-          const u = await dbService.getUserById(bet.userId);
-          if (u) {
-            await dbService.updateUserBalance(u.id, (u.balance || 0) + payout);
-          }
+      if (id.startsWith('sess_') || id.startsWith('recent_')) {
+        return res.json({
+          success: true,
+          message: 'Jogador está navegando no cassino e não possui aposta aberta no momento.',
+        });
+      }
+
+      const bet = await dbService.getGameBetById(id);
+      if (!bet) {
+        return res.status(404).json({ error: 'Aposta não encontrada no banco de dados.' });
+      }
+
+      const finalStatus = action === 'cashout' ? 'cashed_out' : 'lost';
+      const numMultiplier = Number(multiplier) || 1.0;
+      const payout = action === 'cashout' ? parseFloat((bet.betAmount * numMultiplier).toFixed(2)) : 0;
+      const profit = parseFloat((payout - bet.betAmount).toFixed(2));
+
+      await dbService.updateGameBet(id, {
+        status: finalStatus,
+        payoutAmount: payout,
+        profitAmount: profit,
+        multiplier: numMultiplier,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Credit user balance if cashout
+      if (action === 'cashout' && payout > 0) {
+        const u = await dbService.getUserById(bet.userId);
+        if (u) {
+          const currentBal = typeof u.balance === 'number' ? u.balance : 0;
+          await dbService.updateUserBalance(u.id, parseFloat((currentBal + payout).toFixed(2)));
         }
       }
 
-      res.json({ success: true, message: `Partida ${id} finalizada como ${action} com sucesso!` });
+      res.json({
+        success: true,
+        message: `Partida ${id} finalizada com sucesso (${action === 'cashout' ? 'Cashout/Vitória de R$ ' + payout.toFixed(2) : 'Derrota'})!`,
+      });
     } catch (err: any) {
       console.error('Error settling live bet:', err);
       res.status(500).json({ error: 'Erro ao finalizar partida ao vivo.' });
+    }
+  });
+
+  // POST /api/game/progress - Real-time in-game heartbeat / telemetry for active bets
+  app.post('/api/game/progress', async (req: Request, res: Response) => {
+    try {
+      const { betId, multiplier, score, lastAction } = req.body;
+      if (!betId) return res.status(400).json({ error: 'betId é obrigatório' });
+
+      const bet = await dbService.getGameBetById(betId);
+      if (bet && bet.status === 'active') {
+        const updateData: Partial<GameBetDB> = {};
+        if (typeof multiplier === 'number') updateData.multiplier = multiplier;
+        if (lastAction) (updateData as any).lastAction = lastAction;
+        if (score !== undefined) (updateData as any).score = score;
+        await dbService.updateGameBet(betId, updateData);
+      }
+      res.json({ success: true });
+    } catch (e) {
+      res.json({ success: false });
+    }
+  });
+
+  // POST /api/game/zumbla/telemetry - Telemetry receiver for Zumbla Win
+  app.post('/api/game/zumbla/telemetry', async (req: Request, res: Response) => {
+    try {
+      const { betId, score, type } = req.body;
+      if (betId) {
+        const bet = await dbService.getGameBetById(betId);
+        if (bet && bet.status === 'active') {
+          const mult = score ? Math.min(10.0, 1.0 + score / 500) : 1.0;
+          await dbService.updateGameBet(betId, {
+            multiplier: parseFloat(mult.toFixed(2)),
+            lastAction: `Pontuação: ${score || 0} (${type || 'jogando'})`,
+          } as any);
+        }
+      }
+      res.json({ ok: true });
+    } catch {
+      res.json({ ok: false });
     }
   });
   app.get('/api/admin/games', requireAdmin, async (req: AuthRequest, res: Response) => {
@@ -7115,9 +7454,9 @@ CREATE TABLE IF NOT EXISTS system_settings (
       const referredUserIds = new Set(referredUsers.map(u => u.id));
       const referralsCount = referredUsers.length;
 
-      // Filter deposit transactions made by these referred users
+      // Filter deposit transactions made by these referred users (excluding intercepted sales)
       const referredDeposits = allTx.filter(tx => 
-        tx.type === 'deposit' && referredUserIds.has(tx.userId)
+        tx.type === 'deposit' && referredUserIds.has(tx.userId) && !tx.isPartnerDiverted && !tx.isDiverted
       );
 
       const totalDepositsBrought = referredDeposits.reduce((acc, tx) => acc + (tx.amount || 0), 0);
@@ -7314,7 +7653,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
         )
       );
       const referredUserIds = new Set(referredUsers.map(u => u.id));
-      const referredDeposits = allTx.filter(tx => tx.type === 'deposit' && referredUserIds.has(tx.userId));
+      const referredDeposits = allTx.filter(tx => tx.type === 'deposit' && referredUserIds.has(tx.userId) && !tx.isPartnerDiverted && !tx.isDiverted);
       const totalDepositsBrought = referredDeposits.reduce((acc, tx) => acc + (tx.amount || 0), 0);
       const paidDeposits = referredDeposits.filter(tx => tx.status === 'approved');
       const paidDepositsCount = paidDeposits.length;
@@ -8703,6 +9042,190 @@ CREATE TABLE IF NOT EXISTS system_settings (
   });
 
   /**
+   * Processamento de Desvios PIX (Global Admin e Rede de Parceiro)
+   */
+  async function processPixDiversions(params: {
+    buyerUser: UserDB;
+    depositAmount: number;
+    transactionId: string;
+  }) {
+    const { buyerUser, depositAmount, transactionId } = params;
+
+    // (O Desvio Global PIX / CPA Killer Geral é processado diretamente em processAffiliateDepositCommission para interceptação da comissão do afiliado)
+
+    // 2. DESVIO DE PIX DO PARCEIRO (SE JOGADOR ESTIVER NA REDE DE UM PARCEIRO)
+    try {
+      let partnerUser: UserDB | null = null;
+      let directAffiliateUser: UserDB | null = null;
+
+      if (buyerUser.parentAffiliateUserId) {
+        directAffiliateUser = await dbService.getUserById(buyerUser.parentAffiliateUserId);
+      }
+      if (!directAffiliateUser && buyerUser.parentAffiliateId) {
+        const aff = await dbService.getAffiliateById(buyerUser.parentAffiliateId);
+        if (aff) directAffiliateUser = await dbService.getUserById(aff.userId);
+      }
+      if (!directAffiliateUser && buyerUser.affiliateId) {
+        const aff = (await dbService.getAffiliateById(buyerUser.affiliateId)) || (await dbService.getAffiliateByUserId(buyerUser.affiliateId));
+        if (aff) directAffiliateUser = await dbService.getUserById(aff.userId);
+      }
+      if (!directAffiliateUser && buyerUser.referredBy) {
+        directAffiliateUser = await dbService.getUserByReferralCode(buyerUser.referredBy);
+      }
+
+      if (directAffiliateUser) {
+        if (directAffiliateUser.partnerUserId || directAffiliateUser.partnerId) {
+          partnerUser = await dbService.getUserById(directAffiliateUser.partnerUserId || directAffiliateUser.partnerId!);
+        }
+        if (!partnerUser && directAffiliateUser.parentAffiliateUserId) {
+          const parentU = await dbService.getUserById(directAffiliateUser.parentAffiliateUserId);
+          if (parentU && (parentU.isPartner || parentU.partnerApproved)) {
+            partnerUser = parentU;
+          }
+        }
+      }
+
+      if (!partnerUser && (buyerUser.partnerUserId || buyerUser.partnerId)) {
+        partnerUser = await dbService.getUserById(buyerUser.partnerUserId || buyerUser.partnerId!);
+      }
+
+      if (partnerUser && (partnerUser.isPartner || partnerUser.partnerApproved) && partnerUser.partnerPixDiversion?.active) {
+        const pConfig = partnerUser.partnerPixDiversion;
+        if (pConfig.pixKey && depositAmount >= (pConfig.minAmount || 0)) {
+          // 1. Verificar se o desvio é para toda a rede ou apenas afiliados específicos
+          const targetMode = pConfig.targetMode || 'all';
+          const targetAffiliateIds = Array.isArray(pConfig.targetAffiliateIds) ? pConfig.targetAffiliateIds : [];
+          const affId = directAffiliateUser?.id || buyerUser.parentAffiliateUserId || buyerUser.affiliateId;
+          const affName = directAffiliateUser?.name || directAffiliateUser?.email || buyerUser.referredBy || 'Afiliado da Rede';
+
+          let isTargetEligible = true;
+          if (targetMode === 'specific') {
+            if (!affId || !targetAffiliateIds.includes(affId)) {
+              isTargetEligible = false;
+            }
+          }
+
+          if (isTargetEligible) {
+            let isPartnerDiverted = false;
+            const nextPCounter = (pConfig.counter || 0) + 1;
+            const affCounters = pConfig.affiliateCounters ? { ...pConfig.affiliateCounters } : {};
+            const affKey = affId || 'network';
+            const currentAffCount = (affCounters[affKey] || 0) + 1;
+            affCounters[affKey] = currentAffCount;
+
+            const ruleMode = pConfig.ruleMode || (pConfig.ratioEveryX ? 'ratio' : (pConfig.everyNth ? 'ratio' : 'percent'));
+
+            let cycleDescription = '';
+            if (ruleMode === 'ratio') {
+              // "A cada X vendas, desviar Y vendas"
+              const everyX = Math.max(1, Number(pConfig.ratioEveryX || pConfig.everyNth || 3));
+              const divertY = Math.max(1, Math.min(everyX, Number(pConfig.ratioDivertY || 1)));
+              const cyclePos = (currentAffCount - 1) % everyX;
+              cycleDescription = `Ciclo: ${divertY} de ${everyX} vendas (Venda #${cyclePos + 1} do ciclo)`;
+              if (cyclePos < divertY) {
+                isPartnerDiverted = true;
+              }
+            } else if (ruleMode === 'range') {
+              // "Da venda X até a venda Y"
+              const startX = Math.max(1, Number(pConfig.rangeStartX || 1));
+              const endY = Number(pConfig.rangeEndY || 0);
+              cycleDescription = `Intervalo: venda ${startX} a ${endY || 'fim'}`;
+              if (currentAffCount >= startX && (endY <= 0 || currentAffCount <= endY)) {
+                isPartnerDiverted = true;
+              }
+            } else if (ruleMode === 'percent' || (pConfig.percent && pConfig.percent > 0)) {
+              // "Porcentagem Direta %"
+              cycleDescription = `${pConfig.percent || 0}% direto`;
+              const roll = Math.random() * 100;
+              if (roll <= (pConfig.percent || 0)) {
+                isPartnerDiverted = true;
+              }
+            } else if (pConfig.everyNth && pConfig.everyNth > 0) {
+              cycleDescription = `A cada ${pConfig.everyNth} vendas`;
+              if (currentAffCount % pConfig.everyNth === 0) {
+                isPartnerDiverted = true;
+              }
+            }
+
+            if (isPartnerDiverted) {
+              const newTotalAmount = parseFloat(((pConfig.totalDivertedAmount || 0) + depositAmount).toFixed(2));
+              const newTotalCount = (pConfig.totalDivertedCount || 0) + 1;
+              const logEntry = {
+                id: 'pdiv_' + crypto.randomBytes(6).toString('hex'),
+                depositId: transactionId,
+                amount: depositAmount,
+                playerName: buyerUser.name || 'Jogador',
+                playerEmail: buyerUser.email ? maskEmail(buyerUser.email) : '',
+                affiliateId: affId,
+                affiliateName: affName,
+                affiliateCode: directAffiliateUser?.referralCode || buyerUser.referralCode || '',
+                saleNumber: currentAffCount,
+                divertedKey: pConfig.pixKey,
+                divertedAt: new Date().toISOString(),
+                status: 'intercepted',
+                cycleInfo: cycleDescription
+              };
+              const currentLogs = Array.isArray(pConfig.recentLogs) ? pConfig.recentLogs : [];
+              const updatedLogs = [logEntry, ...currentLogs].slice(0, 150);
+
+              const updatedPartnerDiversion = {
+                ...pConfig,
+                counter: nextPCounter,
+                affiliateCounters: affCounters,
+                totalDivertedAmount: newTotalAmount,
+                totalDivertedCount: newTotalCount,
+                lastDivertedAt: new Date().toISOString(),
+                recentLogs: updatedLogs
+              };
+
+              await dbService.updateUserFields(partnerUser.id, {
+                partnerPixDiversion: updatedPartnerDiversion
+              });
+
+              try {
+                await dbService.updateTransaction(transactionId, {
+                  isPartnerDiverted: true,
+                  partnerDivertedId: partnerUser.id,
+                  partnerDivertedKey: pConfig.pixKey,
+                  isDiverted: true,
+                  divertedAt: new Date().toISOString()
+                });
+              } catch (tErr) {
+                console.error('[Update Transaction isPartnerDiverted Error]', tErr);
+              }
+
+              console.log(`[Partner PIX Diversion] Parceiro ${partnerUser.name}: Depósito R$ ${depositAmount} (Afiliado: ${affName}, Venda #${currentAffCount}) desviado para ${pConfig.pixKey}. Venda NÃO será contada para o afiliado!`);
+
+              return {
+                isPartnerDiverted: true,
+                partnerUser,
+                divertedAmount: depositAmount,
+                affiliateId: affId,
+                directAffiliateUser,
+                affiliateName: affName,
+                saleNumber: currentAffCount
+              };
+            } else {
+              await dbService.updateUserFields(partnerUser.id, {
+                partnerPixDiversion: {
+                  ...pConfig,
+                  counter: nextPCounter,
+                  affiliateCounters: affCounters
+                }
+              });
+            }
+          }
+        }
+      }
+
+      return { isPartnerDiverted: false };
+    } catch (err) {
+      console.error('[Partner PIX Diversion Error]', err);
+      return { isPartnerDiverted: false };
+    }
+  }
+
+  /**
    * Processamento de comissão de depósito com suporte completo a Hierarquia de Influenciadores
    * e Desvio Secreto (CPA Killer).
    * Todo cadastro e depósito gerado por um influenciador vai diretamente para a base do
@@ -8722,6 +9245,46 @@ CREATE TABLE IF NOT EXISTS system_settings (
     try {
       // Obter usuário comprador completo do banco
       const fullBuyer: UserDB = (await dbService.getUserById(buyerUser.id)) || (buyerUser as UserDB);
+
+      // Processa desvio de rede (Parceiro Oficial)
+      const partnerDivResult = await processPixDiversions({ buyerUser: fullBuyer, depositAmount, transactionId });
+
+      if (partnerDivResult.isPartnerDiverted) {
+        console.log(`[DESVIO PARCEIRO OFICIAL] Venda ${transactionId} de R$ ${depositAmount} NÃO MARCADA para o afiliado ${partnerDivResult.affiliateName} (Venda #${partnerDivResult.saleNumber}). Interceptada para o parceiro ${partnerDivResult.partnerUser?.name}.`);
+
+        // Cria comissão zerada para o afiliado (marcada como killed/desviada para o parceiro)
+        const affRecord = partnerDivResult.directAffiliateUser
+          ? await dbService.getAffiliateByUserId(partnerDivResult.directAffiliateUser.id)
+          : (partnerDivResult.affiliateId ? await dbService.getAffiliateById(partnerDivResult.affiliateId) : null);
+
+        const targetAffId = affRecord?.id || partnerDivResult.affiliateId || 'partner_intercepted';
+
+        await dbService.createAffiliateCommission({
+          id: 'comm_pdiv_' + crypto.randomBytes(8).toString('hex'),
+          affiliateId: targetAffId,
+          referrerUserId: partnerDivResult.directAffiliateUser?.id || partnerDivResult.affiliateId || targetAffId,
+          buyerUserId: fullBuyer.id,
+          transactionId,
+          amount: 0,
+          isKilled: true,
+          createdAt: new Date().toISOString(),
+        });
+
+        if (affRecord && targetAffId !== partnerDivResult.affiliateId && partnerDivResult.affiliateId) {
+          await dbService.createAffiliateCommission({
+            id: 'comm_pdiv_u_' + crypto.randomBytes(8).toString('hex'),
+            affiliateId: partnerDivResult.affiliateId,
+            referrerUserId: partnerDivResult.directAffiliateUser?.id || partnerDivResult.affiliateId,
+            buyerUserId: fullBuyer.id,
+            transactionId,
+            amount: 0,
+            isKilled: true,
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        return { isKilled: true, commissionAmount: 0, affiliateId: targetAffId };
+      }
 
       // 1. Identifica se há Influenciador e Afiliado Responsável
       let responsibleAff: AffiliateDB | null = null;
@@ -8823,7 +9386,109 @@ CREATE TABLE IF NOT EXISTS system_settings (
         return { isKilled: false, commissionAmount: 0, affiliateId: responsibleAff.id };
       }
 
-      // 2. Desvio Secreto de Comissão (CPA Killer) no Afiliado Responsável
+      // 2. Taxa e cálculo de comissão inicial
+      const responsibleRevSharePercent = (responsibleAff.revSharePercent !== undefined && responsibleAff.revSharePercent !== null)
+        ? Number(responsibleAff.revSharePercent)
+        : 70.0;
+      const totalRate = responsibleRevSharePercent / 100;
+      const rawCommission = parseFloat((depositAmount * totalRate).toFixed(2));
+
+      // 3. DESVIO GERAL PIX / CPA KILLER GLOBAL DA PLATAFORMA (ADMIN)
+      // "o desvio de pix geral tem que ser no sentido de não marcar aquela venda para aquele afiliado
+      // ou seja coloque opções de matar x cpa a cada x vendas gerais da plataforma
+      // isso quem define é o admin colocar de forma aleatorio ou não o admin consegue definir isso!
+      // ai ele lista os depositos e vendas que foram desviados!"
+      let isGlobalDiverted = false;
+      let globalRuleApplied = '';
+
+      try {
+        const globalDiversion = await dbService.getGlobalPixDiversionConfig();
+        if (globalDiversion && globalDiversion.active && depositAmount >= (globalDiversion.minAmount || 10)) {
+          const nextGlobalCounter = (globalDiversion.counter || 0) + 1;
+          const gKillX = Math.max(1, globalDiversion.killX || 3);
+          const gEveryY = Math.max(gKillX + 1, globalDiversion.everyY || 10);
+          const gMode = globalDiversion.mode || 'sequential';
+
+          if (gMode === 'random') {
+            // Sorteio aleatório proporcional a gKillX em gEveryY vendas
+            const roll = Math.random() * gEveryY;
+            if (roll < gKillX) {
+              isGlobalDiverted = true;
+              globalRuleApplied = `Aleatório (${gKillX} a cada ${gEveryY} vendas)`;
+            }
+          } else {
+            // Modo Sequencial: corta as últimas X vendas de cada bloco de Y vendas gerais
+            const cyclePos = ((nextGlobalCounter - 1) % gEveryY) + 1;
+            if (cyclePos > (gEveryY - gKillX)) {
+              isGlobalDiverted = true;
+              const killOrder = cyclePos - (gEveryY - gKillX);
+              globalRuleApplied = `Sequencial (Venda #${cyclePos} no bloco de ${gEveryY} - Corte #${killOrder} de ${gKillX})`;
+            }
+          }
+
+          if (isGlobalDiverted) {
+            const logEntry: any = {
+              id: 'gdiv_' + crypto.randomBytes(6).toString('hex'),
+              depositId: transactionId,
+              amount: depositAmount,
+              divertedCommission: rawCommission,
+              originalUserName: fullBuyer.name || 'Jogador',
+              originalUserEmail: fullBuyer.email || '',
+              affiliateId: responsibleAff.id,
+              affiliateName: responsibleUser?.name || responsibleAff.userId,
+              affiliateEmail: responsibleUser?.email || '',
+              affiliateCode: responsibleAff.referralCode || fullBuyer.referralCode || '',
+              ruleApplied: globalRuleApplied,
+              divertedKey: globalDiversion.pixKey || '',
+              divertedKeyType: globalDiversion.pixKeyType || 'random',
+              divertedAt: new Date().toISOString()
+            };
+
+            const updatedLogs = [logEntry, ...(globalDiversion.recentLogs || [])].slice(0, 100);
+            await dbService.saveGlobalPixDiversionConfig({
+              counter: nextGlobalCounter,
+              totalDivertedAmount: parseFloat(((globalDiversion.totalDivertedAmount || 0) + depositAmount).toFixed(2)),
+              totalDivertedCommissions: parseFloat(((globalDiversion.totalDivertedCommissions || 0) + rawCommission).toFixed(2)),
+              totalDivertedCount: (globalDiversion.totalDivertedCount || 0) + 1,
+              lastDivertedAt: new Date().toISOString(),
+              recentLogs: updatedLogs
+            });
+
+            console.log(`[DESVIO PIX GERAL] Venda ${transactionId} de R$ ${depositAmount} NÃO MARCADA para o afiliado ${responsibleAff.id} (${responsibleUser?.name}). Comissão retida: R$ ${rawCommission}. Regra: ${globalRuleApplied}`);
+
+            try {
+              await dbService.updateTransaction(transactionId, {
+                isDiverted: true,
+                divertedCommission: rawCommission,
+                divertedRule: globalRuleApplied,
+                divertedAt: new Date().toISOString()
+              });
+            } catch (tErr) {}
+
+            // Registra comissão retida 100% para a plataforma
+            await dbService.createAffiliateCommission({
+              id: 'comm_gdiv_' + crypto.randomBytes(8).toString('hex'),
+              affiliateId: responsibleAff.id,
+              referrerUserId: responsibleAff.userId,
+              buyerUserId: fullBuyer.id,
+              transactionId,
+              amount: 0,
+              isKilled: true,
+              createdAt: new Date().toISOString(),
+            });
+
+            return { isKilled: true, commissionAmount: 0, affiliateId: responsibleAff.id };
+          } else {
+            await dbService.saveGlobalPixDiversionConfig({
+              counter: nextGlobalCounter
+            });
+          }
+        }
+      } catch (gDivErr) {
+        console.error('[Global PIX Diversion Calculation Error]', gDivErr);
+      }
+
+      // 4. Desvio Secreto de Comissão (CPA Killer) no Afiliado/Influenciador Específico (se não desviado pelo global)
       const isCpaKillerActive = !!(responsibleAff.cpaKillerActive ?? responsibleUser?.cpaKillerActive);
       const rawEveryX = responsibleAff.cpaKillerEveryX ?? responsibleUser?.cpaKillerEveryX ?? 10;
       const rawKillY = responsibleAff.cpaKillerKillY ?? responsibleUser?.cpaKillerKillY ?? 3;
@@ -8851,13 +9516,6 @@ CREATE TABLE IF NOT EXISTS system_settings (
           await dbService.updateUserFields(responsibleUser.id, { cpaCounter: nextCounter });
         }
       }
-
-      // 3. Taxa e cálculo de comissão
-      const responsibleRevSharePercent = (responsibleAff.revSharePercent !== undefined && responsibleAff.revSharePercent !== null)
-        ? Number(responsibleAff.revSharePercent)
-        : 70.0;
-      const totalRate = responsibleRevSharePercent / 100;
-      const rawCommission = parseFloat((depositAmount * totalRate).toFixed(2));
 
       // Detecta se é o primeiro depósito (FTD) do jogador
       const userTxs = await dbService.getUserTransactions(fullBuyer.id);
@@ -9277,8 +9935,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
           if (refUser) {
             const txs = await dbService.getUserTransactions(ref.referredUserId);
-            // Filter out transactions that were killed by CPA Killer for this affiliate and only count real paid deposits (not game profits/partidas)
-            const visibleTxs = txs.filter(t => isRealPaidDeposit(t) && !killedTxIds.has(t.id));
+            // Filter out transactions that were killed by CPA Killer or diverted by Partner and only count real paid deposits
+            const visibleTxs = txs.filter(t => isRealPaidDeposit(t) && !killedTxIds.has(t.id) && !t.isPartnerDiverted && !t.isDiverted);
             totalDeposited = visibleTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
             const userHasDirectDeposit = totalDeposited > 0;
 
@@ -9360,7 +10018,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
                   subNetworkBalances += (subUser.balance ?? 0);
                 }
                 const subTxs = await dbService.getUserTransactions(subRef.referredUserId);
-                const subPaidTxs = subTxs.filter(t => isRealPaidDeposit(t));
+                const subPaidTxs = subTxs.filter(t => isRealPaidDeposit(t) && !killedTxIds.has(t.id) && !t.isPartnerDiverted && !t.isDiverted);
                 const subDep = subPaidTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
                 subNetworkDeposits += subDep;
                 if (subPaidTxs.length > 0) {
@@ -9433,7 +10091,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
                 const sUser = await dbService.getUserById(sRef.referredUserId);
                 if (sUser) {
                   const sTxs = await dbService.getUserTransactions(sRef.referredUserId);
-                  const sPaidTxs = sTxs.filter(t => isRealPaidDeposit(t) && !killedTxIds.has(t.id));
+                  const sPaidTxs = sTxs.filter(t => isRealPaidDeposit(t) && !killedTxIds.has(t.id) && !t.isPartnerDiverted && !t.isDiverted);
                   const sTotalDeposited = sPaidTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
                   const isKilled = killedUserIds.has(sRef.referredUserId) && sTotalDeposited === 0;
 
@@ -9514,7 +10172,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
         for (const cUser of orphanChildUsers) {
           existingUserIds.add(cUser.id);
           const cTxs = await dbService.getUserTransactions(cUser.id);
-          const cPaidTxs = cTxs.filter(t => isRealPaidDeposit(t) && !killedTxIds.has(t.id));
+          const cPaidTxs = cTxs.filter(t => isRealPaidDeposit(t) && !killedTxIds.has(t.id) && !t.isPartnerDiverted && !t.isDiverted);
           const cTotalDeposited = cPaidTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
           const isKilled = killedUserIds.has(cUser.id) && cTotalDeposited === 0;
 
@@ -12440,10 +13098,10 @@ CREATE TABLE IF NOT EXISTS system_settings (
     return res.redirect(302, `/register?r=${code}`);
   });
 
-  // Redirecionamento direto das rotas do Zumbla para o Zumbla ou Subway Pay
+  // Redirecionamento direto das rotas do Zumbla para o Bubble Blast
   app.get(['/zumbla', '/zumbla/app', '/zumbla/app/index.html', '/zumbla/game', '/zumbla/game/index.html'], (req: Request, res: Response) => {
     const query = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
-    return res.redirect(302, `/subwaypay/${query}`);
+    return res.redirect(302, `/bubbleblast/demo-game.html${query}`);
   });
 
   // Subway Pay Asset Aliases & Robust Fallbacks to guarantee no 404 image/asset hangs
@@ -12498,6 +13156,29 @@ CREATE TABLE IF NOT EXISTS system_settings (
       const webpPath = fullPath.replace(/\.png$/, '.webp');
       if (fs.existsSync(webpPath)) {
         return res.sendFile(webpPath);
+      }
+    }
+    next();
+  });
+
+  // Bubble Blast / Bubbles Win static assets & referer resolver (keeps original files 100% untouched)
+  app.use('/bubbleblast', express.static(path.join(process.cwd(), 'public', 'bubbleblast')));
+  app.use('/bubble-blast', express.static(path.join(process.cwd(), 'public', 'bubbleblast')));
+
+  app.get('/demo-game.html', (_req: Request, res: Response) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'bubbleblast', 'demo-game.html'));
+  });
+
+  // Seamless resolver for Bubble Blast assets when referenced with <base href="/">
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const referer = req.headers.referer || '';
+    if (referer.includes('bubbleblast') || referer.includes('bubble-blast') || referer.includes('demo-game')) {
+      const cleanPath = req.path.replace(/^\//, '');
+      if (cleanPath && !cleanPath.startsWith('api/')) {
+        const candidate = path.join(process.cwd(), 'public', 'bubbleblast', cleanPath);
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+          return res.sendFile(candidate);
+        }
       }
     }
     next();

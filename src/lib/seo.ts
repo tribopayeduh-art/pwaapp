@@ -170,6 +170,33 @@ export const GAMES_SEO_DATA: Record<string, GameSEOMetadata> = {
     operatingSystem: 'Android, iOS, Web, Windows, macOS',
     applicationCategory: 'GameApplication',
   },
+  'bubble-blast': {
+    id: 'bubble-blast',
+    name: 'Bubble Blast — Jogo de Estourar Bolhas',
+    shortName: 'Bubble Blast',
+    title: 'Bubble Blast | Jogo de Bolhas Online — Em Breve',
+    description: 'Novo jogo Bubble Blast! Mire, atire e combine as bolhas coloridas para estourar sequências épicas. Lançamento em breve com prêmios e PIX instantâneo.',
+    keywords: [
+      'bubble blast',
+      'bubble shooter',
+      'jogo das bolhas',
+      'estourar bolhas',
+      'bubble blast pix',
+      'jogar bubble blast online',
+      'jogos de bolha celular'
+    ],
+    canonicalDomain: 'https://zumblapay.site',
+    canonicalPath: '/bubbleblast',
+    image: '/Bubbleblast.png',
+    favicon: '/Bubbleblast.png',
+    category: 'Casual / Bubble Shooter',
+    genre: ['ArcadeGame', 'PuzzleGame'],
+    multiplier: 'Em Breve',
+    ratingValue: '5.0',
+    reviewCount: '120',
+    operatingSystem: 'Android, iOS, Web, Windows, macOS',
+    applicationCategory: 'GameApplication',
+  },
   'alliance-hub': {
     id: 'alliance-hub',
     name: 'Alliance Hub — Painel de Afiliados iGaming & Gateway PIX',
@@ -236,8 +263,7 @@ export function resolveGameSEOKey(rawKey: string | null | undefined): string {
   if (!rawKey) return 'alliance-hub';
   const clean = rawKey.trim().toLowerCase().replace(/_/g, '-');
   if (['partner', 'parceiro', 'p', 'portal-parceiro', 'painel-parceiro'].includes(clean)) return 'partner';
-  if (['blockwin', 'block-win', 'block-puzzle', 'g-block', 'g-block-puzzle', 'block'].includes(clean)) return 'blockwin';
-  if (['zumbla', 'zumbla-win', 'zumblapay', 'g-zumbla'].includes(clean)) return 'zumbla';
+  if (['bubble-blast', 'bubbleblast', 'bubble_blast', 'g-bubble-blast', 'g_bubble_blast', 'bubble', 'zumbla', 'zumbla-win', 'zumblapay', 'g-zumbla'].includes(clean)) return 'bubble-blast';
   if (['gen-dino', 'gendino', 'dino', 'dinopay', 'dinoplay', 'dinipay', 'g-gen-dino'].includes(clean)) return 'gen-dino';
   if (['raspa-fortuna', 'raspafortuna', 'raspa', 'raspadinha', 'raspadinhaadasorte', 'g-raspa-fortuna'].includes(clean)) return 'raspa-fortuna';
   if (['subwaypay', 'subway-pay', 'subway_pay', 'subway', 'g-subway-pay', 'g_subway_pay', 'joguesubway', 'joguesubway.surf'].includes(clean)) return 'subwaypay';

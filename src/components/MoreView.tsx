@@ -45,7 +45,7 @@ export const MoreView: React.FC<MoreViewProps> = ({
   onLogout,
   onOpenAdmin,
 }) => {
-  const isAdminUser = user.role === 'admin' || user.role === 'superadmin' || user.email.toLowerCase() === 'admin.eduh@gmail.com' || user.email.toLowerCase() === 'tribopayeduh@gmail.com';
+  const isAdminUser = user.role === 'admin' || user.role === 'superadmin';
   const isApprovedPartner = Boolean((user.isPartner === true && user.partnerApproved === true) || isAdminUser);
 
   const menuSections = [

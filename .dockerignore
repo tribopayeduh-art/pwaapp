@@ -7,3 +7,8 @@ dist
 *.tar.gz
 npm-debug.log*
 .DS_Store
+*.md
+.jwt-secret.local
+.system_secrets.vault
+*.vault
+bun.lock

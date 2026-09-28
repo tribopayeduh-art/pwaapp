@@ -99,95 +99,96 @@ export const PartnerAffiliateDetailModal: React.FC<PartnerAffiliateDetailModalPr
         </div>
 
         {/* Action Bar */}
-        <div className="grid grid-cols-2 gap-2 mb-5">
+        <div className="grid grid-cols-2 gap-2.5 mb-5">
           {waUrl ? (
             <a
               href={waUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold border border-emerald-200 transition"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200/80 transition shadow-2xs active:scale-95"
             >
               <MessageCircle className="w-4 h-4 text-emerald-600" />
               WhatsApp Direto
             </a>
           ) : (
-            <div className="flex items-center justify-center py-2.5 px-3 rounded-xl bg-zinc-100 text-zinc-400 text-xs font-medium">
-              Sem telefone
+            <div className="flex items-center justify-center py-2.5 px-3 rounded-xl bg-zinc-50 border border-zinc-200/60 text-zinc-400 text-xs font-medium">
+              Sem WhatsApp
             </div>
           )}
           <button
             onClick={() => onOpenSendAlert(affiliate)}
-            className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-semibold border border-indigo-200 transition cursor-pointer"
+            className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition cursor-pointer shadow-2xs active:scale-95"
           >
-            <Bell className="w-4 h-4 text-indigo-600" />
+            <Bell className="w-4 h-4 text-amber-400" />
             Enviar Notificação
           </button>
         </div>
 
         {/* Commission Dynamics Control */}
-        <div className="p-4 rounded-2xl border border-indigo-100 bg-indigo-50/70 mb-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+        <div className="p-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 mb-4 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
                 <Percent className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider">
-                  Comissão do Afiliado & Sua Margem
+                <h4 className="text-xs font-black text-indigo-950 uppercase tracking-wider">
+                  Comissão e Margem
                 </h4>
-                <div className="flex items-center gap-4 mt-1 text-xs">
+                <div className="flex items-center gap-3 mt-1.5 text-xs">
                   <div>
-                    <span className="text-zinc-500 text-[11px] block">Comissão Afiliado:</span>
-                    <strong className="text-emerald-700 font-extrabold text-sm">
+                    <span className="text-zinc-500 text-[10px] block font-semibold uppercase tracking-wider">Comissão Afiliado:</span>
+                    <strong className="text-emerald-700 font-black text-sm tabular-nums">
                       {affiliate.revSharePercent ?? 70}%
                     </strong>
                   </div>
                   <div className="h-6 w-px bg-indigo-200" />
                   <div>
-                    <span className="text-zinc-500 text-[11px] block">Sua Comissão (Parceiro):</span>
-                    <strong className="text-indigo-700 font-extrabold text-sm">
+                    <span className="text-zinc-500 text-[10px] block font-semibold uppercase tracking-wider">Sua Margem Parceiro:</span>
+                    <strong className="text-indigo-700 font-black text-sm tabular-nums">
                       {getPartnerCutFromAffiliateRevShare(affiliate.revSharePercent ?? 70)}%
                     </strong>
                   </div>
                 </div>
-                <p className="text-[11px] text-zinc-500 mt-1.5">
-                  Teto máximo permitido: <strong>{MAX_PARTNER_AFFILIATE_COMMISSION}%</strong>.
-                </p>
               </div>
             </div>
 
             {onOpenEditCommission && (
               <button
                 onClick={() => onOpenEditCommission(affiliate)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-sm cursor-pointer whitespace-nowrap flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-2xs cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5 active:scale-95 self-start sm:self-auto shrink-0"
               >
                 <Sliders className="w-3.5 h-3.5" />
-                Alterar Comissão
+                Alterar Taxa
               </button>
             )}
           </div>
         </div>
 
         {/* Security Control: Auto-Withdraw Circuit Breaker */}
-        <div className={`p-4 rounded-2xl border transition-all mb-5 ${
+        <div className={`p-4 rounded-2xl border transition-all mb-4 shadow-2xs ${
           affiliate.autoWithdrawBlocked
-            ? 'bg-rose-50/80 border-rose-200 text-rose-900'
-            : 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+            ? 'bg-rose-50/70 border-rose-200 text-rose-900'
+            : 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
         }`}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
               {affiliate.autoWithdrawBlocked ? (
-                <Lock className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Lock className="w-4 h-4" />
+                </div>
               ) : (
-                <Unlock className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                  <Unlock className="w-4 h-4" />
+                </div>
               )}
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider">
-                  Controle de Saque Automático
+                <h4 className="text-xs font-black uppercase tracking-wider">
+                  Saque Automático PIX
                 </h4>
-                <p className="text-xs mt-0.5 opacity-90">
+                <p className="text-xs mt-0.5 opacity-90 leading-relaxed">
                   {affiliate.autoWithdrawBlocked
-                    ? 'BLOQUEADO: Qualquer solicitação de saque deste afiliado cairá na fila manual de compliance.'
+                    ? 'BLOQUEADO: Saques deste afiliado passam por análise manual de compliance.'
                     : 'LIBERADO: Saques rápidos processados automaticamente via PIX na Dotfy.'}
                 </p>
               </div>
@@ -196,7 +197,7 @@ export const PartnerAffiliateDetailModal: React.FC<PartnerAffiliateDetailModalPr
             <button
               onClick={handleToggleLock}
               disabled={toggling}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer whitespace-nowrap ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer whitespace-nowrap active:scale-95 self-start sm:self-auto shrink-0 ${
                 affiliate.autoWithdrawBlocked
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                   : 'bg-rose-600 hover:bg-rose-700 text-white'
@@ -206,7 +207,7 @@ export const PartnerAffiliateDetailModal: React.FC<PartnerAffiliateDetailModalPr
                 ? 'Atualizando...'
                 : affiliate.autoWithdrawBlocked
                 ? 'Desbloquear Saques'
-                : 'Bloquear Saque Automático'}
+                : 'Bloquear Saque'}
             </button>
           </div>
         </div>

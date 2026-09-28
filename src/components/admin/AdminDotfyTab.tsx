@@ -144,12 +144,14 @@ interface DotfyOverviewData {
 interface AdminDotfyTabProps {
   token: string | null;
   currentUserEmail?: string;
+  currentUserRole?: string;
   onShowToast: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
   token,
   currentUserEmail,
+  currentUserRole,
   onShowToast
 }) => {
   const [data, setData] = useState<DotfyOverviewData | null>(null);
@@ -178,7 +180,7 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
   const [withdrawSearch, setWithdrawSearch] = useState('');
   const [withdrawStatusFilter, setWithdrawStatusFilter] = useState<'ALL' | 'APPROVED' | 'PROCESSING' | 'FAILED'>('ALL');
 
-  const isSuperAdmin = (currentUserEmail || '').toLowerCase() === 'admin.eduh@gmail.com';
+  const isSuperAdmin = currentUserRole === 'superadmin' || !!data?.userIsSuperAdmin;
 
   const handleToggleAutoCashout = async () => {
     if (!token) return;
@@ -356,7 +358,7 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
               {isSuperAdmin && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
                   <ShieldCheck className="w-3 h-3" />
-                  SUPER ADMIN: admin.eduh@gmail.com
+                  SUPER ADMIN: Acesso Total
                 </span>
               )}
             </div>

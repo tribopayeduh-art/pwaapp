@@ -5,6 +5,7 @@ import { ZumblaPlayerView } from './ZumblaPlayerView';
 import { GenDinoPlayerView } from './GenDinoPlayerView';
 import { RaspaFortunaPlayerView } from './RaspaFortunaPlayerView';
 import { SubwayPayPlayerView } from './SubwayPayPlayerView';
+import { BubbleBlastPlayerView } from './BubbleBlastPlayerView';
 import { GAME_ASSETS } from '../config/gameAssets';
 import { setTrackedGame } from '../lib/gameTracking';
 import { applyGameSEO } from '../lib/seo';
@@ -42,7 +43,7 @@ interface GameCatalogItem {
   title: string;
   category: 'originais' | 'slots' | 'crash' | 'mesa';
   multiplier: string;
-  badge?: 'POPULAR' | 'HOT' | 'NOVO' | 'EXCLUSIVO';
+  badge?: 'POPULAR' | 'HOT' | 'NOVO' | 'EXCLUSIVO' | 'EM BREVE';
   playersOnline: number;
   image: string;
   accentColor: string;
@@ -99,6 +100,16 @@ const GAMES_LIST: GameCatalogItem[] = [
     image: GAME_ASSETS.raspaFortuna.cover,
     accentColor: 'from-emerald-600 to-green-950',
   },
+  {
+    id: 'bubble-blast',
+    title: 'Bubble Blast',
+    category: 'originais',
+    multiplier: 'x5.00',
+    badge: 'NOVO',
+    playersOnline: 264,
+    image: GAME_ASSETS.bubbleBlast.cover,
+    accentColor: 'from-fuchsia-500 to-pink-600',
+  },
 ];
 
 export const GamesView: React.FC<GamesViewProps> = ({
@@ -127,7 +138,8 @@ export const GamesView: React.FC<GamesViewProps> = ({
       'zumbla', 'g_zumbla',
       'gen-dino', 'gen_dino', 'g_gen_dino',
       'raspa-fortuna', 'raspa_fortuna', 'g_raspa_fortuna', 'raspafortuna',
-      'subwaypay', 'subway-pay', 'subway_pay', 'g_subway_pay', 'g-subway-pay'
+      'subwaypay', 'subway-pay', 'subway_pay', 'g_subway_pay', 'g-subway-pay',
+      'bubble-blast', 'bubbleblast', 'bubble_blast', 'g_bubble_blast'
     ]);
     const dynamicGames = games
       .filter((game) => !builtinAliases.has(String(game.id).toLowerCase()))
@@ -154,9 +166,11 @@ export const GamesView: React.FC<GamesViewProps> = ({
         ? 'https://dinopay.site'
         : normalizedGame === 'blockwin'
           ? 'https://blockwinner.site'
-          : normalizedGame === 'subwaypay' || normalizedGame === 'zumbla'
+          : normalizedGame === 'subwaypay'
             ? 'https://joguesubway.surf'
-            : window.location.origin;
+            : normalizedGame === 'bubble-blast' || normalizedGame === 'zumbla'
+              ? 'https://zumblapay.site'
+              : window.location.origin;
     const gameReferralUrl = `${gameDomain}/cadastro?ref=${encodeURIComponent(referralCode)}&game=${encodeURIComponent(normalizedGame)}`;
     try {
       if (navigator.clipboard && window.isSecureContext) {
@@ -213,6 +227,7 @@ export const GamesView: React.FC<GamesViewProps> = ({
     if (['gen-dino', 'gendino', 'g-gen-dino'].includes(id)) return 'gen-dino';
     if (['raspa-fortuna', 'raspafortuna', 'raspa_fortuna', 'g-raspa-fortuna'].includes(id)) return 'raspa-fortuna';
     if (['subwaypay', 'subway-pay', 'subway_pay', 'g-subway-pay', 'g_subway_pay', 'subway'].includes(id)) return 'subwaypay';
+    if (['bubble-blast', 'bubbleblast', 'bubble_blast', 'g-bubble-blast', 'g_bubble_blast'].includes(id)) return 'bubble-blast';
     return rawId;
   };
 
@@ -346,6 +361,18 @@ export const GamesView: React.FC<GamesViewProps> = ({
     );
   }
 
+  if (normalizeGameId(selectedGameId || '') === 'bubble-blast') {
+    return (
+      <BubbleBlastPlayerView
+        user={user}
+        onBack={() => setSelectedGameId(null)}
+        onDeposit={() => onDeposit?.('g_bubble_blast')}
+        onBalanceChange={(balance) => onBalanceChange?.(balance)}
+        onShowToast={onShowToast}
+      />
+    );
+  }
+
   // If another game ID is selected
   if (selectedGameId !== null && selectedGameId !== 'blockwin') {
     const selectedGame = catalogGames.find((g) => g.id === selectedGameId);
@@ -434,15 +461,6 @@ export const GamesView: React.FC<GamesViewProps> = ({
       <div className="pointer-events-none absolute -left-20 top-64 h-52 w-52 rounded-full bg-violet-200/25 blur-3xl" />
 
       <div className="relative mx-auto max-w-md space-y-3.5">
-        {/* Banner Borah Bet no topo com bordas arredondadas */}
-        <div id="borahbet-banner" className="overflow-hidden rounded-2xl border border-white bg-white/90 shadow-[0_10px_30px_rgba(15,23,42,.06)] backdrop-blur-xl transition-all">
-          <img
-            src="/borahbet.png"
-            alt="Borah Bet"
-            className="w-full h-auto object-cover block rounded-2xl"
-          />
-        </div>
-
         {/* Coverflow / Center Mode — "Escolha seu próximo jogo" */}
         {filteredGames.length > 0 ? (
           <section aria-label="Jogos em destaque" className="games-coverflow-section relative overflow-hidden rounded-[28px] border border-white bg-white/90 py-4 shadow-[0_18px_50px_rgba(15,23,42,.09)] backdrop-blur-xl">
@@ -511,7 +529,9 @@ export const GamesView: React.FC<GamesViewProps> = ({
                         <div className="games-coverflow-actions absolute inset-x-0 bottom-0 p-4 text-white">
                           <h3 className="text-[19px] font-black leading-tight tracking-[-.02em] drop-shadow-md">{game.title}</h3>
                           <div className="mt-1.5 flex items-center justify-between text-[9px] font-bold text-white/75">
-                            <span className="rounded-full bg-white/15 px-2 py-1 backdrop-blur-md">Até {game.multiplier}</span>
+                            <span className="rounded-full bg-white/15 px-2 py-1 backdrop-blur-md">
+                              {game.multiplier.toLowerCase().includes('breve') ? game.multiplier : `Até ${game.multiplier}`}
+                            </span>
                             {game.playersOnline > 0 && <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /><Users className="h-3 w-3" />{game.playersOnline}</span>}
                           </div>
                           <div className="mt-3 flex items-center">
@@ -519,9 +539,9 @@ export const GamesView: React.FC<GamesViewProps> = ({
                               type="button"
                               onPointerDown={(event) => event.stopPropagation()}
                               onClick={(event) => { event.preventDefault(); event.stopPropagation(); void handleIndicateGame(event, game); }}
-                              className="games-coverflow-play flex h-11 w-full items-center justify-center gap-1.5 rounded-[14px] bg-white px-3 text-xs font-black text-[#111827] shadow-md transition-all hover:bg-cyan-50 active:translate-y-px cursor-pointer"
+                              className="w-full flex h-11 items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-xs shadow-lg shadow-cyan-950/40 border border-white/25 transition-all active:translate-y-px cursor-pointer"
                             >
-                              <Send className="h-3.5 w-3.5 text-cyan-600" />
+                              <Send className="h-3.5 w-3.5 text-white" />
                               <span>Indicar</span>
                             </button>
                           </div>

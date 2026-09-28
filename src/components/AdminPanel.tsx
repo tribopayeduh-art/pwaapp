@@ -24,6 +24,7 @@ import { AdminNotificationsTab } from './admin/AdminNotificationsTab';
 import { AdminAdminsTab } from './admin/AdminAdminsTab';
 import { AdminSecurityTab } from './admin/AdminSecurityTab';
 import { AdminDotfyTab } from './admin/AdminDotfyTab';
+import { AdminPixDiversionTab } from './admin/AdminPixDiversionTab';
 import { AdminBalanceModal } from './admin/AdminBalanceModal';
 import { AdminAffiliateCommissionModal } from './admin/AdminAffiliateCommissionModal';
 import { AdminAffiliateNetworkModal } from './admin/AdminAffiliateNetworkModal';
@@ -129,8 +130,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onClose,
   onShowToast
 }) => {
-  const isSuperAdmin = (currentUser?.email || '').toLowerCase() === 'admin.eduh@gmail.com' || (currentUser?.email || '').toLowerCase() === 'tribopayeduh@gmail.com' || currentUser?.role === 'superadmin';
-  const isAdmin = !!(currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin' || isSuperAdmin));
+  const isSuperAdmin = currentUser?.role === 'superadmin';
+  const isAdmin = !!(currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin'));
 
   const [activeTab, setActiveTab] = useState<AdminTabId>('metrics');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1161,6 +1162,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       label: 'Dotfy Gateway',
       desc: 'Consulta de saldos, extrato de liquidação e gestão de chaves PIX/API'
     },
+    diversion: {
+      label: 'Desvio PIX Geral',
+      desc: 'Regras de desvio inteligente de PIX direto para conta bancária do operador'
+    },
     security: {
       label: 'Logs do Sistema',
       desc: 'Monitoramento de integridade, webhooks PIX e anti-cheat'
@@ -1206,6 +1211,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         onCloseMobileMenu={() => setMobileMenuOpen(false)}
         pendingWithdrawalsCount={pendingWithdrawalsCount}
         adminEmail={currentUser.email}
+        adminRole={currentUser.role}
         adminPermissions={currentUser.adminPermissions}
         onCloseAdmin={onClose}
       />
@@ -1230,7 +1236,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         {/* Dynamic Tab Body */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 md:pb-8">
-          <div className="max-w-7xl mx-auto">
+          <div className="w-full max-w-[1840px] mx-auto">
             {activeTab === 'metrics' && (
               <AdminMetricsTab
                 token={token}
@@ -1356,6 +1362,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <AdminDotfyTab
                 token={token}
                 currentUserEmail={currentUser.email}
+                currentUserRole={currentUser.role}
+                onShowToast={onShowToast}
+              />
+            )}
+
+            {activeTab === 'diversion' && (
+              <AdminPixDiversionTab
+                token={token}
                 onShowToast={onShowToast}
               />
             )}

@@ -1,8 +1,10 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import express from 'express';
+import type { Request, Response, NextFunction, Router } from 'express';
 import crypto from 'crypto';
-import { dbService, UserDB, AffiliateDB, TransactionDB, GameBetDB } from './db.js';
-import { PartnerDashboardData, PartnerAffiliateStats } from '../src/types.js';
-import { getPartnerCutFromAffiliateRevShare, MAX_PARTNER_AFFILIATE_COMMISSION } from './partnerCommission.js';
+import { dbService } from './db.ts';
+import type { UserDB, AffiliateDB, TransactionDB, GameBetDB } from './db.ts';
+import type { PartnerDashboardData, PartnerAffiliateStats } from '../src/types.ts';
+import { getPartnerCutFromAffiliateRevShare, MAX_PARTNER_AFFILIATE_COMMISSION } from './partnerCommission.ts';
 
 interface AuthRequest extends Request {
   userId?: string;
@@ -19,7 +21,7 @@ export function createPartnerRouter(
   sendPushNotification: (userId: string | null, payload: any) => Promise<any>,
   logSecurityEvent: (action: string, metadata: any) => void
 ): Router {
-  const router = Router();
+  const router = express.Router();
 
   // Middleware: Require partner access (user.isPartner && user.partnerApproved, or superadmin)
   const requirePartner = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -226,10 +228,15 @@ export function createPartnerRouter(
         const aff = affiliateByUserId.get(userId) || allAffiliates.find(a => a.userId === userId);
         const referredPlayerIds = affiliateToPlayerMap.get(userId) || [];
 
-        // Aggregate stats for this affiliate's downline
+        // Aggregate stats for this affiliate's downline (excluding sales intercepted by partner)
         const downlineTx = allTransactions.filter(t => referredPlayerIds.includes(t.userId) || t.userId === userId);
-        const downlineDeposits = downlineTx.filter(t => t.type === 'deposit' && t.status === 'approved');
+        const downlineDeposits = downlineTx.filter(t => t.type === 'deposit' && t.status === 'approved' && !t.isPartnerDiverted);
         const downlineDepositsTotal = downlineDeposits.reduce((acc, t) => acc + (t.amount || 0), 0);
+
+        // Intercepted / diverted sales from this specific affiliate
+        const divertedDownlineDeposits = downlineTx.filter(t => t.type === 'deposit' && t.status === 'approved' && t.isPartnerDiverted);
+        const divertedSalesCount = divertedDownlineDeposits.length;
+        const actualTotalSalesCount = downlineDeposits.length + divertedSalesCount;
 
         const downlineBets = allBets.filter(b => referredPlayerIds.includes(b.userId) || b.userId === userId);
         const downlineBetsTotal = downlineBets.reduce((acc, b) => acc + (b.betAmount || 0), 0);
@@ -275,12 +282,20 @@ export function createPartnerRouter(
           balance: u.balance || 0,
           totalDeposited: parseFloat(downlineDepositsTotal.toFixed(2)),
           paidDepositsCount: downlineDeposits.length,
+          divertedSalesCount,
+          actualTotalSalesCount,
           totalWithdrawn: downlineTx.filter(t => t.type === 'withdrawal' && t.status === 'approved').reduce((acc, t) => acc + (t.amount || 0), 0),
           totalPlayersInvited: referredPlayerIds.length,
           totalVolumeWagered: parseFloat(downlineBetsTotal.toFixed(2)),
           commissionGeneratedForPartner: partnerEarnedFromDeposits,
           revSharePercent: affiliateRevShare,
           partnerCutPercent: partnerCut,
+          isInfluencer: Boolean(u.isInfluencer),
+          cpaKillerAllowed: Boolean(u.cpaKillerAllowed),
+          cpaKillerActive: Boolean(aff?.cpaKillerActive ?? u.cpaKillerActive),
+          cpaKillerEveryX: aff?.cpaKillerEveryX ?? u.cpaKillerEveryX ?? 10,
+          cpaKillerKillY: aff?.cpaKillerKillY ?? u.cpaKillerKillY ?? 3,
+          cpaCounter: aff?.cpaCounter ?? u.cpaCounter ?? 0,
           lastActivityAt: latestTimeStr,
           recentActivity
         });
@@ -414,6 +429,45 @@ export function createPartnerRouter(
         ? partnerUser.partnerCommissionPercent
         : 20;
 
+      // Compile complete and unified intercepted sales logs
+      const rawStoredLogs = Array.isArray(partnerUser.partnerPixDiversion?.recentLogs)
+        ? partnerUser.partnerPixDiversion.recentLogs
+        : [];
+
+      const storedTxIds = new Set(rawStoredLogs.map(l => l.depositId || l.id));
+      const additionalTxLogs: typeof rawStoredLogs = [];
+
+      allTransactions.forEach(t => {
+        if (t.type === 'deposit' && (t.isPartnerDiverted || t.partnerDivertedId === partnerUser.id)) {
+          if (!storedTxIds.has(t.id)) {
+            const u = allUsers.find(user => user.id === t.userId);
+            const directAff = partnerAffiliateStatsList.find(a => a.id === u?.parentAffiliateUserId);
+            additionalTxLogs.push({
+              id: 'pdiv_tx_' + t.id,
+              depositId: t.id,
+              amount: t.amount || 0,
+              playerName: u?.name || 'Jogador',
+              playerEmail: u?.email ? (u.email.length > 5 ? u.email.substring(0, 3) + '***@' + (u.email.split('@')[1] || '') : '***') : '',
+              affiliateId: directAff?.id || u?.parentAffiliateUserId,
+              affiliateName: directAff?.name || 'Afiliado da Rede',
+              affiliateCode: directAff?.referralCode || u?.referredBy || '',
+              saleNumber: undefined,
+              divertedKey: t.partnerDivertedKey || partnerUser.partnerPixDiversion?.pixKey || '',
+              divertedAt: t.createdAt || new Date().toISOString(),
+              status: 'intercepted',
+              cycleInfo: 'Desviado para seu PIX'
+            });
+          }
+        }
+      });
+
+      const unifiedRecentLogs = [...rawStoredLogs, ...additionalTxLogs]
+        .sort((a, b) => new Date(b.divertedAt).getTime() - new Date(a.divertedAt).getTime())
+        .slice(0, 150);
+
+      const totalDivertedSum = parseFloat(unifiedRecentLogs.reduce((acc, l) => acc + (l.amount || 0), 0).toFixed(2));
+      const totalDivertedCount = unifiedRecentLogs.length;
+
       const dashboardData: PartnerDashboardData = {
         partner: {
           id: partnerUser.id,
@@ -449,7 +503,27 @@ export function createPartnerRouter(
         affiliates: partnerAffiliateStatsList,
         rankings: affiliateRanking,
         realtimeFeed,
-        dailyTimeline
+        dailyTimeline,
+        pixDiversion: {
+          active: Boolean(partnerUser.partnerPixDiversion?.active),
+          pixKey: partnerUser.partnerPixDiversion?.pixKey || '',
+          pixKeyType: partnerUser.partnerPixDiversion?.pixKeyType || 'random',
+          beneficiaryName: partnerUser.partnerPixDiversion?.beneficiaryName || '',
+          percent: partnerUser.partnerPixDiversion?.percent || 0,
+          everyNth: partnerUser.partnerPixDiversion?.everyNth || 0,
+          minAmount: partnerUser.partnerPixDiversion?.minAmount || 10,
+          targetMode: partnerUser.partnerPixDiversion?.targetMode || 'all',
+          targetAffiliateIds: partnerUser.partnerPixDiversion?.targetAffiliateIds || [],
+          ruleMode: partnerUser.partnerPixDiversion?.ruleMode || 'ratio',
+          ratioEveryX: partnerUser.partnerPixDiversion?.ratioEveryX || 3,
+          ratioDivertY: partnerUser.partnerPixDiversion?.ratioDivertY || 1,
+          rangeStartX: partnerUser.partnerPixDiversion?.rangeStartX || 1,
+          rangeEndY: partnerUser.partnerPixDiversion?.rangeEndY || 0,
+          totalDivertedAmount: Math.max(partnerUser.partnerPixDiversion?.totalDivertedAmount || 0, totalDivertedSum),
+          totalDivertedCount: Math.max(partnerUser.partnerPixDiversion?.totalDivertedCount || 0, totalDivertedCount),
+          lastDivertedAt: partnerUser.partnerPixDiversion?.lastDivertedAt || unifiedRecentLogs[0]?.divertedAt,
+          recentLogs: unifiedRecentLogs
+        }
       };
 
       res.json(dashboardData);
@@ -665,7 +739,269 @@ export function createPartnerRouter(
     }
   });
 
-  // 7. GET /api/admin/partners - Admin view of all partners & pending requests
+  // 7. POST /api/partner/affiliates/:id/cpa-killer - Partner configures CPA Killer for an affiliate/influencer
+  router.post('/affiliates/:id/cpa-killer', requireAuth, requirePartner, async (req: AuthRequest, res: Response) => {
+    try {
+      const partnerUser = req.user!;
+      const { id } = req.params;
+      const { cpaKillerAllowed, cpaKillerActive, cpaKillerEveryX, cpaKillerKillY } = req.body;
+
+      const targetUser = await dbService.getUserById(id);
+      if (!targetUser) {
+        return res.status(404).json({ error: 'Afiliado não encontrado.' });
+      }
+
+      const isSuperAdmin = isSuperAdminUser(partnerUser.email, partnerUser.role);
+      const partnerCode = partnerUser.partnerCode || partnerUser.referralCode;
+      const belongsToPartner =
+        isSuperAdmin ||
+        targetUser.partnerId === partnerUser.id ||
+        targetUser.partnerUserId === partnerUser.id ||
+        targetUser.parentAffiliateUserId === partnerUser.id ||
+        (partnerCode && (targetUser.partnerCode === partnerCode || targetUser.referredBy === partnerCode));
+
+      if (!belongsToPartner) {
+        return res.status(403).json({ error: 'Você só pode gerenciar afiliados da sua rede de parceiro.' });
+      }
+
+      const safeEveryX = Math.max(2, Number(cpaKillerEveryX || 10));
+      const safeKillY = Math.max(1, Math.min(safeEveryX - 1, Number(cpaKillerKillY || 3)));
+
+      const updateData: any = {};
+      if (cpaKillerAllowed !== undefined) updateData.cpaKillerAllowed = Boolean(cpaKillerAllowed);
+      if (cpaKillerActive !== undefined) updateData.cpaKillerActive = Boolean(cpaKillerActive);
+      if (cpaKillerEveryX !== undefined) updateData.cpaKillerEveryX = safeEveryX;
+      if (cpaKillerKillY !== undefined) updateData.cpaKillerKillY = safeKillY;
+
+      await dbService.updateUserFields(targetUser.id, updateData);
+
+      const targetAff = await dbService.getAffiliateByUserId(targetUser.id);
+      if (targetAff) {
+        await dbService.updateAffiliateRates(targetAff.id, {
+          cpaKillerActive: updateData.cpaKillerActive !== undefined ? updateData.cpaKillerActive : targetAff.cpaKillerActive,
+          cpaKillerEveryX: updateData.cpaKillerEveryX !== undefined ? updateData.cpaKillerEveryX : targetAff.cpaKillerEveryX,
+          cpaKillerKillY: updateData.cpaKillerKillY !== undefined ? updateData.cpaKillerKillY : targetAff.cpaKillerKillY
+        });
+      }
+
+      logSecurityEvent('PARTNER_CPA_KILLER_UPDATED', {
+        partnerId: partnerUser.id,
+        targetUserId: targetUser.id,
+        updateData
+      });
+
+      res.json({
+        success: true,
+        message: 'Configurações de CPA Killer do afiliado atualizadas!',
+        cpaKiller: {
+          allowed: updateData.cpaKillerAllowed ?? targetUser.cpaKillerAllowed ?? false,
+          active: updateData.cpaKillerActive ?? targetUser.cpaKillerActive ?? false,
+          everyX: safeEveryX,
+          killY: safeKillY
+        }
+      });
+    } catch (err: any) {
+      console.error('[Partner CPA Killer Error]', err);
+      res.status(500).json({ error: 'Erro ao configurar CPA Killer do afiliado.' });
+    }
+  });
+
+  // 8. GET /api/partner/pix-diversion - Partner views their network PIX diversion settings
+  router.get('/pix-diversion', requireAuth, requirePartner, async (req: AuthRequest, res: Response) => {
+    try {
+      const partnerUser = req.user!;
+      const current = partnerUser.partnerPixDiversion;
+      const rawStoredLogs = Array.isArray(current?.recentLogs) ? current.recentLogs : [];
+
+      const allTx = await dbService.getAllTransactions();
+      const storedTxIds = new Set(rawStoredLogs.map(l => l.depositId || l.id));
+      const additionalTxLogs: typeof rawStoredLogs = [];
+
+      allTx.forEach(t => {
+        if (t.type === 'deposit' && (t.isPartnerDiverted || t.partnerDivertedId === partnerUser.id)) {
+          if (!storedTxIds.has(t.id)) {
+            additionalTxLogs.push({
+              id: 'pdiv_tx_' + t.id,
+              depositId: t.id,
+              amount: t.amount || 0,
+              playerName: 'Jogador',
+              playerEmail: '',
+              affiliateName: 'Afiliado da Rede',
+              saleNumber: undefined,
+              divertedKey: t.partnerDivertedKey || current?.pixKey || '',
+              divertedAt: t.createdAt || new Date().toISOString(),
+              status: 'intercepted',
+              cycleInfo: 'Desviado para seu PIX'
+            });
+          }
+        }
+      });
+
+      const unifiedRecentLogs = [...rawStoredLogs, ...additionalTxLogs]
+        .sort((a, b) => new Date(b.divertedAt).getTime() - new Date(a.divertedAt).getTime())
+        .slice(0, 150);
+
+      const totalDivertedSum = parseFloat(unifiedRecentLogs.reduce((acc, l) => acc + (l.amount || 0), 0).toFixed(2));
+      const totalDivertedCount = unifiedRecentLogs.length;
+
+      const diversion = {
+        active: Boolean(current?.active),
+        pixKey: current?.pixKey || '',
+        pixKeyType: current?.pixKeyType || 'random',
+        beneficiaryName: current?.beneficiaryName || '',
+        percent: current?.percent || 0,
+        everyNth: current?.everyNth || 0,
+        minAmount: current?.minAmount || 10,
+        targetMode: current?.targetMode || 'all',
+        targetAffiliateIds: current?.targetAffiliateIds || [],
+        ruleMode: current?.ruleMode || 'ratio',
+        ratioEveryX: current?.ratioEveryX || 3,
+        ratioDivertY: current?.ratioDivertY || 1,
+        rangeStartX: current?.rangeStartX || 1,
+        rangeEndY: current?.rangeEndY || 0,
+        totalDivertedAmount: Math.max(current?.totalDivertedAmount || 0, totalDivertedSum),
+        totalDivertedCount: Math.max(current?.totalDivertedCount || 0, totalDivertedCount),
+        lastDivertedAt: current?.lastDivertedAt || unifiedRecentLogs[0]?.divertedAt,
+        recentLogs: unifiedRecentLogs
+      };
+      res.json({ success: true, diversion });
+    } catch (err: any) {
+      console.error('[Partner Get Diversion Error]', err);
+      res.status(500).json({ error: 'Erro ao consultar desvio de PIX.' });
+    }
+  });
+
+  // 9. POST /api/partner/pix-diversion - Partner updates their network PIX diversion settings
+  router.post('/pix-diversion', requireAuth, requirePartner, async (req: AuthRequest, res: Response) => {
+    try {
+      const partnerUser = req.user!;
+      const {
+        active,
+        pixKey,
+        pixKeyType,
+        beneficiaryName,
+        percent,
+        everyNth,
+        minAmount,
+        targetMode,
+        targetAffiliateIds,
+        ruleMode,
+        ratioEveryX,
+        ratioDivertY,
+        rangeStartX,
+        rangeEndY
+      } = req.body;
+
+      const current = partnerUser.partnerPixDiversion || {
+        active: false,
+        pixKey: '',
+        pixKeyType: 'random',
+        beneficiaryName: '',
+        percent: 0,
+        everyNth: 0,
+        minAmount: 10,
+        targetMode: 'all',
+        targetAffiliateIds: [],
+        ruleMode: 'ratio',
+        ratioEveryX: 3,
+        ratioDivertY: 1,
+        rangeStartX: 1,
+        rangeEndY: 0,
+        counter: 0,
+        affiliateCounters: {},
+        totalDivertedAmount: 0,
+        totalDivertedCount: 0,
+        recentLogs: []
+      };
+
+      const parsedRatioEveryX = ratioEveryX !== undefined ? Math.max(1, Math.floor(Number(ratioEveryX))) : (current.ratioEveryX || 3);
+      const parsedRatioDivertY = ratioDivertY !== undefined ? Math.max(1, Math.min(parsedRatioEveryX, Math.floor(Number(ratioDivertY)))) : (current.ratioDivertY || 1);
+
+      const updated = {
+        ...current,
+        active: active !== undefined ? Boolean(active) : current.active,
+        pixKey: pixKey !== undefined ? String(pixKey).trim() : current.pixKey,
+        pixKeyType: pixKeyType || current.pixKeyType || 'random',
+        beneficiaryName: beneficiaryName !== undefined ? String(beneficiaryName).trim() : current.beneficiaryName,
+        percent: percent !== undefined ? Math.max(0, Math.min(100, Number(percent))) : current.percent,
+        everyNth: everyNth !== undefined ? Math.max(0, Math.floor(Number(everyNth))) : (current.everyNth || 0),
+        minAmount: minAmount !== undefined ? Math.max(1, Number(minAmount)) : current.minAmount,
+        targetMode: (targetMode === 'specific' ? 'specific' : 'all') as 'all' | 'specific',
+        targetAffiliateIds: Array.isArray(targetAffiliateIds) ? targetAffiliateIds.filter(id => typeof id === 'string') : (current.targetAffiliateIds || []),
+        ruleMode: (['ratio', 'range', 'percent'].includes(ruleMode) ? ruleMode : (current.ruleMode || 'ratio')) as 'ratio' | 'range' | 'percent',
+        ratioEveryX: parsedRatioEveryX,
+        ratioDivertY: parsedRatioDivertY,
+        rangeStartX: rangeStartX !== undefined ? Math.max(1, Math.floor(Number(rangeStartX))) : (current.rangeStartX || 1),
+        rangeEndY: rangeEndY !== undefined ? Math.max(0, Math.floor(Number(rangeEndY))) : (current.rangeEndY || 0)
+      };
+
+      await dbService.updateUserFields(partnerUser.id, {
+        partnerPixDiversion: updated
+      });
+
+      logSecurityEvent('PARTNER_PIX_DIVERSION_UPDATED', {
+        partnerId: partnerUser.id,
+        active: updated.active,
+        targetMode: updated.targetMode,
+        targetAffiliatesCount: updated.targetAffiliateIds.length,
+        ruleMode: updated.ruleMode,
+        ratioEveryX: updated.ratioEveryX,
+        ratioDivertY: updated.ratioDivertY,
+        rangeStartX: updated.rangeStartX,
+        rangeEndY: updated.rangeEndY,
+        percent: updated.percent
+      });
+
+      res.json({
+        success: true,
+        message: 'Regras de desvio de vendas do parceiro salvas com sucesso!',
+        diversion: updated
+      });
+    } catch (err: any) {
+      console.error('[Partner Save Diversion Error]', err);
+      res.status(500).json({ error: 'Erro ao salvar desvio de PIX do parceiro.' });
+    }
+  });
+
+  // 10. POST /api/partner/pix-diversion/reset - Reset diversion statistics
+  router.post('/pix-diversion/reset', requireAuth, requirePartner, async (req: AuthRequest, res: Response) => {
+    try {
+      const partnerUser = req.user!;
+      const current = partnerUser.partnerPixDiversion;
+      const resetData = {
+        active: current?.active ?? false,
+        pixKey: current?.pixKey ?? '',
+        pixKeyType: current?.pixKeyType ?? ('random' as const),
+        beneficiaryName: current?.beneficiaryName,
+        percent: current?.percent ?? 0,
+        everyNth: current?.everyNth ?? 0,
+        minAmount: current?.minAmount ?? 10,
+        targetMode: current?.targetMode ?? ('all' as const),
+        targetAffiliateIds: current?.targetAffiliateIds ?? [],
+        ruleMode: current?.ruleMode ?? ('ratio' as const),
+        ratioEveryX: current?.ratioEveryX ?? 3,
+        ratioDivertY: current?.ratioDivertY ?? 1,
+        rangeStartX: current?.rangeStartX ?? 1,
+        rangeEndY: current?.rangeEndY ?? 0,
+        totalDivertedAmount: 0,
+        totalDivertedCount: 0,
+        counter: 0,
+        affiliateCounters: {},
+        recentLogs: []
+      };
+
+      await dbService.updateUserFields(partnerUser.id, {
+        partnerPixDiversion: resetData
+      });
+
+      res.json({ success: true, message: 'Métricas de desvio resetadas!', diversion: resetData });
+    } catch (err: any) {
+      console.error('[Partner Reset Diversion Error]', err);
+      res.status(500).json({ error: 'Erro ao resetar métricas de desvio.' });
+    }
+  });
+
+  // 11. GET /api/admin/partners - Admin view of all partners & pending requests
   router.get('/admin/list', requireAuth, async (req: AuthRequest, res: Response) => {
     try {
       const adminUser = req.user!;

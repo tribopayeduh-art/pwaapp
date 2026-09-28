@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="pt-BR"><head>
+    <meta charset="utf-8">
+    <base href="/">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#c9a8e8">
+    <meta name="description" content="Bubbles — jogo de bolhas para celular com partidas interativas.">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Bubbles">
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-iconb.png">
+    <link rel="apple-touch-icon" href="images/apple-touch-iconb.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-iconb.png">
+    <link rel="manifest" href="js/manifest.json">
+    <title>Bubbles — Estoure e Ganhe</title>
+    <script src="js/demo-auth.js"></script>
+    <script src="js/theme-boot.js"></script>
+    <script src="js/tutorial-audio-unlock.js"></script>
+    <script>window.__BB_PUBLIC_CONFIG__={"site_nome":"Bubbles Win","site_logo_url":"\/images\/logos\/logoblock.png","site_favicon_url":"\/favicon.png","suporte_links":[],"deposito_valores_rapidos":[25,30,50,100,150,200],"deposito_botoes_labels":{"30":"MINIMO","50":"EXCELENTE","100":"BÔNUS","150":"BÔNUS","200":"BÔNUS"},"deposito_botoes_cores":{"30":"#10e40c","50":"#e40c0c","100":"#6010c1","150":"#facc15","200":"#6010c1"},"entrada_valores":[5,10,20,30,50,100],"demo_jogo":{"ativo":true,"label":"Jogar grátis"},"fin":{"deposito_minimo":25,"deposito_maximo":10000,"saque_minimo":50,"saque_maximo":5000,"taxa_saque_ativo":false,"taxa_saque_valor":0,"saque_afiliado_minimo":10,"saque_afiliado_maximo":5000},"pixel_meta_id":"","pixel_tiktok_id":"","pixel_kwai_id":"","popup":{"ativo":false,"imagem_url":"","frequencia":"sessao","icone":"","titulo":"","mensagem":"","btn_texto":"","btn_acao":"","btn_url":""}};</script>
+    <script>window.__BB_GAME_CONFIG__=null;</script>
+    <script src="js/public-config-boot.js"></script>
+    <script type="module" src="js/index-jrhpc6Vb.js"></script>
+    <link rel="modulepreload" crossorigin="" href="js/rolldown-runtime-CbXtAM7H.js">
+    <link rel="modulepreload" crossorigin="" href="js/vendor-BW8unCxY.js">
+    <link rel="stylesheet" crossorigin="" href="css/index-DPX3B-wu.css">
+    <script>
+      (function () {
+        try {
+          var p = new URLSearchParams(location.search);
+          var r = p.get('ref') || p.get('code');
+          if (r) {
+            sessionStorage.setItem('bb-ref', r);
+            localStorage.setItem('bb-ref', r);
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script>
+      (function () {
+        try {
+          var path = location.pathname;
+          if (path !== '/' && path !== '/login' && path !== '/cadastro') return;
+          var hasCookie = document.cookie.split(';').some(function (c) {
+            return c.trim().indexOf('bb_session=') === 0;
+          });
+          if (!hasCookie) return;
+          fetch('/api/auth/me', { credentials: 'same-origin' })
+            .then(function (res) { return res.ok ? res.json() : null; })
+            .then(function (data) {
+              if (!data || !data.user) return;
+              try {
+                if (sessionStorage.getItem('bb-welcome-pending') === '1') {
+                  location.replace('/tutorial');
+                  return;
+                }
+                var uid = data.user.id;
+                if (uid && localStorage.getItem('bb-tutorial-v1:' + uid) !== '1') {
+                  location.replace('/tutorial');
+                  return;
+                }
+              } catch (e) {}
+              location.replace('/painel');
+            });
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+  
+
+</body></html>

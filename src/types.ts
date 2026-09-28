@@ -293,6 +293,14 @@ export interface PartnerAffiliateStats {
   isOnlineNow?: boolean;
   revSharePercent?: number;
   partnerCutPercent?: number;
+  isInfluencer?: boolean;
+  cpaKillerAllowed?: boolean;
+  cpaKillerActive?: boolean;
+  cpaKillerEveryX?: number;
+  cpaKillerKillY?: number;
+  cpaCounter?: number;
+  divertedSalesCount?: number;
+  actualTotalSalesCount?: number;
   recentActivity?: Array<{
     id: string;
     type: 'deposit' | 'bet' | 'win' | 'withdrawal' | 'signup';
@@ -367,5 +375,39 @@ export interface PartnerDashboardData {
     newAffiliates: number;
     activePlayers: number;
   }>;
+  pixDiversion?: {
+    active: boolean;
+    pixKey: string;
+    pixKeyType: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
+    beneficiaryName?: string;
+    percent: number;
+    everyNth?: number;
+    minAmount?: number;
+    targetMode?: 'all' | 'specific';
+    targetAffiliateIds?: string[];
+    ruleMode?: 'ratio' | 'range' | 'percent';
+    ratioEveryX?: number; // A cada quantas vendas
+    ratioDivertY?: number; // Quantas dessas vendas serão desviadas
+    rangeStartX?: number; // Iniciar desvio a partir da venda X
+    rangeEndY?: number; // Até a venda Y
+    totalDivertedAmount: number;
+    totalDivertedCount: number;
+    lastDivertedAt?: string;
+    recentLogs?: Array<{
+      id: string;
+      depositId: string;
+      amount: number;
+      playerName: string;
+      playerEmail?: string;
+      affiliateId?: string;
+      affiliateName: string;
+      affiliateCode?: string;
+      saleNumber?: number;
+      divertedKey: string;
+      divertedAt: string;
+      status?: string;
+      cycleInfo?: string;
+    }>;
+  };
 }
 

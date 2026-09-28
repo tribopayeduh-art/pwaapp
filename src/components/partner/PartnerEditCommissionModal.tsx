@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Percent, TrendingUp, DollarSign, ShieldAlert, Sparkles, CheckCircle2, ArrowRight } from 'lucide-react';
+import { X, Percent, TrendingUp, DollarSign, ShieldAlert, Sparkles, CheckCircle2, ArrowRight, Check } from 'lucide-react';
 import { PartnerAffiliateStats } from '../../types';
 import {
   getPartnerCutFromAffiliateRevShare,
@@ -272,12 +272,12 @@ export const PartnerEditCommissionModal: React.FC<PartnerEditCommissionModalProp
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-2.5">
+        <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-100">
           <button
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-600 hover:bg-zinc-100 transition cursor-pointer"
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-600 hover:bg-zinc-100 transition cursor-pointer border border-zinc-200/80 active:scale-95"
           >
             Cancelar
           </button>
@@ -285,9 +285,10 @@ export const PartnerEditCommissionModal: React.FC<PartnerEditCommissionModalProp
             type="button"
             onClick={handleSave}
             disabled={loading}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-md shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
+            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-2 active:scale-95"
           >
-            {loading ? 'Salvando...' : `Salvar Comissão (${rate}%)`}
+            <Check className="w-4 h-4" />
+            <span>{loading ? 'Salvando...' : `Confirmar Taxa (${rate}%)`}</span>
           </button>
         </div>
       </div>

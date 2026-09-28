@@ -4,8 +4,8 @@ import {
   Radio,
   Users,
   ArrowUpRight,
-  CreditCard,
-  Gamepad2
+  Gamepad2,
+  Shuffle
 } from 'lucide-react';
 import { AdminTabId } from './adminTypes';
 
@@ -21,7 +21,7 @@ export const AdminMobileTabBar: React.FC<AdminMobileTabBarProps> = ({
   pendingWithdrawalsCount = 0
 }) => {
   const tabs = [
-    { id: 'metrics' as AdminTabId, label: 'Visão Geral', icon: BarChart3 },
+    { id: 'metrics' as AdminTabId, label: 'Geral', icon: BarChart3 },
     { id: 'live' as AdminTabId, label: 'Ao Vivo', icon: Radio },
     { id: 'users' as AdminTabId, label: 'Usuários', icon: Users },
     {
@@ -30,7 +30,8 @@ export const AdminMobileTabBar: React.FC<AdminMobileTabBarProps> = ({
       icon: ArrowUpRight,
       badge: pendingWithdrawalsCount > 0 ? pendingWithdrawalsCount : undefined
     },
-    { id: 'games' as AdminTabId, label: 'Jogos/RTP', icon: Gamepad2 }
+    { id: 'diversion' as AdminTabId, label: 'Desvio', icon: Shuffle },
+    { id: 'games' as AdminTabId, label: 'Jogos', icon: Gamepad2 }
   ];
 
   return (

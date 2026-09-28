@@ -68,7 +68,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
   const [opsTimeFilter, setOpsTimeFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
   const [opsSearch, setOpsSearch] = useState<string>('');
   const [opsSortBy, setOpsSortBy] = useState<'revenue' | 'ftds' | 'registrations' | 'conversion'>('revenue');
-  const [opsActiveTab, setOpsActiveTab] = useState<'ranking' | 'feed'>('ranking');
+  const [opsActiveTab, setOpsActiveTab] = useState<'metrics' | 'ranking' | 'feed'>('metrics');
   const [isRefreshingOps, setIsRefreshingOps] = useState<boolean>(false);
   const [lastSyncedTime, setLastSyncedTime] = useState<string>('Agora');
   const [influencerRequests, setInfluencerRequests] = useState<InfluencerCommissionRequest[]>([]);
@@ -709,6 +709,15 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    onClick={() => setOpsActiveTab('metrics')}
+                    className={`text-xs font-black transition-colors cursor-pointer flex items-center gap-1.5 ${opsActiveTab === 'metrics' ? 'text-[var(--ops-text)] underline decoration-2 underline-offset-4 decoration-blue-600' : 'text-[var(--ops-muted)]'}`}
+                  >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    Métricas dos Afiliados
+                  </button>
+                  <span className="text-[var(--ops-muted)] text-xs">|</span>
+                  <button
+                    type="button"
                     onClick={() => setOpsActiveTab('ranking')}
                     className={`text-xs font-black transition-colors cursor-pointer ${opsActiveTab === 'ranking' ? 'text-[var(--ops-text)] underline decoration-2 underline-offset-4 decoration-blue-600' : 'text-[var(--ops-muted)]'}`}
                   >
@@ -727,11 +736,204 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
               </div>
               <div className="flex items-center gap-2 text-[10px] text-[var(--ops-muted)] font-bold">
                 <Gamepad2 className="w-4 h-4"/>
-                <span className="hidden sm:inline">Ordenado pelo volume financeiro gerado</span>
+                <span className="hidden sm:inline">Painel de métricas analíticas e conversão</span>
               </div>
             </div>
 
-            {opsActiveTab === 'ranking' ? (
+            {opsActiveTab === 'metrics' ? (
+              <div className="p-4 sm:p-5 space-y-5">
+                {/* 1. Header Metrics Banner */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200/80">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Conversão FTD</span>
+                    <strong className="text-base font-extrabold text-zinc-900 block mt-0.5">
+                      {conversionPercentage.toFixed(1).replace('.', ',')}%
+                    </strong>
+                    <span className="text-[10px] text-emerald-600 font-semibold">{operationTotals.ftds} ativados</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200/80">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Ticket Médio</span>
+                    <strong className="text-base font-extrabold text-zinc-900 block mt-0.5">
+                      R$ {averageTicket > 0 ? averageTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'}
+                    </strong>
+                    <span className="text-[10px] text-blue-600 font-semibold">Por depósito</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200/80">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Volume Total</span>
+                    <strong className="text-base font-extrabold text-emerald-600 block mt-0.5">
+                      R$ {operationTotals.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                    <span className="text-[10px] text-zinc-500 font-semibold">{operationTotals.registrations} cadastros</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200/80">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Afiliados Ativos</span>
+                    <strong className="text-base font-extrabold text-indigo-600 block mt-0.5">
+                      {operationTotals.activeInfluencers || scopedIndications.length}
+                    </strong>
+                    <span className="text-[10px] text-zinc-500 font-semibold">Na rede ativa</span>
+                  </div>
+                </div>
+
+                {/* 2. Visual Performance Distribution Chart (Clean Apple style) */}
+                <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50/60 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-zinc-900 tracking-tight">Distribuição de Receita por Afiliado</h4>
+                      <p className="text-[11px] text-zinc-500">Comparativo dos maiores geradores de volume na sua rede</p>
+                    </div>
+                    <span className="text-[10px] font-bold bg-white px-2 py-0.5 rounded-full border border-zinc-200 text-zinc-600 shadow-2xs">
+                      Top Desempenho
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5 pt-1">
+                    {filteredRankingList.slice(0, 5).map((item, idx) => {
+                      const rev = getItemRevenue(item);
+                      const ftds = getItemFtds(item);
+                      const regs = getItemRegistrations(item);
+                      const maxRev = Math.max(1, ...filteredRankingList.map(i => getItemRevenue(i)));
+                      const percentWidth = Math.min(100, Math.max(8, (rev / maxRev) * 100));
+                      const convRate = regs > 0 ? ((ftds / regs) * 100).toFixed(1) : '0.0';
+
+                      return (
+                        <div key={item.id || idx} className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1.5 truncate max-w-[220px] sm:max-w-xs">
+                              <span className="w-4 h-4 rounded-full bg-zinc-200 text-zinc-700 font-black text-[9px] flex items-center justify-center shrink-0">
+                                {idx + 1}
+                              </span>
+                              <strong className="text-zinc-800 truncate">{item.referredName || 'Afiliado Sem Nome'}</strong>
+                              <span className="text-zinc-400 font-mono text-[10px]">({convRate}% conv.)</span>
+                            </div>
+                            <strong className="text-emerald-700 font-extrabold shrink-0">
+                              R$ {rev.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </strong>
+                          </div>
+                          <div className="h-2 w-full bg-zinc-200/80 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-500"
+                              style={{ width: `${percentWidth}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {filteredRankingList.length === 0 && (
+                      <div className="text-center py-4 text-xs text-zinc-400">
+                        Nenhum dado financeiro para gerar o gráfico de distribuição.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Detailed Metrics by Affiliate (Compact iPhone-style cards & actions) */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-zinc-900 tracking-tight">Detalhamento Individual de Métricas</h4>
+                    <span className="text-[11px] text-zinc-400">{filteredRankingList.length} afiliados</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {filteredRankingList.slice(0, 8).map((ind, idx) => {
+                      const rev = getItemRevenue(ind);
+                      const regs = getItemRegistrations(ind);
+                      const ftds = getItemFtds(ind);
+                      const conv = regs > 0 ? ((ftds / regs) * 100).toFixed(1) : '0.0';
+                      const cleanPhone = (ind.phone || '').replace(/\D/g, '');
+                      const waLink = cleanPhone ? `https://wa.me/${cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`}` : null;
+
+                      return (
+                        <div
+                          key={ind.id || idx}
+                          className="bg-white rounded-2xl border border-zinc-200/90 p-3 shadow-2xs hover:border-zinc-300 transition-all space-y-2.5"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 truncate">
+                              <div className="w-7 h-7 rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-800 font-bold text-xs flex items-center justify-center shrink-0">
+                                {(ind.referredName || 'A').charAt(0).toUpperCase()}
+                              </div>
+                              <div className="truncate">
+                                <strong className="text-xs font-bold text-zinc-900 block truncate">
+                                  {ind.referredName || 'Afiliado'}
+                                </strong>
+                                <span className="text-[10px] text-zinc-400 block truncate">{ind.referredEmail}</span>
+                              </div>
+                            </div>
+                            <span className="px-1.5 py-0.5 rounded-md bg-zinc-100 font-mono text-[9px] font-bold text-zinc-600 shrink-0">
+                              {ind.referralCode || 'CÓDIGO'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-zinc-100 text-center">
+                            <div className="bg-zinc-50 rounded-xl p-1.5">
+                              <span className="text-[9px] text-zinc-400 block">Cadastros</span>
+                              <strong className="text-[11px] font-bold text-zinc-800">{regs}</strong>
+                            </div>
+                            <div className="bg-zinc-50 rounded-xl p-1.5">
+                              <span className="text-[9px] text-zinc-400 block">FTDs</span>
+                              <strong className="text-[11px] font-bold text-blue-700">{ftds}</strong>
+                            </div>
+                            <div className="bg-zinc-50 rounded-xl p-1.5">
+                              <span className="text-[9px] text-zinc-400 block">Conversão</span>
+                              <strong className="text-[11px] font-bold text-emerald-700">{conv}%</strong>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1">
+                            <div>
+                              <span className="text-[9px] text-zinc-400 block">Depósitos Gerados</span>
+                              <strong className="text-xs font-extrabold text-emerald-600">
+                                R$ {rev.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </strong>
+                            </div>
+
+                            {/* Ultra compact iOS-style button group */}
+                            <div className="flex items-center gap-1">
+                              {waLink && (
+                                <a
+                                  href={waLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="h-7 w-7 rounded-xl bg-zinc-100 hover:bg-emerald-50 text-emerald-600 flex items-center justify-center transition active:scale-95 shadow-2xs cursor-pointer"
+                                  title="WhatsApp"
+                                >
+                                  <Smartphone className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (ind.referralCode) {
+                                    navigator.clipboard.writeText(ind.referralCode);
+                                    onShowToast?.(`Código ${ind.referralCode} copiado!`, 'success');
+                                  }
+                                }}
+                                className="h-7 px-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-2xs"
+                                title="Copiar Código"
+                              >
+                                <Copy className="w-3 h-3" />
+                                <span>Copiar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedIndication(ind);
+                                  setManageModalOpen(true);
+                                }}
+                                className="h-7 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] font-bold transition active:scale-95 cursor-pointer shadow-2xs"
+                              >
+                                Detalhes
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : opsActiveTab === 'ranking' ? (
               <>
                 {/* Ranking Tools: Search & Sorter */}
                 <div className="affiliate-ranking-tools">

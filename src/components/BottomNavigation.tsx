@@ -48,7 +48,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
   ];
 
   return (
-    <nav className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5E5E5] mx-auto transition-[max-width] duration-300 ${desktopExpanded ? 'max-w-md lg:max-w-[1440px]' : 'max-w-md'}`}>
+    <nav className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E5E5E5] mx-auto transition-[max-width] duration-300 ${desktopExpanded ? 'max-w-md lg:max-w-[97vw] xl:max-w-[98vw] 2xl:max-w-[1920px]' : 'max-w-md'}`}>
       <div className="flex items-center justify-around h-16 px-2">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;

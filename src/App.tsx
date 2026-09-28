@@ -37,15 +37,16 @@ import {
   playSaleSound,
 } from './lib/pwaNotification';
 import { applyGameSEO } from './lib/seo';
-import { Loader2, Gamepad2, ShieldCheck, ExternalLink, Wallet, Activity, Layers3 } from 'lucide-react';
+import { Loader2, Gamepad2, ShieldCheck, ExternalLink, Wallet, Activity, Layers3, Crown } from 'lucide-react';
 import logoImg from './components/logo.webp';
 import { GAME_ASSETS, publicAsset } from './config/gameAssets';
+import { BubbleBlastPlayerView } from './components/BubbleBlastPlayerView';
 
 const AdminPanel = lazy(() => import('./components/AdminPanel').then((module) => ({ default: module.AdminPanel })));
 const BlockPuzzleApp = lazy(() => import('./game/BlockPuzzleApp').then((module) => ({ default: module.BlockPuzzleApp })));
 const LazyScreen = () => <div className="min-h-screen bg-white grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-zinc-800" /></div>;
 
-type AppContext = 'alliance-hub' | 'blockwin' | 'zumbla' | 'gen-dino' | 'raspa-fortuna' | 'subwaypay';
+type AppContext = 'alliance-hub' | 'blockwin' | 'zumbla' | 'gen-dino' | 'raspa-fortuna' | 'subwaypay' | 'bubble-blast';
 
 const detectAppContext = (): AppContext => {
   const host = window.location.hostname.toLowerCase();
@@ -54,15 +55,24 @@ const detectAppContext = (): AppContext => {
   const pathname = window.location.pathname.toLowerCase();
 
   if (host.includes('goalliancehub')) return 'alliance-hub';
+
+  // Zumbla domain (zumblapay.site, zumbla, etc.) & Bubble Blast aliases route directly to Bubble Blast
+  if (
+    host.includes('zumblapay') || host.includes('zumbla') ||
+    site === 'zumbla' || site === 'zumbla-win' || site === 'zumblapay' ||
+    search.includes('site=zumbla') || search.includes('game=zumbla') || search.includes('site=zumblapay') ||
+    pathname.startsWith('/zumbla') ||
+    host.includes('bubbleblast') || host.includes('bubble-blast') ||
+    site === 'bubble-blast' || site === 'bubbleblast' ||
+    search.includes('site=bubble') || search.includes('game=bubble') || search.includes('site=bubbleblast') || search.includes('game=bubbleblast') ||
+    pathname.startsWith('/bubble')
+  ) return 'bubble-blast';
+
   if (
     host.includes('joguesubway') || host.includes('subwaypay') || host.includes('subway') ||
     site === 'subway' || site === 'subwaypay' || site === 'subway-pay' || site === 'joguesubway' ||
     search.includes('site=subway') || search.includes('game=subway') || search.includes('site=joguesubway') ||
-    pathname.startsWith('/subway') ||
-    host.includes('zumblapay') || host.includes('zumbla') ||
-    site === 'zumbla' || site === 'zumbla-win' || site === 'zumblapay' ||
-    search.includes('site=zumbla') || search.includes('game=zumbla') || search.includes('site=zumblapay') ||
-    pathname.startsWith('/zumbla')
+    pathname.startsWith('/subway')
   ) return 'subwaypay';
   if (
     host.includes('raspadinhaadasorte') || host.includes('raspadinha') || host.includes('raspafortuna') ||
@@ -85,7 +95,18 @@ const detectAppContext = (): AppContext => {
   return 'alliance-hub';
 };
 
-const gameTrackingId = (context: AppContext) => context === 'zumbla' ? 'g_zumbla' : context === 'gen-dino' ? 'g_gen_dino' : context === 'raspa-fortuna' ? 'g_raspa_fortuna' : context === 'subwaypay' ? 'g_subway_pay' : context === 'blockwin' ? 'g_block_puzzle' : 'platform';
+const gameTrackingId = (context: AppContext) =>
+  context === 'bubble-blast' || context === 'zumbla'
+    ? 'g_bubble_blast'
+    : context === 'gen-dino'
+      ? 'g_gen_dino'
+      : context === 'raspa-fortuna'
+        ? 'g_raspa_fortuna'
+        : context === 'subwaypay'
+          ? 'g_subway_pay'
+          : context === 'blockwin'
+            ? 'g_block_puzzle'
+            : 'platform';
 
 const resolveAcquisitionGame = (context: AppContext): string => {
   const searchParams = new URLSearchParams(window.location.search);
@@ -261,6 +282,18 @@ export default function App() {
 
   // Modals & Overlay State
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [partnerPanelOpen, setPartnerPanelOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    return (
+      path.startsWith('/parceiro') ||
+      path.startsWith('/partner') ||
+      search.includes('view=partner') ||
+      search.includes('tab=partner') ||
+      search.includes('parceiro')
+    );
+  });
   const [bannerOpen, setBannerOpen] = useState(true);
   const [depositOpen, setDepositOpen] = useState(false);
   const [depositGameId, setDepositGameId] = useState('platform');
@@ -286,6 +319,11 @@ export default function App() {
     return u.role === 'admin' || u.role === 'superadmin';
   };
 
+  const isUserPartnerOrAdmin = (u: User | null | undefined): boolean => {
+    if (!u) return false;
+    return Boolean((u.isPartner && u.partnerApproved) || isUserAdmin(u));
+  };
+
   const handleOpenAdmin = () => {
     if (!user) {
       showToast('Usuário bloqueado para essa ação. Faça login com uma conta administradora.', 'error');
@@ -297,6 +335,35 @@ export default function App() {
       return;
     }
     setAdminPanelOpen(true);
+  };
+
+  const handleOpenPartnerPanel = () => {
+    if (!user) {
+      showToast('Faça login com sua conta para acessar o Painel do Parceiro.', 'error');
+      setAuthView('login');
+      return;
+    }
+    if (!isUserPartnerOrAdmin(user)) {
+      showToast('Acesso restrito para Parceiros Oficiais e Administradores.', 'error');
+      setPartnerPanelOpen(false);
+      return;
+    }
+    setPartnerPanelOpen(true);
+    try {
+      if (!window.location.pathname.startsWith('/parceiro')) {
+        window.history.pushState({}, '', '/parceiros');
+      }
+    } catch (e) {}
+  };
+
+  const handleClosePartnerPanel = () => {
+    setPartnerPanelOpen(false);
+    try {
+      const url = new URL(window.location.href);
+      if (url.pathname.startsWith('/parceiro') || url.pathname.startsWith('/partner') || url.pathname.startsWith('/parceiros')) {
+        window.history.replaceState({}, '', '/');
+      }
+    } catch (e) {}
   };
 
   // 1. Initialize Service Worker & Detect Route / Referral URL Parameter on initial load
@@ -933,6 +1000,17 @@ export default function App() {
     );
   }
 
+  if (appContext === 'bubble-blast') {
+    return (
+      <BubbleBlastPlayerView
+        user={user || undefined}
+        onBack={() => setAppContext('alliance-hub')}
+        onDeposit={() => { setDepositGameId('g_bubble_blast'); setDepositOpen(true); }}
+        onShowToast={showToast}
+      />
+    );
+  }
+
   if (appContext === 'zumbla' || appContext === 'gen-dino' || appContext === 'raspa-fortuna' || appContext === 'subwaypay') {
     return <DirectGameFrame context={appContext} />;
   }
@@ -993,9 +1071,9 @@ export default function App() {
 
   // Render Authenticated Mobile Container
   return (
-    <div className="min-h-screen bg-zinc-900/5 sm:py-6 flex items-center justify-center">
+    <div className="min-h-screen bg-zinc-900/5 sm:py-4 lg:py-2.5 sm:px-2 lg:px-4 flex items-center justify-center">
       {/* Responsive Shell Frame: clean mobile-first that smoothly expands for tablet & desktop */}
-      <div className="alliance-app-shell w-full max-w-md md:max-w-3xl lg:max-w-[1400px] xl:max-w-[1440px] bg-white min-h-screen sm:min-h-[820px] border border-zinc-200/90 shadow-2xl relative overflow-hidden flex flex-col justify-between transition-[max-width,border-radius] duration-300 sm:rounded-3xl lg:rounded-[28px]">
+      <div className="alliance-app-shell w-full max-w-md md:max-w-4xl lg:max-w-[97vw] xl:max-w-[98vw] 2xl:max-w-[1880px] bg-white min-h-screen sm:min-h-[820px] border border-zinc-200/90 shadow-2xl relative overflow-hidden flex flex-col justify-between transition-[max-width,border-radius] duration-300 sm:rounded-3xl lg:rounded-[28px]">
         {/* Toast */}
         {toast && (
           <Toast message={toast.message} type={toast.type} duration={3000} onClose={() => setToast(null)} />
@@ -1011,7 +1089,7 @@ export default function App() {
 
         {/* Scrollable Main Content Area */}
         <main className="alliance-main-content flex-1 overflow-y-auto no-scrollbar">
-          {!(activeTab === 'more' && subView === 'campaigns') && (
+          {!(activeTab === 'games' || (activeTab === 'more' && subView === 'campaigns')) && (
             <section className="desktop-context-strip" aria-label="Resumo da seção atual">
               <div><span>ÁREA ATUAL</span><strong>{activeTab === 'home' ? 'Visão geral' : activeTab === 'finance' ? 'Financeiro' : activeTab === 'games' ? 'Central de jogos' : subView === 'affiliates' ? 'Programa de afiliados' : 'Conta e configurações'}</strong></div>
               <div><i><Wallet/></i><span>Saldo total<strong>R$ {(user.balance + Number(affiliateInfo?.affiliateBalance || 0)).toLocaleString('pt-BR', { minimumFractionDigits:2 })}</strong></span></div>
@@ -1086,52 +1164,27 @@ export default function App() {
                   onCopySuccess={() => showToast('Link de indicação copiado!', 'success')}
                   onShowToast={showToast}
                   onOpenSettings={() => setGatewaySettingsOpen(true)}
-                  onOpenPartnerPanel={((user.isPartner && user.partnerApproved) || isUserAdmin(user)) ? () => {
-                    setSubView('partner');
-                    try {
-                      if (!window.location.pathname.startsWith('/parceiro')) {
-                        window.history.pushState({}, '', '/parceiros');
-                      }
-                    } catch (e) {}
-                  } : undefined}
+                  onOpenPartnerPanel={isUserPartnerOrAdmin(user) ? handleOpenPartnerPanel : undefined}
                   onRefresh={() => {
                     if (token) fetchAffiliateInfo(token);
                   }}
                 />
               ) : subView === 'partner' ? (
-                (user.isPartner && user.partnerApproved) || isUserAdmin(user) ? (
-                  <PartnerPanelView
-                    user={user}
-                    token={token}
-                    onBackToHub={() => {
-                      setSubView('main');
-                      try {
-                        if (window.location.pathname.startsWith('/parceiro')) {
-                          window.history.pushState({}, '', '/');
-                        }
-                      } catch (e) {}
-                    }}
-                    onShowToast={showToast}
-                  />
-                ) : (
-                  <div className="p-8 text-center text-zinc-500 max-w-md mx-auto">
-                    <p className="font-semibold text-zinc-700">Acesso Restrito</p>
-                    <p className="text-xs mt-1">O Painel de Parceiro é restrito a parceiros homologados pela administração.</p>
-                    <button
-                      onClick={() => {
-                        setSubView('main');
-                        try {
-                          if (window.location.pathname.startsWith('/parceiro')) {
-                            window.history.pushState({}, '', '/');
-                          }
-                        } catch (e) {}
-                      }}
-                      className="mt-4 px-4 py-2 bg-zinc-900 text-white text-xs font-bold rounded-xl cursor-pointer"
-                    >
-                      Voltar ao Início
-                    </button>
+                // Automatically redirect to fullscreen Partner Panel
+                <div className="p-8 text-center text-zinc-500 max-w-md mx-auto space-y-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto animate-pulse">
+                    <Crown className="w-5 h-5 text-amber-500 fill-amber-500" />
                   </div>
-                )
+                  <p className="font-bold text-zinc-800 text-sm">Abrindo Painel do Parceiro Oficial...</p>
+                  <p className="text-xs text-zinc-400">O painel foi expandido para tela cheia independente.</p>
+                  <button
+                    type="button"
+                    onClick={handleOpenPartnerPanel}
+                    className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl shadow-xs"
+                  >
+                    Acessar Tela Cheia
+                  </button>
+                </div>
               ) : subView === 'members' ? (
                 <MembersAreaView onBack={() => setSubView('main')} />
               ) : (
@@ -1142,14 +1195,7 @@ export default function App() {
                     setSubView('affiliates');
                     if (token) fetchAffiliateInfo(token);
                   }}
-                  onOpenPartnerPanel={((user.isPartner && user.partnerApproved) || isUserAdmin(user)) ? () => {
-                    setSubView('partner');
-                    try {
-                      if (!window.location.pathname.startsWith('/parceiro')) {
-                        window.history.pushState({}, '', '/parceiros');
-                      }
-                    } catch (e) {}
-                  } : undefined}
+                  onOpenPartnerPanel={isUserPartnerOrAdmin(user) ? handleOpenPartnerPanel : undefined}
                   onOpenMembers={() => setSubView('members')}
                   onOpenCampaigns={() => setSubView('campaigns')}
                   onOpenSettings={() => setGatewaySettingsOpen(true)}
@@ -1259,6 +1305,39 @@ export default function App() {
               onShowToast={(msg, type) => showToast(msg, type)}
             />
           </Suspense>
+        )}
+
+        {/* Fullscreen Independent Partner Panel (Like Admin Panel) */}
+        {partnerPanelOpen && user && (
+          isUserPartnerOrAdmin(user) ? (
+            <PartnerPanelView
+              user={user}
+              token={token}
+              onBackToHub={handleClosePartnerPanel}
+              onShowToast={showToast}
+            />
+          ) : (
+            <div className="fixed inset-0 z-[70] bg-[#F8F9FA] flex flex-col items-center justify-center p-6 text-center select-none font-sans">
+              <div className="max-w-md w-full p-8 rounded-3xl bg-white border border-zinc-200/80 shadow-lg space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-zinc-900 text-lg">Acesso Restrito ao Painel de Parceiros</h2>
+                  <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
+                    Esta área é exclusiva para Parceiros Oficiais homologados e Administradores da plataforma.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClosePartnerPanel}
+                  className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                >
+                  Voltar ao Hub
+                </button>
+              </div>
+            </div>
+          )
         )}
       </div>
     </div>

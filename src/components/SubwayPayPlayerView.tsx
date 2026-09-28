@@ -146,105 +146,19 @@ export const SubwayPayPlayerView: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-[#0b1329] flex flex-col">
-      {/* Top Header Bar */}
-      <div className="sticky top-0 z-[90] bg-[#0b1329]/95 border-b border-amber-500/20 px-3 py-2 flex items-center justify-between backdrop-blur-md">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Voltar ao lobby"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-white/10 text-white font-mono text-xs font-bold hover:bg-white/20 transition-all cursor-pointer shadow-lg active:scale-95"
-        >
-          <ArrowLeft className="h-4 w-4 text-amber-400" />
-          <span>Voltar ao Lobby</span>
-        </button>
+    <div className="fixed inset-0 z-[70] bg-[#0b1329] overflow-hidden select-none">
+      {/* Minimal Floating Back Button (iOS translucent style) */}
+      <button
+        type="button"
+        onClick={onBack}
+        aria-label="Voltar"
+        className="absolute top-3 left-3 z-[90] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white/90 hover:text-white border border-white/15 backdrop-blur-md shadow-lg transition-all active:scale-95 cursor-pointer text-xs font-semibold"
+      >
+        <ArrowLeft className="h-4 w-4 text-amber-400" />
+        <span className="hidden sm:inline">Voltar</span>
+      </button>
 
-        {/* Mode Switch: Lobby vs Corrida */}
-        <div className="hidden sm:flex items-center bg-black/40 border border-white/10 rounded-xl p-0.5">
-          <button
-            type="button"
-            onClick={() => switchMode('lobby')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              mode === 'lobby'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-            <span>Painel</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMode('runner')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              mode === 'runner'
-                ? 'bg-amber-500 text-slate-950 shadow-md'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            <Play className="h-3.5 w-3.5 fill-current" />
-            <span>Correr (Jogo)</span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (mode === 'runner') {
-                const base = GAME_ASSETS.subwayPay.app;
-                const token =
-                  typeof window !== 'undefined'
-                    ? localStorage.getItem('pg_auth_token') ||
-                      localStorage.getItem('paygateway_token') ||
-                      localStorage.getItem('token') ||
-                      ''
-                    : '';
-                const separator = base.includes('?') ? '&' : '?';
-                const params = new URLSearchParams();
-                params.set('embedded', '1');
-                if (token) params.set('token', token);
-                if (user?.email) params.set('email', user.email);
-                if (user?.name) params.set('name', user.name);
-                if (typeof user?.balance === 'number') params.set('balance', String(user.balance));
-                setMode('lobby');
-                setLoaded(false);
-                setFailed(false);
-                setIframeSrc(`${base}${separator}${params.toString()}#depositar`);
-              } else {
-                try {
-                  if (iframeRef.current?.contentWindow) {
-                    iframeRef.current.contentWindow.location.hash = 'depositar';
-                  }
-                } catch (_) {}
-              }
-            }}
-            className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md"
-          >
-            Depositar agora
-          </button>
-          <button
-            type="button"
-            onClick={handleReload}
-            title="Recarregar jogo"
-            aria-label="Recarregar jogo"
-            className="grid h-8 w-8 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => window.open(iframeSrc, '_blank')}
-            title="Abrir em tela cheia"
-            aria-label="Abrir em nova aba"
-            className="grid h-8 w-8 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      <div className="relative flex-1 w-full h-full overflow-hidden">
+      <div className="relative w-full h-full overflow-hidden">
         {!loaded && !failed && (
           <div className="absolute inset-0 z-[80] grid place-items-center bg-[#0b1329] text-white">
             <div className="flex flex-col items-center gap-3">

@@ -119,7 +119,7 @@ export const AdminAdminsTab: React.FC<AdminAdminsTabProps> = ({
             </thead>
             <tbody className="divide-y divide-black/[0.04]">
               {admins.map((admin) => {
-                const isSuper = (admin.email || '').toLowerCase() === 'admin.eduh@gmail.com';
+                const isSuper = admin.role === 'superadmin';
 
                 return (
                   <tr key={admin.id} className="hover:bg-black/[0.015] transition-colors">

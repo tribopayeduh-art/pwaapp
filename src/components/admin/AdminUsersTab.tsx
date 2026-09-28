@@ -457,9 +457,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
             {/* MOBILE VIEW: High-Contrast Touch Cards (< 768px) */}
             <div className="block md:hidden divide-y divide-slate-100">
               {paginatedUsers.map((user) => {
-                const isSuper =
-                  (user.email || '').toLowerCase() === 'admin.eduh@gmail.com' ||
-                  user.role === 'superadmin';
+                const isSuper = user.role === 'superadmin';
                 const isAdmin = user.role === 'admin';
                 const isAffiliate = user.role === 'affiliate';
                 const isInfluencer = !!user.isInfluencer;
@@ -894,9 +892,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 </thead>
                 <tbody className="divide-y divide-black/[0.04]">
                   {paginatedUsers.map((user) => {
-                    const isSuper =
-                      (user.email || '').toLowerCase() === 'admin.eduh@gmail.com' ||
-                      user.role === 'superadmin';
+                    const isSuper = user.role === 'superadmin';
                     const isAdmin = user.role === 'admin';
                     const isAffiliate = user.role === 'affiliate';
                     const isInfluencer = !!user.isInfluencer;
