@@ -32,7 +32,7 @@ export const GAME_ASSETS = {
     app: publicAsset('raspafortuna/index.html?embedded=1&v=2'),
   },
   bubbleBlast: {
-    cover: publicAsset('Bubbleblast.png'),
+    cover: publicAsset('bubbleblast.png'),
     app: publicAsset('bubbleblast/demo-game.html'),
     lobby: publicAsset('bubbleblast/index.html'),
   },

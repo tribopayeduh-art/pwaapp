@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { ArrowLeft, Loader2, RefreshCw, LayoutGrid, Play } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
 import { GAME_ASSETS } from '../config/gameAssets';
 import { User } from '../types';
 import { setTrackedGame } from '../lib/gameTracking';
@@ -12,152 +12,54 @@ interface Props {
   onShowToast: (message: string, type?: 'info' | 'success' | 'error') => void;
 }
 
-export const BubbleBlastPlayerView: React.FC<Props> = ({
-  user,
-  onBack,
-  onDeposit,
-  onBalanceChange,
-  onShowToast,
-}) => {
+/** Bubble Blast is a self-contained demo with virtual credits, not the account wallet. */
+export const BubbleBlastPlayerView: React.FC<Props> = ({ user, onBack }) => {
+  const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [mode, setMode] = useState<'game' | 'portal'>('game');
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const src = useMemo(() => {
+    const url = new URL(GAME_ASSETS.bubbleBlast.app, window.location.href);
+    url.searchParams.set('embedded', '1');
+    if (user?.id != null) url.searchParams.set('player', String(user.id));
+    url.searchParams.set('v', String(attempt));
+    return url.toString();
+  }, [attempt, user?.id]);
 
   useEffect(() => {
     setTrackedGame('g_bubble_blast', 'bubbleblast_player_view');
   }, []);
 
-  const buildUrl = (targetMode: 'game' | 'portal') => {
-    const base = targetMode === 'game' ? GAME_ASSETS.bubbleBlast.app : GAME_ASSETS.bubbleBlast.lobby;
-    const separator = base.includes('?') ? '&' : '?';
-    const params = new URLSearchParams();
-    params.set('embedded', '1');
-    if (user?.balance !== undefined) {
-      params.set('betCents', String(Math.max(500, Math.min(10000, Math.round(Number(user.balance) * 100)))));
-    }
-    return `${base}${separator}${params.toString()}`;
-  };
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.data?.type !== 'bubbleblast:back') return;
+      if (event.source !== document.querySelector<HTMLIFrameElement>('#bubbleblast-frame')?.contentWindow) return;
+      onBack();
+    };
+    window.addEventListener('message', receive);
+    return () => window.removeEventListener('message', receive);
+  }, [onBack]);
 
-  const [iframeSrc, setIframeSrc] = useState<string>(() => buildUrl('game'));
+  useEffect(() => {
+    if (loaded) return;
+    const timer = window.setTimeout(() => setFailed(true), 15000);
+    return () => window.clearTimeout(timer);
+  }, [loaded, attempt]);
 
-  const switchMode = (newMode: 'game' | 'portal') => {
-    setMode(newMode);
-    setLoaded(false);
-    setFailed(false);
-    setIframeSrc(buildUrl(newMode));
-  };
-
-  const handleReload = () => {
-    setLoaded(false);
-    setFailed(false);
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeSrc;
-    }
-  };
+  const retry = () => { setLoaded(false); setFailed(false); setAttempt(value => value + 1); };
 
   return (
-    <div className="relative w-full h-[100dvh] flex flex-col bg-[#110e24] overflow-hidden select-none">
-      {/* Top Header Bar */}
-      <header className="shrink-0 h-14 bg-[#1a1438]/95 backdrop-blur-md border-b border-purple-500/20 px-3 sm:px-4 flex items-center justify-between z-30">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white font-mono text-xs font-bold transition-all cursor-pointer border border-white/10"
-            title="Voltar ao Lobby"
-          >
-            <ArrowLeft className="w-4 h-4 text-white" />
-            <span className="hidden sm:inline">Lobby</span>
-          </button>
-
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-black text-white tracking-wide flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
-              Bubble Blast
-            </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
-              Oficial
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="bg-black/30 p-0.5 rounded-xl border border-white/10 flex items-center">
-            <button
-              type="button"
-              onClick={() => switchMode('game')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                mode === 'game'
-                  ? 'bg-pink-600 text-white shadow-xs'
-                  : 'text-purple-200 hover:text-white'
-              }`}
-            >
-              <Play className="w-3 h-3 fill-current" />
-              <span>Jogo</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode('portal')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                mode === 'portal'
-                  ? 'bg-pink-600 text-white shadow-xs'
-                  : 'text-purple-200 hover:text-white'
-              }`}
-            >
-              <LayoutGrid className="w-3 h-3" />
-              <span>Painel</span>
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleReload}
-            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer active:scale-95 border border-white/10"
-            title="Recarregar Partida"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${!loaded ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#110e24] text-white">
+      <header className="z-10 flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-[#1a1438] px-3 safe-area-inset-top">
+        <button type="button" onClick={onBack} className="flex min-h-11 items-center gap-2 rounded-xl bg-white/10 px-3 text-sm font-bold" aria-label="Voltar aos jogos">
+          <ArrowLeft size={18} /> <span>Voltar</span>
+        </button>
+        <div className="min-w-0 text-center"><strong className="block truncate text-sm">Bubble Blast</strong><small className="block text-[10px] text-purple-200">Créditos virtuais de teste</small></div>
+        <button type="button" onClick={retry} className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white/10" aria-label="Recarregar jogo"><RefreshCw size={18} /></button>
       </header>
-
-      {/* Main Iframe Player */}
-      <div className="relative flex-1 w-full h-full bg-[#0a0718]">
-        {!loaded && !failed && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[#110e24] text-white">
-            <Loader2 className="w-8 h-8 text-pink-500 animate-spin" />
-            <div className="text-center">
-              <p className="text-sm font-bold tracking-wide">Carregando Bubble Blast...</p>
-              <p className="text-xs text-purple-300/70 mt-0.5">Preparando tabuleiro e bolhas</p>
-            </div>
-          </div>
-        )}
-
-        {failed && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center bg-[#110e24] text-white">
-            <p className="text-sm font-bold text-rose-400 mb-2">Erro ao carregar o jogo</p>
-            <p className="text-xs text-purple-200 mb-4 max-w-xs">
-              Não foi possível estabelecer a conexão com o motor do jogo.
-            </p>
-            <button
-              type="button"
-              onClick={handleReload}
-              className="px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 font-bold text-xs cursor-pointer shadow-md"
-            >
-              Tentar Novamente
-            </button>
-          </div>
-        )}
-
-        <iframe
-          ref={iframeRef}
-          src={iframeSrc}
-          title="Bubble Blast"
-          className="w-full h-full border-0 outline-none"
-          allow="autoplay; fullscreen; clipboard-write"
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
-        />
+      <div className="relative min-h-0 flex-1">
+        {!loaded && !failed && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#110e24]"><Loader2 className="animate-spin text-sky-400" /><span>Carregando o jogo…</span></div>}
+        {failed && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#110e24] p-6 text-center"><p>Não foi possível carregar o jogo.</p><button type="button" onClick={retry} className="rounded-xl bg-sky-500 px-5 py-3 font-bold">Tentar novamente</button></div>}
+        <iframe id="bubbleblast-frame" key={src} src={src} title="Bubble Blast — créditos virtuais" className="h-full w-full border-0" allow="autoplay; fullscreen" onLoad={() => {setLoaded(true);setFailed(false);}} onError={() => setFailed(true)} />
       </div>
     </div>
   );
