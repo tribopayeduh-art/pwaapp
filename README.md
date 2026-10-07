@@ -61,3 +61,15 @@ A gestão de saques inclui busca, filtros por situação e período, ordenação
 A atividade do sistema consulta eventos reais da instância atual, limitados aos últimos 300 e reiniciados com o servidor. O tempo exibido mede somente a resposta deste endpoint. Não é um histórico durável nem uma certificação do banco ou gateway.
 
 As capturas em `docs/admin-previews/` usam dados ilustrativos. O relatório `REVISAO_SISTEMA.md` descreve a validação e os limites.
+
+## Painel de parceiros simplificado
+
+O Alliance Hub agora abre em uma visão geral com quatro indicadores: comissões acumuladas, depósitos da rede, afiliados e jogadores indicados. O link de convite, QR Code, resumo e cadastros recentes ficam em cartões simples. O total de comissões é histórico, não saldo disponível.
+
+A navegação desktop fica na lateral. No celular, Início, Afiliados e Links ficam no menu inferior; Mais abre as outras áreas. Relatórios, ranking, atividade, materiais, simulador e configurações continuam separados. O tema é branco com detalhes azuis, sem GTA VI.
+
+A lista de afiliados mostra busca, filtro principal e uma ação de Detalhes. Filtros adicionais ficam recolhidos e combinam presença online com comissão. A listagem renderiza 20 registros por vez, com Mostrar mais; isso não muda a consulta integral existente no servidor. O CSV exporta os registros filtrados com proteção de células textuais contra fórmulas. Detalhes mantém as ações individuais de comissão, saque automático e aviso.
+
+O painel informa a última atualização e consulta novamente a cada 30 segundos enquanto a página está visível. Requisições não se sobrepõem, expiram após 15 segundos e preservam os últimos dados em falhas. Capturas ilustrativas em `docs/partner-previews/`.
+
+Os três painéis também foram limpos de emojis, estrelas, coroas e enfeites. Ícones de navegação e ações úteis foram mantidos.

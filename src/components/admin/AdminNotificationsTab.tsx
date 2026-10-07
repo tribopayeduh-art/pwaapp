@@ -13,7 +13,7 @@ import {
   Smartphone,
   Search,
   UserCheck,
-  Award,
+  BarChart3,
   Wallet,
   Copy,
   Check,
@@ -81,7 +81,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
   token
 }) => {
   const formRef = useRef<HTMLDivElement>(null);
-  const [title, setTitle] = useState('🔥 Nova Campanha de Comissões Liberada!');
+  const [title, setTitle] = useState(' Nova Campanha de Comissões Liberada!');
   const [message, setMessage] = useState(
     'Aproveite as novas taxas de CPA deste fim de semana. Compartilhe seu link exclusivo e turbine seus lucros agora!'
   );
@@ -153,17 +153,17 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
     { id: 'all_affiliates' as const, label: 'Todos os Afiliados' },
     { id: 'active_affiliates' as const, label: 'Afiliados Ativos' },
     { id: 'influencers' as const, label: 'Influenciadores VIP' },
-    { id: 'single_affiliate' as const, label: '🎯 Afiliado Específico' }
+    { id: 'single_affiliate' as const, label: ' Afiliado Específico' }
   ];
 
   const quickTemplates = [
     {
-      title: '🔥 Nova Bonificação de CPA!',
+      title: ' Nova Bonificação de CPA!',
       message: 'Comissões turbinadas ativadas para todos os depósitos das próximas 48 horas. Acelere seus disparos!',
       target: 'all_affiliates' as const
     },
     {
-      title: '📈 Meta Batida = Bônus Extra!',
+      title: ' Meta Batida = Bônus Extra!',
       message: 'Parabéns pelos seus resultados! Como parceiro destaque, liberamos um bônus exclusivo na sua carteira.',
       target: 'active_affiliates' as const
     },
@@ -234,7 +234,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
 
       // 1. Trigger in-app local notification banner and sound immediately
       triggerInAppNotification({
-        title: title || 'Teste: Você vendeu! 💰',
+        title: title || 'Teste: Você vendeu! ',
         body: message || 'Comissão de R$ 75,00 creditada na sua conta!',
         url: '/?tab=affiliates'
       });
@@ -247,7 +247,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
         },
         body: JSON.stringify({
-          title: title || 'Teste: Você vendeu! 💰',
+          title: title || 'Teste: Você vendeu! ',
           body: message || 'Comissão de R$ 75,00 creditada no seu saldo!',
           endpoint,
           forceAll: true
@@ -426,7 +426,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
               <div className="flex items-center gap-2">
                 <h4 className="text-xs font-bold text-slate-900">Webhook Discord de Afiliados</h4>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#5865F2]/20 text-[#5865F2]">
-                  Espelhamento em Tempo Real Ativo ✓
+                  Espelhamento em Tempo Real Ativo 
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 mt-0.5 font-mono truncate max-w-md sm:max-w-xl">
@@ -504,7 +504,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                     }}
                     className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 text-slate-700 hover:text-amber-900 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Award className="w-3.5 h-3.5 text-amber-500" />
+                    <BarChart3 className="w-3.5 h-3.5 text-amber-500" />
                     <span>{item.title}</span>
                   </button>
                 ))}
@@ -518,7 +518,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                   <span>Público-Alvo do Disparo</span>
                   <span className="text-[10px] font-medium text-amber-700">
                     {target === 'single_affiliate'
-                      ? '🎯 Disparo exclusivo individual'
+                      ? ' Disparo exclusivo individual'
                       : 'Restrito a parceiros afiliados'}
                   </span>
                 </label>
@@ -566,11 +566,11 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                             <strong className="text-xs text-slate-900">{selectedAffiliate.name}</strong>
                             {selectedAffiliate.hasPush ? (
                               <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
-                                📱 Push Ativo
+                                 Push Ativo
                               </span>
                             ) : (
                               <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600">
-                                ⏳ Push Pendente
+                                 Push Pendente
                               </span>
                             )}
                           </div>
@@ -581,7 +581,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                         </div>
                       </div>
                       <span className="px-2 py-1 rounded-lg bg-[#34C759]/15 text-[#248A3D] text-[11px] font-bold">
-                        Selecionado ✓
+                        Selecionado 
                       </span>
                     </div>
                   ) : (
@@ -591,7 +591,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                       </p>
                       <p className="text-[11px] text-slate-500">
                         Escolha um afiliado na tabela abaixo clicando no botão{' '}
-                        <strong className="text-[#007AFF]">"🎯 Disparar para este Afiliado"</strong>.
+                        <strong className="text-[#007AFF]">" Disparar para este Afiliado"</strong>.
                       </p>
                     </div>
                   )}
@@ -604,7 +604,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Ex: 🚀 Bônus Especial de Afiliado Liberado!"
+                  placeholder="Ex:  Bônus Especial de Afiliado Liberado!"
                   className="w-full h-10 px-3.5 bg-[#767680]/10 focus:bg-white text-slate-900 text-xs font-medium rounded-xl border border-transparent focus:border-[#007AFF] focus:outline-none transition-all"
                   required
                 />
@@ -676,9 +676,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
             <div className="bg-white/20 backdrop-blur-xl border border-white/25 rounded-2xl p-3.5 text-slate-900 shadow-xl space-y-1 text-left mb-12">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-md bg-amber-500 text-white flex items-center justify-center text-[9px] font-bold">
-                    ★
-                  </div>
+                  
                   <span className="text-[10px] font-bold text-white uppercase tracking-wider">
                     {target === 'single_affiliate' && selectedAffiliate
                       ? `AFILIADO • ${selectedAffiliate.name.toUpperCase().slice(0, 14)}`
@@ -752,7 +750,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                 : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
             }`}
           >
-            <span>📱 Com Push Ativo</span>
+            <span> Com Push Ativo</span>
             <span className="opacity-80 font-bold">
               ({affiliates.filter((a) => a.hasPush).length})
             </span>
@@ -780,7 +778,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                 : 'bg-purple-50 text-purple-800 hover:bg-purple-100'
             }`}
           >
-            <span>💰 Com Saldo de Comissão</span>
+            <span> Com Saldo de Comissão</span>
             <span className="opacity-80 font-bold">
               ({affiliates.filter((a) => a.affiliateBalance > 0).length})
             </span>
@@ -941,11 +939,11 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
 
                       {aff.hasPush ? (
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 shrink-0">
-                          📱 Ativo
+                           Ativo
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-500 shrink-0">
-                          ⏳ Pendente
+                           Pendente
                         </span>
                       )}
                     </div>

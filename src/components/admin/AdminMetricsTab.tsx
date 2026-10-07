@@ -8,14 +8,12 @@ import {
   Percent,
   ChevronRight,
   Clock,
-  Sparkles,
   ArrowDownLeft,
   Activity,
   CheckCircle2,
   AlertCircle,
   Radio,
   Gamepad2,
-  Zap,
   BarChart3,
   Layers,
   SlidersHorizontal,
@@ -1030,7 +1028,7 @@ export const AdminMetricsTab: React.FC<AdminMetricsTabProps> = ({
                   {sess.userName}
                 </span>
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                  <Zap className="w-2.5 h-2.5 fill-emerald-300" />
+                  <Activity className="w-2.5 h-2.5 fill-emerald-300" />
                   {sess.multiplier.toFixed(2)}x
                 </span>
               </div>

@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
-import { 
-  Loader2, 
-  AlertCircle, 
-  ShieldCheck, 
-  Wallet, 
-  ArrowUpRight, 
-  CheckCircle2, 
-  Zap, 
-  Clock, 
-  Coins, 
+import {
+  Loader2,
+  AlertCircle,
+  ShieldCheck,
+  Wallet,
+  ArrowUpRight,
+  CheckCircle2,
+  Zap,
+  Clock,
+  Coins,
   ExternalLink,
   Copy,
   Check,

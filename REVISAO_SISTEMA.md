@@ -80,3 +80,19 @@ TypeScript, os 16 testes e o build cliente/servidor passaram. O build mantém av
 No navegador Chromium, com APIs simuladas apenas para QA, foram verificados: renderização desktop (1440 × 1080), período do gráfico e tabela, busca de usuário, salvamento de prioridade/revisão, manutenção do saque pendente após envio, esquema dos eventos, navegação móvel (390 × 844), cartões e modais. Não houve erros não tratados do React/navegador nem overflow horizontal da página móvel verificada. As capturas ilustrativas estão em `docs/admin-previews/`.
 
 Esta validação não usa contas, banco ou gateway reais. As permissões e integrações precisam ser conferidas no ambiente de homologação; a central auxilia a revisão, mas não resolve automaticamente conciliações bancárias.
+
+## Simplificação do painel de parceiros
+
+A interface principal foi reorganizada em visão geral, lista e ferramentas. Foram removidos da abertura os banners grandes, a faixa de gamificação e os atalhos duplicados. O menu lateral agrupa as áreas; no celular a navegação usa quatro opções e um diálogo acessível de Mais.
+
+A lista principal tem menos colunas e ações concentradas em Detalhes; no celular usa cartões. Filtros avançados ficam recolhidos, o exportador usa a lista filtrada e a renderização começa com 20 itens. Foi corrigida a combinação dos filtros de presença/saque e comissão, antes interrompida por retornos antecipados. A consulta da API ainda carrega a rede integral: renderização progressiva não é paginação de banco.
+
+Os detalhes do afiliado usam o modal compartilhado com foco, Escape e restauração de foco. O editor de comissão permanece acessível após fechar o diálogo de detalhes. O link pode ser selecionado manualmente se a área de transferência não estiver disponível. A atualização possui bloqueio de requisições sobrepostas, timeout, data de atualização e erro visível. O polling passou de 15 para 30 segundos e pausa quando a página está oculta.
+
+Validação: TypeScript, build e 16 testes financeiros existentes passaram. Em Chromium com respostas de QA isoladas foram verificados visão geral desktop, carregamento progressivo, filtros combinados, busca vazia/limpeza, CSV, detalhes por teclado, editor de comissão, falha e recuperação de atualização, cartões e navegação móvel em 390 × 844 e relatórios. Não houve erros não tratados nem gravações involuntárias nos testes de interface. Não foram usados serviços ou dados reais. As telas avançadas mantêm seus formulários legados com estilo mais sóbrio; esta entrega concentra a simplificação nos fluxos de entrada e gestão de afiliados.
+
+## Limpeza de símbolos dos painéis
+
+Removidos emojis, estrelas, coroas, chamas e troféus decorativos das telas de afiliados, admin e parceiros, incluindo filtros, rótulos, modais e textos de exemplo. Raios, caveiras e medalhas foram substituídos por ícones neutros de atividade/configuração/relatórios quando identificavam um controle. Foram mantidos os ícones funcionais de navegação, copiar, busca, carteira, ações e estados, além dos símbolos de atalhos de teclado.
+
+A mudança é de apresentação; as regras e permissões permanecem iguais. TypeScript e build passaram. As verificações de navegador dos painéis admin e parceiro passaram; a área de afiliados também foi renderizada no celular sem estrelas ou coroas. As verificações usam dados ilustrativos com APIs de QA, sem operações financeiras reais. A sincronização preexistente de preferências de push foi simulada na verificação do painel de afiliados.

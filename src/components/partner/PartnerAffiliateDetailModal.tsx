@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Modal } from '../Modal';
 import {
   X,
   User,
@@ -55,15 +56,8 @@ export const PartnerAffiliateDetailModal: React.FC<PartnerAffiliateDetailModalPr
   const waUrl = cleanPhone ? `https://wa.me/${cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`}` : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-zinc-200 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
+    <Modal isOpen={isOpen} onClose={onClose} title="Detalhes do afiliado" maxWidth="max-w-lg">
+      <div className="partner-clean">
         {/* Affiliate Profile Header */}
         <div className="flex items-start gap-3.5 mb-6">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center text-lg font-bold shadow-md shadow-emerald-500/20">
@@ -292,6 +286,6 @@ export const PartnerAffiliateDetailModal: React.FC<PartnerAffiliateDetailModalPr
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

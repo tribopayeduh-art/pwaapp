@@ -15,7 +15,7 @@ import {
   Eye,
   EyeOff,
   Server,
-  Zap,
+  Activity,
   Globe,
   Radio,
   CheckCircle2,
@@ -445,7 +445,7 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
         <div className="bg-white rounded-2xl p-5 border border-black/[0.06] shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
             <span>Saldo Pendente / Em Trânsito</span>
-            <Zap className="w-4 h-4 text-amber-500" />
+            <Activity className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-2xl font-bold text-slate-900 tracking-tight mt-2">
             {formatBRL(data?.balance.pendingReais || 0)}
@@ -476,7 +476,7 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
         <div className="p-4 sm:p-5 border-b border-black/[0.05] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-emerald-50/70 to-teal-50/40">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
-              <Zap className="w-5 h-5 fill-current" />
+              <Activity className="w-5 h-5 fill-current" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -511,7 +511,7 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
                   : 'bg-slate-800 hover:bg-slate-900 text-white'
               }`}
             >
-              <Zap className="w-3.5 h-3.5 fill-current" />
+              <Activity className="w-3.5 h-3.5 fill-current" />
               <span>
                 {togglingAutoCashout
                   ? 'Alterando...'
@@ -999,7 +999,7 @@ export const AdminDotfyTab: React.FC<AdminDotfyTabProps> = ({
         <div className="p-4 sm:p-5 border-b border-black/[0.05] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#F9F9FB]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Zap className="w-4 h-4" />
+              <Activity className="w-4 h-4" />
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900">

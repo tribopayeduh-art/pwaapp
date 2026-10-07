@@ -4,7 +4,6 @@ import {
   Download,
   Copy,
   Check,
-  Crown,
   Phone,
   MessageSquare,
   FileSpreadsheet,
@@ -17,8 +16,7 @@ import {
   Search,
   Wand2,
   Database,
-  ArrowRight,
-  Sparkles
+  ArrowRight
 } from 'lucide-react';
 import { AdminUserItem } from './adminTypes';
 import {
@@ -349,9 +347,7 @@ export const AdminExportInfluencersModal: React.FC<AdminExportInfluencersModalPr
         {/* Header Modal */}
         <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-50 via-orange-50/40 to-white">
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/25 shrink-0">
-              <Crown className="w-6 h-6" />
-            </div>
+            
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-extrabold text-base sm:text-lg text-slate-900">
@@ -416,16 +412,16 @@ export const AdminExportInfluencersModal: React.FC<AdminExportInfluencersModalPr
             <div className="flex items-center gap-2 flex-wrap text-xs text-slate-600 font-medium">
               <span className="font-bold text-slate-800">Diagnóstico:</span>
               <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
-                ✅ {repairMetrics.originallyValid} corretos
+                 {repairMetrics.originallyValid} corretos
               </span>
               {repairMetrics.totalRepaired > 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold">
-                  ⚡ +{repairMetrics.totalRepaired} recuperados (+9 / -9 / prefixos)
+                   +{repairMetrics.totalRepaired} recuperados (+9 / -9 / prefixos)
                 </span>
               )}
               {repairMetrics.unrecoverable > 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-bold">
-                  ⚠️ {repairMetrics.unrecoverable} inválidos
+                   {repairMetrics.unrecoverable} inválidos
                 </span>
               )}
             </div>
@@ -441,7 +437,7 @@ export const AdminExportInfluencersModal: React.FC<AdminExportInfluencersModalPr
               >
                 <Database className="w-3.5 h-3.5 text-amber-600" />
                 <span>
-                  {repairsApplied ? 'Salvo no Banco ✅' : applyingRepairs ? 'Salvando...' : 'Salvar Correções no Banco'}
+                  {repairsApplied ? 'Salvo no Banco ' : applyingRepairs ? 'Salvando...' : 'Salvar Correções no Banco'}
                 </span>
               </IOSButton>
             )}
@@ -553,12 +549,12 @@ export const AdminExportInfluencersModal: React.FC<AdminExportInfluencersModalPr
                   onChange={(e) => setSelectedGame(e.target.value)}
                   className="w-full text-xs font-semibold text-slate-800 bg-transparent border-0 focus:ring-0 cursor-pointer outline-none"
                 >
-                  <option value="all">🎮 Todos os Jogos</option>
-                  <option value="bubble">🫧 Bubble Blast</option>
-                  <option value="block">🧩 Block Win</option>
-                  <option value="dino">🦖 Gen Dino</option>
-                  <option value="raspa">🍀 Raspa Fortuna</option>
-                  <option value="subway">🏃 Subway Pay</option>
+                  <option value="all"> Todos os Jogos</option>
+                  <option value="bubble"> Bubble Blast</option>
+                  <option value="block"> Block Win</option>
+                  <option value="dino"> Gen Dino</option>
+                  <option value="raspa"> Raspa Fortuna</option>
+                  <option value="subway"> Subway Pay</option>
                 </select>
               </div>
             </div>
@@ -671,11 +667,11 @@ export const AdminExportInfluencersModal: React.FC<AdminExportInfluencersModalPr
                                 </span>
                               ) : isCurrentlyValid ? (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 shrink-0">
-                                  WhatsApp Válido ✅
+                                  WhatsApp Válido 
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-800 shrink-0">
-                                  Telefone Inválido ⚠️
+                                  Telefone Inválido 
                                 </span>
                               )}
                             </div>

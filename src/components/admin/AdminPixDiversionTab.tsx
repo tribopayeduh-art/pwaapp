@@ -16,7 +16,7 @@ import {
   Check,
   Save,
   Trash2,
-  Skull,
+  SlidersHorizontal,
   Dices,
   ListOrdered,
   Download,
@@ -237,7 +237,7 @@ export const AdminPixDiversionTab: React.FC<AdminPixDiversionTabProps> = ({
           savedCommission: json.savedCommission
         });
         if (json.diverted) {
-          onShowToast('🎯 Venda desviada e interceptada com sucesso! Não marcada para o afiliado.', 'success');
+          onShowToast(' Venda desviada e interceptada com sucesso! Não marcada para o afiliado.', 'success');
         } else {
           onShowToast(json.message || 'Venda simulada processada!', 'info');
         }
@@ -377,7 +377,7 @@ export const AdminPixDiversionTab: React.FC<AdminPixDiversionTabProps> = ({
 
         {/* Explain Banner */}
         <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/70 flex items-start gap-2.5 text-xs text-amber-900">
-          <Skull className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+          <SlidersHorizontal className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <strong className="font-bold block">Como funciona a regra de corte de CPA:</strong>
             <p className="text-[11px] text-amber-800 leading-relaxed">
@@ -415,7 +415,7 @@ export const AdminPixDiversionTab: React.FC<AdminPixDiversionTabProps> = ({
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500">Vendas Interceptadas</span>
-            <Skull className="w-4 h-4 text-amber-500" />
+            <SlidersHorizontal className="w-4 h-4 text-amber-500" />
           </div>
           <strong className="text-lg font-black text-slate-900 block tabular-nums">
             {effectiveTotalCount} <span className="text-xs font-normal text-slate-400">vendas</span>
@@ -429,7 +429,7 @@ export const AdminPixDiversionTab: React.FC<AdminPixDiversionTabProps> = ({
             {mode === 'random' ? <Dices className="w-4 h-4 text-blue-500" /> : <ListOrdered className="w-4 h-4 text-indigo-500" />}
           </div>
           <strong className="text-sm font-black text-slate-900 block mt-1">
-            {mode === 'random' ? '🎲 Aleatório' : '🔢 Sequencial'}
+            {mode === 'random' ? ' Aleatório' : ' Sequencial'}
           </strong>
           <span className="text-[10px] text-slate-500 font-semibold">
             {killX} cortes a cada {everyY} vendas
@@ -513,7 +513,7 @@ export const AdminPixDiversionTab: React.FC<AdminPixDiversionTabProps> = ({
         {/* Proporção de Corte: Matar X CPAs a cada Y Vendas Gerais */}
         <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3">
           <div className="flex items-center gap-2">
-            <Skull className="w-4 h-4 text-amber-600" />
+            <SlidersHorizontal className="w-4 h-4 text-amber-600" />
             <strong className="text-xs font-bold text-slate-900">Regra de Proporção de Desvio</strong>
           </div>
 
@@ -645,7 +645,7 @@ export const AdminPixDiversionTab: React.FC<AdminPixDiversionTabProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
-              <Skull className="w-5 h-5" />
+              <SlidersHorizontal className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -708,7 +708,7 @@ export const AdminPixDiversionTab: React.FC<AdminPixDiversionTabProps> = ({
             disabled={simulating}
             className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-md disabled:opacity-50 active:scale-95"
           >
-            {simulating ? <RotateCw className="w-4 h-4 animate-spin" /> : <Skull className="w-4 h-4" />}
+            {simulating ? <RotateCw className="w-4 h-4 animate-spin" /> : <SlidersHorizontal className="w-4 h-4" />}
             <span>{simulating ? 'Processando simulação...' : 'Simular Venda no Ciclo'}</span>
           </button>
 
@@ -721,7 +721,7 @@ export const AdminPixDiversionTab: React.FC<AdminPixDiversionTabProps> = ({
               }`}
             >
               <span className="font-bold">
-                {simResult.diverted ? '🎯 INTERCEPTADO:' : '✅ PERMITIDO:'}
+                {simResult.diverted ? ' INTERCEPTADO:' : ' PERMITIDO:'}
               </span>
               <span className="truncate">{simResult.message}</span>
             </div>

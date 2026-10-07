@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   X,
-  Zap,
+  Activity,
   Shuffle,
   Calendar,
   CreditCard,
@@ -87,7 +87,7 @@ export const PartnerInterceptedSalesModal: React.FC<PartnerInterceptedSalesModal
         <div className="p-4 sm:p-5 border-b border-zinc-100 flex items-start justify-between gap-3 bg-zinc-50/70">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shadow-2xs shrink-0">
-              <Zap className="w-5 h-5 fill-amber-500/20" />
+              <Activity className="w-5 h-5 fill-amber-500/20" />
             </div>
             <div>
               <div className="flex items-center gap-2">

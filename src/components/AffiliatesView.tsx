@@ -5,7 +5,7 @@ import { ReferralCard } from './ReferralCard';
 import { ManageIndicatedModal } from './ManageIndicatedModal';
 import { AffiliateWithdrawModal } from './AffiliateWithdrawModal';
 import { Pagination } from './Pagination';
-import { Users, ShieldCheck, UserCheck, ArrowLeft, Settings, BarChart3, Wallet, TrendingUp, X, Coins, ArrowDownLeft, Search, Loader2, RotateCw, Sun, Moon, Bell, Gamepad2, UserPlus, BadgeDollarSign, Filter, ChevronRight, CheckCircle2, Clock3, Smartphone, Copy, Check, Crown } from 'lucide-react';
+import { Users, ShieldCheck, UserCheck, ArrowLeft, Settings, BarChart3, Wallet, TrendingUp, X, Coins, ArrowDownLeft, Search, Loader2, RotateCw, Sun, Moon, Bell, Gamepad2, UserPlus, BadgeDollarSign, Filter, ChevronRight, CheckCircle2, Clock3, Smartphone, Copy, Check } from 'lucide-react';
 import logoImg from './logo.webp';
 import { getNotificationState, requestNotificationPermission, registerServiceWorker, triggerSaleNotification, syncNotificationPreferences } from '../lib/pwaNotification';
 
@@ -237,7 +237,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
     await registerServiceWorker();
     localStorage.setItem('pg_gateway_notifications', 'true');
     setBrowserNotificationsEnabled(true);
-    await triggerSaleNotification({ customTitle: 'Notificações ativadas! 🔔', customSubtitle: 'Você receberá os eventos e novidades no Programa de Afiliados.' });
+    await triggerSaleNotification({ customTitle: 'Notificações ativadas! ', customSubtitle: 'Você receberá os eventos e novidades no Programa de Afiliados.' });
     if (res.isIframe && !res.granted) {
       onShowToast?.('Notificações In-App ativadas com som! (Para Push nativo no SO, abra o app em uma nova aba).', 'info');
     } else {
@@ -491,7 +491,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
           </h1>
           <p className="text-xs text-[#737373]">Convide pessoas e acompanhe suas indicações.</p>
         </div>
-        <span className="affiliate-version-badge lg:hidden">v5</span>
+        
         <button onClick={() => setAffiliateTheme(theme => theme === 'light' ? 'dark' : 'light')} className="affiliate-theme-button affiliate-theme-mobile lg:hidden" aria-label="Alternar tema">{affiliateTheme === 'light' ? <Moon className="w-4 h-4"/> : <Sun className="w-4 h-4"/>}</button>
         <div className="hidden lg:flex ml-auto items-center gap-2">
           <button onClick={() => setAffiliateTheme(theme => theme === 'light' ? 'dark' : 'light')} className="affiliate-theme-button" title="Alternar tema">{affiliateTheme === 'light' ? <Moon className="w-4 h-4"/> : <Sun className="w-4 h-4"/>}<span>{affiliateTheme === 'light' ? 'Escuro' : 'Claro'}</span></button>
@@ -499,7 +499,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             Rede ativa
           </span>
-          <span className="affiliate-version-badge">Hub v5</span>
+          
           <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-500">
             Código {activeInfo.referralCode}
           </span>
@@ -613,7 +613,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
                 className="px-3 py-1.5 bg-gradient-to-r from-amber-500 via-emerald-600 to-teal-700 hover:from-amber-600 hover:to-teal-800 text-white text-[11px] font-black rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 border border-emerald-400/30"
                 title="Acessar Painel de Parceiro VIP (parceiro.goalliancehub.com ou /parceiros)"
               >
-                <Crown className="w-3.5 h-3.5 text-amber-200 shrink-0" />
+                
                 <span>Painel Parceiro</span>
               </button>
             )}
@@ -622,11 +622,11 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
               <Filter className="w-3.5 h-3.5"/>
               <select value={gameFilter} onChange={e => setGameFilter(e.target.value as typeof gameFilter)}>
                 <option value="all">Todos os jogos</option>
-                <option value="g_subway_pay">🏃 Subway Pay</option>
-                <option value="g_bubble_blast">🫧 Bubble Blast</option>
-                <option value="g_block_puzzle">🧩 Block Win</option>
-                <option value="g_gen_dino">🦖 GEN DINO</option>
-                <option value="g_raspa_fortuna">🍀 Raspa Fortuna</option>
+                <option value="g_subway_pay"> Subway Pay</option>
+                <option value="g_bubble_blast"> Bubble Blast</option>
+                <option value="g_block_puzzle"> Block Win</option>
+                <option value="g_gen_dino"> GEN DINO</option>
+                <option value="g_raspa_fortuna"> Raspa Fortuna</option>
               </select>
             </div>
             <button
@@ -987,7 +987,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
                   const indFtds = getItemFtds(ind);
                   const indConv = getItemConversion(ind);
                   const rankClass = absIndex === 0 ? 'top1' : absIndex === 1 ? 'top2' : absIndex === 2 ? 'top3' : 'other';
-                  const rankIcon = absIndex === 0 ? '🥇' : absIndex === 1 ? '🥈' : absIndex === 2 ? '🥉' : `${absIndex + 1}º`;
+                  const rankIcon = absIndex === 0 ? '' : absIndex === 1 ? '' : absIndex === 2 ? '' : `${absIndex + 1}º`;
 
                   return (
                     <button
@@ -1392,7 +1392,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
                               }}
                               className="text-[11px] font-semibold text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100/70 px-2 py-0.5 rounded-lg transition-colors cursor-pointer border border-amber-200/60"
                             >
-                              ✏️ Trocar o valor que vai liberar para o influenciador
+                               Trocar o valor que vai liberar para o influenciador
                             </button>
                           ) : (
                             <div className="bg-amber-50/70 p-2.5 rounded-xl border border-amber-200 space-y-1.5">
@@ -1509,12 +1509,12 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full sm:w-auto">
             <select value={gameFilter} onChange={(e) => setGameFilter(e.target.value as typeof gameFilter)} className="bg-[#F5F5F5] border border-[#E5E5E5] text-[11px] font-semibold text-[#111111] px-2.5 py-1.5 rounded-xl outline-none">
-              <option value="all">🎮 Todos os Jogos</option>
-              <option value="g_subway_pay">🏃 Subway Pay</option>
-              <option value="g_bubble_blast">🫧 Bubble Blast</option>
-              <option value="g_block_puzzle">🧩 Block Win</option>
-              <option value="g_gen_dino">🦖 GEN DINO</option>
-              <option value="g_raspa_fortuna">🍀 Raspa Fortuna</option>
+              <option value="all"> Todos os Jogos</option>
+              <option value="g_subway_pay"> Subway Pay</option>
+              <option value="g_bubble_blast"> Bubble Blast</option>
+              <option value="g_block_puzzle"> Block Win</option>
+              <option value="g_gen_dino"> GEN DINO</option>
+              <option value="g_raspa_fortuna"> Raspa Fortuna</option>
             </select>
             <select value={depositFilter} onChange={(e) => setDepositFilter(e.target.value as typeof depositFilter)} className="bg-[#F5F5F5] border border-[#E5E5E5] text-[11px] font-semibold text-[#111111] px-2.5 py-1.5 rounded-xl outline-none">
               <option value="all">Todos da minha rede</option>
@@ -1587,34 +1587,34 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
                         if (gid === 'g_subway_pay' || gid.includes('subway')) {
                           return (
                             <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5 shrink-0 shadow-2xs">
-                              <span>🏃</span> Subway Pay
+                               Subway Pay
                             </span>
                           );
                         }
                         if (gid === 'g_bubble_blast' || gid.includes('bubble')) {
                           return (
                             <span className="bg-purple-100 text-purple-900 border border-purple-300 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5 shrink-0 shadow-2xs">
-                              <span>🫧</span> Bubble Blast
+                               Bubble Blast
                             </span>
                           );
                         }
                         if (gid === 'g_gen_dino') {
                           return (
                             <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5 shrink-0 shadow-2xs">
-                              <span>🦖</span> Dino
+                               Dino
                             </span>
                           );
                         }
                         if (gid === 'g_raspa_fortuna') {
                           return (
                             <span className="bg-orange-100 text-orange-900 border border-orange-300 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5 shrink-0 shadow-2xs">
-                              <span>🍀</span> Raspa
+                               Raspa
                             </span>
                           );
                         }
                         return (
                           <span className="bg-cyan-100 text-cyan-900 border border-cyan-300 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5 shrink-0 shadow-2xs">
-                            <span>🧩</span> Block Win
+                             Block Win
                           </span>
                         );
                       })()}
@@ -1632,11 +1632,11 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
                       {/* Tag de Parceiro VIP */}
                       {ind.partnerApproved ? (
                         <span className="bg-gradient-to-r from-amber-100 to-emerald-100 text-emerald-950 border border-emerald-300 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5 shrink-0 shadow-2xs" title={`Parceiro Oficial VIP (${ind.partnerCode || 'VIP'})`}>
-                          <Crown className="w-2.5 h-2.5 text-amber-600" /> Parceiro ({ind.partnerCode || 'VIP'})
+                           Parceiro ({ind.partnerCode || 'VIP'})
                         </span>
                       ) : ind.partnerRequested ? (
                         <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[8px] px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5 shrink-0" title="Solicitou acesso ao Painel de Parceiros">
-                          <span>⏳</span> Pedido Parceiro
+                          <span></span> Pedido Parceiro
                         </span>
                       ) : null}
 
@@ -1646,7 +1646,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
                           className="bg-purple-100 text-purple-900 border border-purple-300 text-[8px] px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5 shrink-0 shadow-2xs"
                           title={`Jogador trazido pelo influenciador ${ind.referredByInfluencerName || 'da rede'}`}
                         >
-                          <span className="text-[9px]">⭐</span> Via {ind.referredByInfluencerName || 'Influenciador'}
+                           Via {ind.referredByInfluencerName || 'Influenciador'}
                         </span>
                       )}
                       {/* Tag de Saque Bloqueado / Saldo de Afiliado */}
@@ -1655,7 +1655,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
                           className="bg-rose-50 text-rose-800 border border-rose-200 text-[8px] px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5 shrink-0 shadow-2xs"
                           title="Saque bloqueado pelo sistema: saldo concedido por afiliado / modo influenciador"
                         >
-                          <span>🔒</span> Saque Bloqueado
+                           Saque Bloqueado
                         </span>
                       )}
                     </div>
@@ -1703,7 +1703,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
                         }`}
                         title="Definir este usuário como Parceiro VIP com acesso a parceiro.goalliancehub.com ou /parceiros"
                       >
-                        <Crown className="w-3 h-3 text-amber-600 shrink-0" />
+                        
                         <span className="hidden xs:inline">{ind.partnerApproved ? 'Parceiro' : 'Tornar Parceiro'}</span>
                       </button>
                     )}

@@ -9,8 +9,7 @@ import {
   Sliders,
   DollarSign,
   Loader2,
-  ArrowLeft,
-  Crown
+  ArrowLeft
 } from 'lucide-react';
 import { User } from '../../types';
 
@@ -99,9 +98,7 @@ export const PartnerRequestView: React.FC<PartnerRequestViewProps> = ({
           </button>
         </div>
 
-        <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/20">
-          <Crown className="w-8 h-8" />
-        </div>
+        
 
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold mb-3 border border-emerald-100">
           <ShieldCheck className="w-3.5 h-3.5" />
@@ -200,7 +197,7 @@ export const PartnerRequestView: React.FC<PartnerRequestViewProps> = ({
                 </>
               ) : (
                 <>
-                  <Crown className="w-4 h-4 text-amber-400" />
+                  
                   Solicitar Liberação de Parceiro
                   <ArrowRight className="w-4 h-4" />
                 </>

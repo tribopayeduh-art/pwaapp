@@ -3,7 +3,6 @@ import {
   DollarSign,
   Wallet,
   Shield,
-  Crown,
   Lock,
   Percent,
   CheckCircle2,
@@ -112,8 +111,8 @@ export const AdminBalanceModal: React.FC<AdminBalanceModalProps> = ({
   };
 
   const walletOptions = [
-    { id: 'player' as const, label: '🎮 Carteira de Jogo' },
-    { id: 'affiliate' as const, label: '💼 Carteira do Afiliado' }
+    { id: 'player' as const, label: ' Carteira de Jogo' },
+    { id: 'affiliate' as const, label: ' Carteira do Afiliado' }
   ];
 
   const actionOptions = [
@@ -409,7 +408,7 @@ export const AdminBalanceModal: React.FC<AdminBalanceModalProps> = ({
                 <div className="p-2.5 bg-white/90 rounded-xl border border-amber-200/60 text-[11px] text-slate-600 leading-relaxed">
                   A cada <strong className="text-slate-900">{cpaKillerEveryX} depósitos</strong> do link, os primeiros {cpaKillerEveryX - cpaKillerKillY} pagam normalmente e as últimas <strong className="text-rose-600">{cpaKillerKillY} comissões</strong> são retidas 100% para a casa.
                   <div className="mt-1 text-[10px] font-semibold text-amber-800">
-                    🔒 O afiliado não recebe notificação nem visualiza o desvio.
+                     O afiliado não recebe notificação nem visualiza o desvio.
                   </div>
                 </div>
 

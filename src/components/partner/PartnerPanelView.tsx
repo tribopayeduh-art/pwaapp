@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Users,
   TrendingUp,
@@ -16,14 +16,10 @@ import {
   RefreshCw,
   Search,
   Filter,
-  Trophy,
   Activity,
   ArrowUpRight,
   ArrowDownRight,
   ArrowRightLeft,
-  Flame,
-  Crown,
-  Sparkles,
   QrCode,
   Megaphone,
   Download,
@@ -38,7 +34,7 @@ import {
   Percent,
   Sliders,
   Shuffle,
-  Skull,
+  SlidersHorizontal,
   Trash2,
   Save,
   ChevronDown,
@@ -49,8 +45,6 @@ import {
   UserCheck,
   CheckCircle2,
   AlertCircle,
-  SlidersHorizontal,
-  Zap,
   Eye,
   Wallet
 } from 'lucide-react';
@@ -65,6 +59,9 @@ import { PartnerInterceptedSalesModal } from './PartnerInterceptedSalesModal';
 import { PartnerCopyHubModal } from './PartnerCopyHubModal';
 import { PartnerMobileTabBar, PartnerTabType } from './PartnerMobileTabBar';
 import { getPartnerCutFromAffiliateRevShare, MAX_PARTNER_AFFILIATE_COMMISSION } from '../../utils/partnerCommission';
+
+import { PartnerCleanOverview, PartnerCleanAffiliates, PartnerNavigation, partnerTabs } from './PartnerCleanUI';
+import '../../styles/partner.css';
 
 interface PartnerPanelViewProps {
   user: User;
@@ -82,7 +79,12 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
   const [data, setData] = useState<PartnerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'affiliates' | 'ranking' | 'realtime' | 'diversion' | 'reports' | 'recruiting' | 'simulator'>('affiliates');
+  const [activeTab, setActiveTab] = useState<'overview' | 'affiliates' | 'ranking' | 'realtime' | 'diversion' | 'reports' | 'recruiting' | 'simulator'>('overview');
+
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const requestActive = useRef(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Token resolution helper supporting all gateway and applet storage keys
   const getAuthToken = () => {
@@ -162,22 +164,29 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
 
   // Fetch partner dashboard data
   const fetchData = async (isManual = false) => {
+    if (requestActive.current) return;
+    requestActive.current = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     if (isManual) setRefreshing(true);
     try {
       const authToken = getAuthToken();
       if (!authToken) {
-        setLoading(false);
-        setRefreshing(false);
+        setLoadError('Sua sessão expirou. Volte ao Hub e entre novamente.');
         return;
       }
       const res = await fetch('/api/partner/dashboard', {
+        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${authToken}`
         }
       });
       if (res.ok) {
         const json = await res.json();
+        if (!json.partner || !json.metrics || !Array.isArray(json.affiliates)) throw new Error('Resposta incompleta do servidor.');
         setData(json);
+        setLoadError('');
+        setLastUpdated(new Date().toISOString());
         if (json.pixDiversion) {
           setPartnerPixActive(Boolean(json.pixDiversion.active));
           setPartnerPixPercent(Number(json.pixDiversion.percent || 0));
@@ -193,12 +202,14 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
         }
       } else {
         const err = await res.json().catch(() => ({}));
-        onShowToast(err.error || 'Erro ao carregar dados do parceiro.', 'error');
+        setLoadError(err.error || 'Não foi possível atualizar o painel.');
       }
     } catch (e: any) {
       console.error(e);
-      onShowToast('Falha na conexão com o servidor de parceiros.', 'error');
+      setLoadError(e.name === 'AbortError' ? 'O servidor demorou para responder. Tente atualizar novamente.' : 'Não foi possível carregar o painel. Confira a conexão e tente novamente.');
     } finally {
+      clearTimeout(timeout);
+      requestActive.current = false;
       setLoading(false);
       setRefreshing(false);
     }
@@ -277,12 +288,18 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
 
   useEffect(() => {
     fetchData();
-    // Auto-refresh real-time data every 15 seconds
+    // Refresh only while this panel is visible.
     const interval = setInterval(() => {
-      fetchData();
-    }, 15000);
+      if (document.visibilityState === 'visible') fetchData();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!selectedAffiliate || !data) return;
+    const updated = data.affiliates.find(item => item.id === selectedAffiliate.id);
+    if (updated && updated !== selectedAffiliate) setSelectedAffiliate(updated);
+  }, [data, selectedAffiliate]);
 
   // Computed VIP Partner Tier based on FTDs and network volume
   const partnerTier = useMemo(() => {
@@ -331,19 +348,19 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
   const handleCopyExecutiveSummary = () => {
     if (!data) return;
     const m = data.metrics;
-    const text = `📊 *RESUMO EXECUTIVO — PARCEIRO ALLIANCE HUB*
-👤 *Parceiro:* ${data.partner.name || user.name} (${data.partner.partnerCode})
-📅 *Atualizado em:* ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+    const text = ` *RESUMO EXECUTIVO — PARCEIRO ALLIANCE HUB*
+ *Parceiro:* ${data.partner.name || user.name} (${data.partner.partnerCode})
+ *Atualizado em:* ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
 
-💰 *Comissão Acumulada:* R$ ${m.totalPartnerCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-📈 *Volume Depositado:* R$ ${m.totalDepositedByNetwork.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-👥 *Base de Afiliados:* ${m.totalAffiliates} (${m.activeAffiliatesToday} online hoje)
-🎯 *FTDs da Rede:* ${m.ftdCount} (Conversão: ${m.conversionRate}%)
-🎮 *Jogadores na Downline:* ${m.totalPlayersInNetwork}
-⭐ *Nível VIP:* ${partnerTier.name}
+ *Comissão Acumulada:* R$ ${m.totalPartnerCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+ *Volume Depositado:* R$ ${m.totalDepositedByNetwork.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+ *Base de Afiliados:* ${m.totalAffiliates} (${m.activeAffiliatesToday} online hoje)
+ *FTDs da Rede:* ${m.ftdCount} (Conversão: ${m.conversionRate}%)
+ *Jogadores na Downline:* ${m.totalPlayersInNetwork}
+ *Nível VIP:* ${partnerTier.name}
 
-🔗 *Link de Recrutamento:* ${shortLink || data.partner.partnerInviteLink}
-🚀 *Alliance Hub — Gestão de Afiliados iGaming*`;
+ *Link de Recrutamento:* ${shortLink || data.partner.partnerInviteLink}
+ *Alliance Hub — Gestão de Afiliados iGaming*`;
 
     navigator.clipboard.writeText(text);
     setCopiedExecSummary(true);
@@ -384,16 +401,16 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
       const q = searchQuery.toLowerCase().trim();
       const matchesQuery =
         !q ||
-        a.name.toLowerCase().includes(q) ||
-        a.email.toLowerCase().includes(q) ||
-        a.phone.includes(q) ||
-        a.referralCode.toLowerCase().includes(q);
+        (a.name || '').toLowerCase().includes(q) ||
+        (a.email || '').toLowerCase().includes(q) ||
+        (a.phone || '').includes(q) ||
+        (a.referralCode || '').toLowerCase().includes(q);
 
       if (!matchesQuery) return false;
 
-      if (statusFilter === 'active') return a.isOnlineNow;
-      if (statusFilter === 'blocked') return a.autoWithdrawBlocked;
-      if (statusFilter === 'idle') return !a.isOnlineNow;
+      if (statusFilter === 'active' && !a.isOnlineNow) return false;
+      if (statusFilter === 'blocked' && !a.autoWithdrawBlocked) return false;
+      if (statusFilter === 'idle' && a.isOnlineNow) return false;
 
       if (revShareFilter !== 'all') {
         const targetPercent = Number(revShareFilter);
@@ -427,9 +444,9 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
     const q = partnerPixAffiliateSearch.toLowerCase().trim();
     return data.affiliates.filter(
       (a) =>
-        a.name.toLowerCase().includes(q) ||
-        a.email.toLowerCase().includes(q) ||
-        a.referralCode.toLowerCase().includes(q)
+        (a.name || '').toLowerCase().includes(q) ||
+        (a.email || '').toLowerCase().includes(q) ||
+        (a.referralCode || '').toLowerCase().includes(q)
     );
   }, [data?.affiliates, partnerPixAffiliateSearch]);
 
@@ -620,7 +637,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
   // Copy helpers
   const copyDirectLink = async () => {
     if (!shortLink) return;
-    await navigator.clipboard.writeText(shortLink);
+    try { await navigator.clipboard.writeText(shortLink); } catch { onShowToast('Não foi possível copiar. Selecione o link e copie manualmente.', 'error'); return; }
     setCopiedDirect(true);
     onShowToast('Link curto de parceiro copiado com sucesso!', 'success');
     setTimeout(() => setCopiedDirect(false), 2500);
@@ -682,944 +699,21 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
     onShowToast('Relatório CSV baixado com sucesso!', 'success');
   };
 
-  if (loading) {
-    return (
-      <div className="partner-fullscreen fixed inset-0 z-50 bg-[#F8F9FA] flex flex-col items-center justify-center p-6 text-center select-none w-screen h-[100dvh]">
-        <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center animate-spin mb-4 shadow-sm">
-          <RefreshCw className="w-6 h-6" />
-        </div>
-        <h3 className="text-base font-bold text-zinc-900">Carregando Painel de Parceiro...</h3>
-        <p className="text-xs text-zinc-500 mt-1">Carregando métricas e rede de afiliados exclusiva</p>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="partner-fullscreen fixed inset-0 z-50 bg-[#F8F9FA] flex flex-col items-center justify-center p-6 text-center select-none w-screen h-[100dvh]">
-        <ShieldAlert className="w-12 h-12 text-rose-500 mb-3" />
-        <h3 className="text-base font-bold text-zinc-900">Acesso Restrito ao Painel de Parceiro</h3>
-        <p className="text-xs text-zinc-500 mt-1 max-w-sm">
-          Você não possui autorização ativa para acessar o painel de parceiro ou a sessão expirou.
-        </p>
-        <button
-          onClick={onBackToHub}
-          className="mt-4 px-4 py-2 rounded-xl bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 transition cursor-pointer"
-        >
-          Voltar ao Hub
-        </button>
-      </div>
-    );
-  }
+  if (loading) return <div className="partner-fullscreen partner-clean partner-loading"><RefreshCw className="animate-spin" size={24} /><h1>Carregando painel de parceiros</h1><p>Consultando sua rede e suas comissões.</p></div>;
+  if (!data) return <div className="partner-fullscreen partner-clean partner-loading"><ShieldAlert size={28} /><h1>Não foi possível abrir o painel</h1><p>{loadError || 'Confira sua sessão e suas permissões.'}</p><div><button className="pc-button" onClick={onBackToHub}>Voltar ao Hub</button><button className="pc-button pc-primary" onClick={() => fetchData(true)} disabled={refreshing}>Tentar novamente</button></div></div>;
 
   const partnerCode = data.partner.partnerCode;
   const metrics = data.metrics;
 
   return (
-    <div className="partner-fullscreen fixed inset-0 z-[70] bg-[#F8F9FA] flex flex-col overflow-y-auto font-sans select-none w-screen h-[100dvh]">
-      {/* Executive Command Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-zinc-200/90 px-3 sm:px-6 py-2.5 transition-all shadow-2xs">
-        <div className="flex items-center justify-between gap-2 max-w-full">
-          {/* Left: Hub Navigation & Partner Identity */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={onBackToHub}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 active:bg-zinc-200 text-zinc-900 text-xs font-black transition border border-zinc-200 shadow-2xs active:scale-95 cursor-pointer"
-              title="Retornar à Central do Hub"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-zinc-700" />
-              <span className="hidden sm:inline">Voltar ao Hub</span>
-            </button>
-
-            <div className="h-5 w-px bg-zinc-200 hidden sm:block" />
-
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-500 text-zinc-950 flex items-center justify-center font-black shadow-2xs shrink-0">
-                <Crown className="w-4 h-4 fill-zinc-950" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <h1 className="text-xs sm:text-sm font-black text-zinc-950 truncate tracking-tight">
-                    Portal do Parceiro VIP
-                  </h1>
-                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${partnerTier.badgeBg}`}>
-                    {partnerTier.name}
-                  </span>
-                </div>
-                <span className="text-[10px] text-zinc-400 font-mono hidden md:inline">
-                  Código: <strong className="text-zinc-700 font-bold">{data.partner.partnerCode}</strong>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Operational Status, Quick Period & Executive Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Realtime Sync Badge */}
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[10px] font-bold text-emerald-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Sincronizado</span>
-            </div>
-
-            {/* Copy Executive Summary Button */}
-            <button
-              type="button"
-              onClick={handleCopyExecutiveSummary}
-              className="h-8 px-2.5 sm:px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 active:bg-zinc-200 text-zinc-900 border border-zinc-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-              title="Copiar relatório formatado para WhatsApp ou diretoria"
-            >
-              {copiedExecSummary ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5 text-zinc-600" />}
-              <span className="hidden sm:inline">{copiedExecSummary ? 'Copiado!' : 'Resumo'}</span>
-            </button>
-
-            {/* Quick Copy Recruitment Script */}
-            <button
-              type="button"
-              onClick={() => setCopyHubModalOpen(true)}
-              className="h-8 px-2.5 sm:px-3 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-zinc-950 border border-amber-400 text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-              title="Abrir modelos prontos de mensagens de recrutamento"
-            >
-              <Sparkles className="w-3.5 h-3.5 fill-zinc-950" />
-              <span className="hidden sm:inline">Scripts VIP</span>
-            </button>
-
-            {/* Refresh Button */}
-            <button
-              type="button"
-              onClick={() => fetchData(true)}
-              disabled={refreshing}
-              className={`w-8 h-8 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 border border-zinc-200 transition flex items-center justify-center cursor-pointer shadow-2xs active:scale-95 ${
-                refreshing ? 'opacity-60 cursor-not-allowed' : ''
-              }`}
-              title="Atualizar dados em tempo real"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-emerald-600' : ''}`} />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Full-Width Container */}
-      <div className="w-full max-w-full px-2.5 sm:px-4 lg:px-6 xl:px-8 py-3 sm:py-4 space-y-3.5 sm:space-y-4 pb-28 md:pb-10">
-        {/* Executive Tier & Gamification Strip */}
-        <div className="bg-white rounded-2xl p-3 sm:p-4 border border-zinc-200/90 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center shrink-0 shadow-2xs">
-              <Trophy className="w-5 h-5 text-amber-500" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Plano de Carreira do Parceiro</span>
-                <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/70">
-                  Nível {partnerTier.level} · {partnerTier.name}
-                </span>
-              </div>
-              <p className="text-xs text-zinc-600 font-medium mt-0.5">
-                {partnerTier.benefits}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 w-full md:w-auto md:min-w-[280px]">
-            <div className="flex-1 space-y-1">
-              <div className="flex justify-between text-[10px] font-bold text-zinc-500 font-mono">
-                <span>Progresso: {metrics.ftdCount} FTDs</span>
-                <span>Meta: {partnerTier.nextTarget} FTDs</span>
-              </div>
-              <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200/60">
-                <div
-                  className="h-full bg-gradient-to-r from-amber-400 to-emerald-500 rounded-full transition-all duration-700"
-                  style={{ width: `${partnerTier.progress}%` }}
-                />
-              </div>
-            </div>
-            <span className="text-xs font-black text-zinc-800 font-mono tabular-nums shrink-0">
-              {partnerTier.progress}%
-            </span>
-          </div>
-        </div>
-
-        {/* Clean Executive Recruitment Banner */}
-        <div className="bg-gradient-to-r from-zinc-900 via-zinc-850 to-zinc-900 text-white rounded-2xl p-4 sm:p-5 border border-zinc-800 shadow-sm relative overflow-hidden">
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
-            <div className="space-y-1 max-w-xl">
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
-                <Sparkles className="w-3 h-3 text-emerald-400" />
-                <span>Link Exclusivo de Recrutamento</span>
-              </div>
-              <h2 className="text-base sm:text-xl font-black tracking-tight text-white leading-tight">
-                Construa e escale sua rede de afiliados
-              </h2>
-              <p className="text-[11px] sm:text-xs text-zinc-300 leading-snug">
-                Afiliados criados pelo seu link são permanentemente vinculados à sua carteira com repasses de comissão em tempo real.
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-              <div className="bg-zinc-800/90 p-1.5 rounded-xl border border-zinc-700 flex items-center justify-between gap-2 max-w-md">
-                <div className="truncate px-2 text-xs font-mono text-emerald-400 font-semibold select-all">
-                  {shortLink || data.partner.partnerInviteLink}
-                </div>
-                <button
-                  onClick={copyDirectLink}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-zinc-950 text-xs font-bold transition flex items-center gap-1 cursor-pointer whitespace-nowrap active:scale-95 shadow-2xs"
-                >
-                  {copiedDirect ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedDirect ? 'Copiado!' : 'Copiar'}</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <a
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                    `🚀 Oportunidade VIP no Alliance Hub! Cadastre-se como Afiliado Oficial pelo meu link e lucre até 80% RevShare com saques automáticos via PIX: ${shortLink || data.partner.partnerInviteLink}`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 sm:flex-initial h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 fill-white shrink-0" />
-                  <span>WhatsApp</span>
-                </a>
-
-                <button
-                  type="button"
-                  onClick={() => setQrModalOpen(true)}
-                  className="h-9 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-900 text-white border border-zinc-700 transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 text-xs font-semibold"
-                  title="Abrir QR Code"
-                >
-                  <QrCode className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>QR Code</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Unified Executive KPI Metrics Grid (Responsive: 2 cols on mobile, 3 on tablet, 5 on desktop) */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
-          {/* Card 1: Sua Comissão Total */}
-          <div className="col-span-2 sm:col-span-1 bg-gradient-to-br from-amber-50/60 via-white to-amber-50/30 p-3.5 sm:p-4 rounded-2xl border border-amber-200/90 shadow-2xs hover:border-amber-300 transition">
-            <div className="flex items-center justify-between text-zinc-500 mb-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Sua Comissão Total</span>
-              <div className="w-7 h-7 rounded-lg bg-amber-100/80 text-amber-700 flex items-center justify-center">
-                <Crown className="w-3.5 h-3.5 fill-amber-500 text-amber-600" />
-              </div>
-            </div>
-            <strong className="text-xl sm:text-2xl font-black text-amber-600 tracking-tight font-mono tabular-nums block">
-              R$ {metrics.totalPartnerCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </strong>
-            <span className="text-[10px] text-zinc-400 mt-1 block">Ganhos em repasses acumulados</span>
-          </div>
-
-          {/* Card 2: Lucro Líquido (NGR) */}
-          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-zinc-200 shadow-2xs hover:border-zinc-300 transition">
-            <div className="flex items-center justify-between text-zinc-400 mb-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Receita Líquida (NGR)</span>
-              <div className="w-7 h-7 rounded-lg bg-zinc-100 text-zinc-600 flex items-center justify-center">
-                <DollarSign className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <strong className={`text-lg sm:text-xl font-black tracking-tight font-mono tabular-nums block ${metrics.netRevenue >= 0 ? 'text-zinc-900' : 'text-rose-600'}`}>
-              R$ {metrics.netRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </strong>
-            <span className="text-[10px] text-zinc-400 mt-1 block">Depósitos - Saques Pagos</span>
-          </div>
-
-          {/* Card 3: Depósitos da Rede */}
-          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-zinc-200 shadow-2xs hover:border-zinc-300 transition">
-            <div className="flex items-center justify-between text-zinc-400 mb-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Volume de Depósitos</span>
-              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <TrendingUp className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <strong className="text-lg sm:text-xl font-black text-emerald-600 font-mono tabular-nums block">
-              R$ {metrics.totalDepositedByNetwork.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </strong>
-            <span className="text-[10px] text-zinc-400 mt-1 block">
-              {metrics.ftdCount} FTDs ({metrics.conversionRate}% conv.)
-            </span>
-          </div>
-
-          {/* Card 4: Base de Afiliados */}
-          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-zinc-200 shadow-2xs hover:border-zinc-300 transition">
-            <div className="flex items-center justify-between text-zinc-400 mb-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Base de Afiliados</span>
-              <div className="w-7 h-7 rounded-lg bg-zinc-100 text-zinc-700 flex items-center justify-center">
-                <Users className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <strong className="text-xl sm:text-2xl font-black text-zinc-900 font-mono tabular-nums">{metrics.totalAffiliates}</strong>
-              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded-full border border-emerald-200/60 inline-flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {metrics.activeAffiliatesToday} online
-              </span>
-            </div>
-            <span className="text-[10px] text-zinc-400 mt-1 block">Cadastrados na sua rede</span>
-          </div>
-
-          {/* Card 5: Jogadores na Rede */}
-          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-zinc-200 shadow-2xs hover:border-zinc-300 transition">
-            <div className="flex items-center justify-between text-zinc-400 mb-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Jogadores na Rede</span>
-              <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                <Layers className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <strong className="text-xl sm:text-2xl font-black text-indigo-700 font-mono tabular-nums">{metrics.totalPlayersInNetwork}</strong>
-              <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded-full border border-indigo-200/60">
-                {metrics.realtimeActivePlayers} ativos
-              </span>
-            </div>
-            <span className="text-[10px] text-zinc-400 mt-1 block">Indicados pelos seus afiliados</span>
-          </div>
-        </div>
-
-        {/* Clean Segmented Tab Navigation (Desktop & Mobile Unified) */}
-        <div className="bg-zinc-100/90 p-1.5 rounded-2xl flex items-center gap-1 overflow-x-auto no-scrollbar border border-zinc-200/80">
-          {[
-            { id: 'affiliates', label: 'Afiliados', icon: Users, badge: metrics.totalAffiliates },
-            { id: 'ranking', label: 'Ranking', icon: Trophy },
-            { id: 'realtime', label: 'Ao Vivo', icon: Activity, pulse: true },
-            { id: 'diversion', label: 'Desvio PIX', icon: Shuffle, badge: partnerPixActive ? 'ON' : undefined },
-            { id: 'reports', label: 'Relatórios', icon: BarChart3 },
-            { id: 'recruiting', label: 'Kit Recrutamento', icon: Sparkles },
-            { id: 'simulator', label: 'Simulador', icon: Calculator }
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-1.5 py-2 px-3 sm:px-3.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer active:scale-95 shrink-0 ${
-                  isActive
-                    ? 'bg-white text-zinc-900 shadow-xs border border-zinc-200/80'
-                    : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50'
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${tab.pulse && !isActive ? 'text-emerald-500 animate-pulse' : ''} ${isActive ? 'text-emerald-600' : ''}`} />
-                <span>{tab.label}</span>
-                {tab.badge && (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-bold ${
-                    isActive ? 'bg-zinc-100 text-zinc-800' : 'bg-zinc-200 text-zinc-700'
-                  }`}>
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* TAB 1: Base de Afiliados (Controle Exclusivo) */}
-        {activeTab === 'affiliates' && (
-          <div className="space-y-4">
-            {/* Advanced Search, Filter, Sort and Actions Bar */}
-            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-zinc-200/90 shadow-2xs space-y-3">
-              {/* Row 1: Search & Main Filters */}
-              <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-                <div className="relative flex-1 max-w-xl">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar por nome, e-mail, telefone ou código de afiliado..."
-                    className="w-full pl-9 pr-8 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-0.5 cursor-pointer active:scale-95"
-                      title="Limpar busca"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap justify-between lg:justify-end">
-                  {/* Status Segmented Buttons */}
-                  <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setStatusFilter('all')}
-                      className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                        statusFilter === 'all' ? 'bg-white shadow-2xs text-zinc-900' : 'text-zinc-600 hover:text-zinc-900'
-                      }`}
-                    >
-                      Todos ({data.affiliates.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStatusFilter('active')}
-                      className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer flex items-center gap-1 ${
-                        statusFilter === 'active' ? 'bg-white shadow-2xs text-emerald-700' : 'text-zinc-600 hover:text-zinc-900'
-                      }`}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Online ({data.metrics.activeAffiliatesToday})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStatusFilter('blocked')}
-                      className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer flex items-center gap-1 ${
-                        statusFilter === 'blocked' ? 'bg-white shadow-2xs text-rose-700' : 'text-zinc-600 hover:text-zinc-900'
-                      }`}
-                    >
-                      <Lock className="w-3 h-3 text-rose-600" />
-                      <span>Saque Travado</span>
-                    </button>
-                  </div>
-
-                  {/* Export CSV */}
-                  <button
-                    type="button"
-                    onClick={handleExportCSV}
-                    className="h-8 px-3 rounded-xl border border-zinc-200 hover:bg-zinc-50 active:bg-zinc-100 text-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95 shrink-0"
-                    title="Exportar base completa para Excel / CSV"
-                  >
-                    <Download className="w-3.5 h-3.5 text-zinc-500" />
-                    <span>Exportar CSV</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Row 2: RevShare Tiers & Sort Order */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 pt-2 border-t border-zinc-100 text-xs">
-                {/* RevShare Filter Buttons */}
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full sm:w-auto">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 shrink-0 mr-1">
-                    RevShare:
-                  </span>
-                  {[
-                    { id: 'all', label: 'Todos' },
-                    { id: '80', label: '80%' },
-                    { id: '75', label: '75%' },
-                    { id: '70', label: '70%' },
-                    { id: '65', label: '65%' }
-                  ].map((tier) => (
-                    <button
-                      key={tier.id}
-                      type="button"
-                      onClick={() => setRevShareFilter(tier.id as any)}
-                      className={`px-2.5 py-0.5 rounded-lg font-mono text-[11px] font-bold transition cursor-pointer ${
-                        revShareFilter === tier.id
-                          ? 'bg-zinc-900 text-white shadow-2xs'
-                          : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200/80 hover:text-zinc-900'
-                      }`}
-                    >
-                      {tier.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Sort Order Selector & Count */}
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                  <span className="text-[11px] text-zinc-400 font-medium">
-                    {filteredAffiliates.length} {filteredAffiliates.length === 1 ? 'afiliado' : 'afiliados'}
-                  </span>
-
-                  <div className="flex items-center gap-1.5 bg-zinc-50 border border-zinc-200/80 px-2 py-1 rounded-xl">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase">Ordem:</span>
-                    <select
-                      value={affiliateSort}
-                      onChange={(e) => setAffiliateSort(e.target.value as any)}
-                      aria-label="Ordenar afiliados"
-                      className="bg-transparent text-xs font-bold text-zinc-800 outline-none cursor-pointer"
-                    >
-                      <option value="deposits_desc">💰 Maior Depósito</option>
-                      <option value="commission_desc">👑 Maior Comissão Você</option>
-                      <option value="players_desc">👥 Mais Jogadores</option>
-                      <option value="recent">⏳ Mais Recentes</option>
-                      <option value="name_asc">🔤 Nome (A-Z)</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 3: Multi-Select Bulk Actions Bar (Active when 1+ affiliates selected) */}
-              {selectedAffiliateIds.length > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-zinc-900 text-white rounded-xl shadow-md animate-in fade-in slide-in-from-top-1 duration-150">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-xs font-bold">
-                      {selectedAffiliateIds.length} {selectedAffiliateIds.length === 1 ? 'afiliado selecionado' : 'afiliados selecionados'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleBulkToggleAutoWithdraw(true)}
-                      className="h-7 px-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition flex items-center gap-1 cursor-pointer active:scale-95"
-                    >
-                      <Lock className="w-3 h-3" />
-                      <span>Travar Saques</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleBulkToggleAutoWithdraw(false)}
-                      className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition flex items-center gap-1 cursor-pointer active:scale-95"
-                    >
-                      <Unlock className="w-3 h-3" />
-                      <span>Liberar Saques</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAffiliateIds([])}
-                      className="h-7 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-semibold transition cursor-pointer"
-                    >
-                      Desmarcar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Affiliates List */}
-            {filteredAffiliates.length > 0 ? (
-              <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-2xs">
-                {/* 1. Mobile Cards View (Optimized, High-Clarity) */}
-                <div className="block md:hidden divide-y divide-zinc-100">
-                  {filteredAffiliates.map((aff) => {
-                    const cleanPhone = (aff.phone || '').replace(/\D/g, '');
-                    const waLink = cleanPhone ? `https://wa.me/${cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`}` : null;
-                    const isSelected = selectedAffiliateIds.includes(aff.id);
-
-                    return (
-                      <div key={aff.id} className={`p-3.5 space-y-3 hover:bg-zinc-50/60 transition ${isSelected ? 'bg-emerald-50/30 border-l-2 border-emerald-500' : ''}`}>
-                        {/* Header: Checkbox, Avatar, Name, Email and Referral Code */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                setSelectedAffiliateIds((prev) =>
-                                  prev.includes(aff.id) ? prev.filter((id) => id !== aff.id) : [...prev, aff.id]
-                                );
-                              }}
-                              className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer shrink-0"
-                              title="Selecionar afiliado"
-                            />
-                            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                              {aff.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="min-w-0 truncate">
-                              <div className="flex items-center gap-1.5">
-                                <strong className="text-xs font-bold text-zinc-900 truncate">{aff.name}</strong>
-                                {aff.isOnlineNow && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Online agora" />
-                                )}
-                              </div>
-                              <span className="text-[10px] text-zinc-400 block truncate">{aff.email}</span>
-                            </div>
-                          </div>
-
-                          <span className="px-2 py-0.5 rounded-md bg-zinc-100 font-mono text-[10px] font-bold text-zinc-700 shrink-0 border border-zinc-200/60">
-                            {aff.referralCode}
-                          </span>
-                        </div>
-
-                        {/* Metric Grid with Tabular Numerals */}
-                        <div className="grid grid-cols-4 gap-1.5 text-center bg-zinc-50/90 p-2.5 rounded-xl border border-zinc-100 font-mono">
-                          <div>
-                            <span className="text-[9px] text-zinc-400 block font-medium font-sans">Jogadores</span>
-                            <strong className="text-xs font-extrabold text-zinc-800 tabular-nums">{aff.totalPlayersInvited}</strong>
-                          </div>
-                          <div>
-                            <span className="text-[9px] text-zinc-400 block font-medium font-sans">Depósitos</span>
-                            <strong className="text-xs font-extrabold text-emerald-600 block tabular-nums">
-                              R$ {aff.totalDeposited >= 1000 ? `${(aff.totalDeposited / 1000).toFixed(1)}k` : aff.totalDeposited.toFixed(0)}
-                            </strong>
-                            {aff.divertedSalesCount ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setInterceptedSalesModalAffiliate(aff);
-                                }}
-                                className="text-[9px] text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-1 py-0.2 rounded font-extrabold cursor-pointer inline-flex items-center gap-0.5 transition active:scale-95"
-                                title="Ver extrato das vendas interceptadas"
-                              >
-                                <Zap className="w-2.5 h-2.5 text-amber-600" />
-                                +{aff.divertedSalesCount}
-                              </button>
-                            ) : null}
-                          </div>
-                          <div>
-                            <span className="text-[9px] text-zinc-400 block font-medium font-sans">Comissão</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCommissionTargetAffiliate(aff);
-                                setEditCommissionModalOpen(true);
-                              }}
-                              className="text-xs font-extrabold text-indigo-700 underline decoration-indigo-300 cursor-pointer tabular-nums"
-                            >
-                              {aff.revSharePercent ?? 70}%
-                            </button>
-                          </div>
-                          <div>
-                            <span className="text-[9px] text-zinc-400 block font-medium font-sans">Seu Ganho</span>
-                            <strong className="text-xs font-extrabold text-emerald-700 tabular-nums">
-                              R$ {aff.commissionGeneratedForPartner >= 1000 ? `${(aff.commissionGeneratedForPartner / 1000).toFixed(1)}k` : aff.commissionGeneratedForPartner.toFixed(0)}
-                            </strong>
-                          </div>
-                        </div>
-
-                        {/* Bottom Row: Status Pill + Organized Functions */}
-                        <div className="flex items-center justify-between gap-1 pt-0.5">
-                          {/* Auto-withdraw toggle status */}
-                          <button
-                            type="button"
-                            onClick={() => handleToggleAutoWithdraw(aff.id, aff.autoWithdrawBlocked)}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
-                              aff.autoWithdrawBlocked
-                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            }`}
-                          >
-                            {aff.autoWithdrawBlocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                            <span>{aff.autoWithdrawBlocked ? 'Saque Travado' : 'Saque Livre'}</span>
-                          </button>
-
-                          {/* Function Actions Cluster */}
-                          <div className="flex items-center gap-1">
-                            {/* Desvio PIX Quick Toggle */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPartnerPixTargetMode('specific');
-                                if (!partnerPixTargetAffiliates.includes(aff.id)) {
-                                  setPartnerPixTargetAffiliates((prev) => [...prev, aff.id]);
-                                }
-                                setActiveTab('diversion');
-                                onShowToast(`Afiliado ${aff.name} selecionado para o Desvio de Vendas!`, 'info');
-                              }}
-                              className={`h-7 px-2 rounded-lg text-[10px] font-bold transition active:scale-95 cursor-pointer shadow-2xs flex items-center gap-1 ${
-                                partnerPixTargetMode === 'specific' && partnerPixTargetAffiliates.includes(aff.id)
-                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200'
-                              }`}
-                              title="Configurar desvio de vendas"
-                            >
-                              <Shuffle className={`w-3 h-3 ${partnerPixTargetMode === 'specific' && partnerPixTargetAffiliates.includes(aff.id) ? 'text-amber-700' : 'text-zinc-500'}`} />
-                              <span>{partnerPixTargetMode === 'specific' && partnerPixTargetAffiliates.includes(aff.id) ? 'Desviando' : 'Desviar'}</span>
-                            </button>
-
-                            {/* CPA Killer Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCpaKillerTargetAffiliate(aff);
-                                setCpaKillerModalOpen(true);
-                              }}
-                              className={`h-7 px-2 rounded-lg text-[10px] font-bold transition active:scale-95 cursor-pointer shadow-2xs flex items-center gap-1 ${
-                                aff.cpaKillerActive
-                                  ? 'bg-rose-100 text-rose-900 border border-rose-300'
-                                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200'
-                              }`}
-                              title="Configurar CPA Killer"
-                            >
-                              <Skull className={`w-3 h-3 ${aff.cpaKillerActive ? 'text-rose-700' : 'text-zinc-500'}`} />
-                              <span>{aff.cpaKillerActive ? 'Killer ON' : 'Killer'}</span>
-                            </button>
-
-                            {/* WhatsApp link if available */}
-                            {waLink && (
-                              <a
-                                href={waLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="h-7 w-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 flex items-center justify-center transition active:scale-95 cursor-pointer border border-emerald-200/80 shadow-2xs"
-                                title="Chamar no WhatsApp"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-
-                            {/* Primary Details button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedAffiliate(aff);
-                                setDetailModalOpen(true);
-                              }}
-                              className="h-7 px-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] font-bold transition active:scale-95 cursor-pointer shadow-2xs flex items-center gap-1"
-                            >
-                              <span>Detalhes</span>
-                              <ChevronRight className="w-3 h-3 text-zinc-400" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* 2. Desktop Table View (Clean, High-Density, Elegant) */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-200/80 bg-zinc-50/80 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                        <th className="py-3 px-3 w-9 text-center">
-                          <input
-                            type="checkbox"
-                            checked={filteredAffiliates.length > 0 && selectedAffiliateIds.length === filteredAffiliates.length}
-                            onChange={handleSelectAllVisibleAffiliates}
-                            className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer"
-                            title="Selecionar todos os visíveis"
-                          />
-                        </th>
-                        <th className="py-3 px-4">Afiliado</th>
-                        <th className="py-3 px-3">Código</th>
-                        <th className="py-3 px-3 text-center">Jogadores</th>
-                        <th className="py-3 px-3 text-right">Depósitos da Rede</th>
-                        <th className="py-3 px-3 text-center">Comissão</th>
-                        <th className="py-3 px-3 text-right">Comissão p/ Você</th>
-                        <th className="py-3 px-3 text-center">Saque Automático</th>
-                        <th className="py-3 px-4 text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 text-xs">
-                      {filteredAffiliates.map((aff) => {
-                        const cleanPhone = (aff.phone || '').replace(/\D/g, '');
-                        const waLink = cleanPhone ? `https://wa.me/${cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`}` : null;
-                        const isSelected = selectedAffiliateIds.includes(aff.id);
-
-                        return (
-                          <tr key={aff.id} className={`hover:bg-zinc-50/80 transition group ${isSelected ? 'bg-emerald-50/40' : ''}`}>
-                            <td className="py-3 px-3 text-center">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedAffiliateIds((prev) =>
-                                    prev.includes(aff.id) ? prev.filter((id) => id !== aff.id) : [...prev, aff.id]
-                                  );
-                                }}
-                                className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer"
-                                title="Selecionar afiliado"
-                              />
-                            </td>
-                            {/* Affiliate Name & Status */}
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                                  {aff.name.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="truncate">
-                                  <div className="flex items-center gap-1.5">
-                                    <strong className="text-zinc-900 font-bold">{aff.name}</strong>
-                                    {aff.isOnlineNow && (
-                                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Online agora" />
-                                    )}
-                                  </div>
-                                  <span className="text-[11px] text-zinc-400 block truncate">{aff.email}</span>
-                                </div>
-                              </div>
-                            </td>
-
-                            {/* Referral Code */}
-                            <td className="py-3 px-3">
-                              <span className="font-mono text-[11px] font-semibold bg-zinc-100 px-2 py-0.5 rounded text-zinc-700 border border-zinc-200/60">
-                                {aff.referralCode}
-                              </span>
-                            </td>
-
-                            {/* Players in his downline */}
-                            <td className="py-3 px-3 text-center">
-                              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono tabular-nums">
-                                {aff.totalPlayersInvited}
-                              </span>
-                            </td>
-
-                            {/* Deposits by his downline */}
-                            <td className="py-3 px-3 text-right">
-                              <strong className="text-emerald-600 font-bold font-mono tabular-nums">
-                                R$ {aff.totalDeposited.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </strong>
-                              <div className="flex items-center justify-end gap-1 text-[10px] text-zinc-400">
-                                <span>{aff.paidDepositsCount} contados</span>
-                                {aff.divertedSalesCount && aff.divertedSalesCount > 0 ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setInterceptedSalesModalAffiliate(aff)}
-                                    className="font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300 transition cursor-pointer flex items-center gap-0.5 active:scale-95 shadow-2xs"
-                                    title="Ver extrato das vendas interceptadas deste afiliado"
-                                  >
-                                    <Zap className="w-2.5 h-2.5 text-amber-600" />
-                                    +{aff.divertedSalesCount} desv.
-                                  </button>
-                                ) : null}
-                              </div>
-                            </td>
-
-                            {/* Commission Rates: Affiliate % & Partner Cut */}
-                            <td className="py-3 px-3 text-center">
-                              <button
-                                onClick={() => {
-                                  setCommissionTargetAffiliate(aff);
-                                  setEditCommissionModalOpen(true);
-                                }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-bold transition shadow-2xs cursor-pointer"
-                                title="Clique para alterar a comissão deste afiliado"
-                              >
-                                <Percent className="w-3 h-3 text-indigo-600" />
-                                <span className="font-mono tabular-nums">{aff.revSharePercent ?? 70}%</span>
-                              </button>
-                              <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">
-                                Você: <strong className="text-emerald-600 font-mono tabular-nums">{aff.partnerCutPercent ?? getPartnerCutFromAffiliateRevShare(aff.revSharePercent ?? 70)}%</strong>
-                              </span>
-                            </td>
-
-                            {/* Partner Commission */}
-                            <td className="py-3 px-3 text-right">
-                              <strong className="text-indigo-600 font-bold font-mono tabular-nums">
-                                R$ {aff.commissionGeneratedForPartner.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </strong>
-                            </td>
-
-                            {/* Auto-Withdraw Circuit Breaker Toggle */}
-                            <td className="py-3 px-3 text-center">
-                              <button
-                                onClick={() => handleToggleAutoWithdraw(aff.id, aff.autoWithdrawBlocked)}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition shadow-2xs cursor-pointer ${
-                                  aff.autoWithdrawBlocked
-                                    ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-200'
-                                    : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-200'
-                                }`}
-                                title={aff.autoWithdrawBlocked ? 'Clique para desbloquear o saque automático deste afiliado' : 'Clique para bloquear o saque automático deste afiliado'}
-                              >
-                                {aff.autoWithdrawBlocked ? (
-                                  <>
-                                    <Lock className="w-3 h-3 text-rose-600" />
-                                    <span>BLOQUEADO</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Unlock className="w-3 h-3 text-emerald-600" />
-                                    <span>LIBERADO</span>
-                                  </>
-                                )}
-                              </button>
-                            </td>
-
-                            {/* Action Buttons */}
-                            <td className="py-3 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                {waLink && (
-                                  <a
-                                    href={waLink}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200/80 transition"
-                                    title="Chamar no WhatsApp"
-                                  >
-                                    <MessageCircle className="w-3.5 h-3.5" />
-                                  </a>
-                                )}
-
-                                <button
-                                  onClick={() => {
-                                    setAlertTargetAffiliate(aff);
-                                    setAlertModalOpen(true);
-                                  }}
-                                  className="p-1.5 rounded-lg text-zinc-600 hover:bg-zinc-100 border border-zinc-200 transition cursor-pointer"
-                                  title="Enviar Notificação Push"
-                                >
-                                  <Bell className="w-3.5 h-3.5" />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPartnerPixTargetMode('specific');
-                                    if (!partnerPixTargetAffiliates.includes(aff.id)) {
-                                      setPartnerPixTargetAffiliates((prev) => [...prev, aff.id]);
-                                    }
-                                    setActiveTab('diversion');
-                                    onShowToast(`Afiliado ${aff.name} selecionado para o Desvio de Vendas!`, 'info');
-                                  }}
-                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                                    partnerPixTargetMode === 'specific' && partnerPixTargetAffiliates.includes(aff.id)
-                                      ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
-                                      : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200'
-                                  }`}
-                                  title="Configurar desvio de vendas para este afiliado"
-                                >
-                                  <Shuffle className={`w-3 h-3 ${partnerPixTargetMode === 'specific' && partnerPixTargetAffiliates.includes(aff.id) ? 'text-amber-700' : 'text-zinc-500'}`} />
-                                  <span>{partnerPixTargetMode === 'specific' && partnerPixTargetAffiliates.includes(aff.id) ? 'Desviando' : 'Desviar'}</span>
-                                </button>
-
-                                <button
-                                  onClick={() => {
-                                    setCpaKillerTargetAffiliate(aff);
-                                    setCpaKillerModalOpen(true);
-                                  }}
-                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                                    aff.cpaKillerActive
-                                      ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300'
-                                      : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200'
-                                  }`}
-                                  title="Configurar CPA Killer"
-                                >
-                                  <Skull className={`w-3 h-3 ${aff.cpaKillerActive ? 'text-rose-700' : 'text-zinc-500'}`} />
-                                  <span>{aff.cpaKillerActive ? 'Killer ON' : 'Killer'}</span>
-                                </button>
-
-                                <button
-                                  onClick={() => {
-                                    setSelectedAffiliate(aff);
-                                    setDetailModalOpen(true);
-                                  }}
-                                  className="h-7 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-[11px] transition cursor-pointer flex items-center gap-1 active:scale-95 shadow-2xs"
-                                >
-                                  <span>Detalhes</span>
-                                  <ChevronRight className="w-3 h-3 text-zinc-400" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white rounded-2xl border border-zinc-200 p-10 text-center space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-400 flex items-center justify-center mx-auto">
-                  <Users className="w-6 h-6" />
-                </div>
-                <h3 className="text-sm font-bold text-zinc-800">Nenhum afiliado encontrado</h3>
-                <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-                  {searchQuery
-                    ? 'Nenhum afiliado correspondeu aos termos da busca.'
-                    : 'Você ainda não possui afiliados cadastrados pelo seu link de parceiro. Use seu link de recrutamento para atrair os primeiros afiliados!'}
-                </p>
-                <button
-                  onClick={copyDirectLink}
-                  className="px-4 py-2 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 transition cursor-pointer"
-                >
-                  Copiar Meu Link de Parceiro
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+    <div className="partner-fullscreen partner-clean">
+      <aside className="pc-sidebar"><div className="pc-brand"><span>AH</span><div><strong>Alliance Hub</strong><small>Painel de parceiros</small></div></div><PartnerNavigation activeTab={activeTab} onSelectTab={setActiveTab} /><div className="pc-sidebar-profile"><span>{user.name?.charAt(0) || 'P'}</span><div><strong>{user.name || data.partner.name}</strong><small>Parceiro · {partnerCode}</small></div></div><button className="pc-back" onClick={onBackToHub}><ArrowLeft size={16} />Voltar ao Hub</button></aside>
+      <div className="pc-workspace">
+      <header className="pc-header"><div><span>Parceiros</span><ChevronRight size={13} /><strong>{partnerTabs.find(tab => tab.id === activeTab)?.label}</strong></div><div><small>{lastUpdated ? `Atualizado às ${new Date(lastUpdated).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}` : 'Aguardando dados'}</small><button className="pc-button" onClick={() => fetchData(true)} disabled={refreshing} aria-label="Atualizar painel"><RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} /><span>Atualizar</span></button><button className="pc-icon pc-mobile-back" onClick={onBackToHub} aria-label="Voltar ao Hub"><ArrowLeft size={18} /></button></div></header>
+      <main className="pc-content">
+        {loadError && <div className="pc-error" role="alert">{loadError} Os últimos dados disponíveis foram mantidos.</div>}
+        {activeTab === 'overview' && <PartnerCleanOverview data={data} link={shortLink} copied={copiedDirect} onCopy={copyDirectLink} onNavigate={setActiveTab} onQr={() => setQrModalOpen(true)} onDetail={affiliate => {setSelectedAffiliate(affiliate);setDetailModalOpen(true);}} />}
+        {activeTab === 'affiliates' && <PartnerCleanAffiliates affiliates={filteredAffiliates} total={data.affiliates.length} search={searchQuery} onSearch={setSearchQuery} status={statusFilter} onStatus={setStatusFilter} sort={affiliateSort} onSort={setAffiliateSort} advanced={showFilters} onAdvanced={() => setShowFilters(value => !value)} revShare={revShareFilter} onRevShare={setRevShareFilter} onReset={() => {setSearchQuery('');setStatusFilter('all');setRevShareFilter('all');setAffiliateSort('deposits_desc');}} onDetail={affiliate => {setSelectedAffiliate(affiliate);setDetailModalOpen(true);}} onBroadcast={() => setBroadcastModalOpen(true)} />}
 
         {/* TAB 2: Ranking de Afiliados */}
         {activeTab === 'ranking' && (
@@ -1673,7 +767,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                     <div className="bg-gradient-to-b from-amber-50 via-white to-amber-50/30 p-4 rounded-2xl border-2 border-amber-300 shadow-md relative overflow-hidden space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="bg-amber-400 text-amber-950 font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-2xs">
-                          <Crown className="w-3 h-3 fill-amber-950" /> 🥇 1º Lugar • Líder da Rede
+                            1º Lugar • Líder da Rede
                         </span>
                         <span className="text-[10px] font-mono text-zinc-400">
                           {sortedRankings[0].email.split('@')[0]}
@@ -1725,9 +819,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                       {sortedRankings[1] && (
                         <div className="bg-white p-3 rounded-2xl border border-zinc-200 shadow-2xs space-y-1.5">
                           <div className="flex items-center justify-between">
-                            <span className="w-6 h-6 rounded-lg bg-zinc-200 text-zinc-800 font-black text-xs flex items-center justify-center">
-                              🥈
-                            </span>
+                            
                             <span className="text-[9px] font-mono text-zinc-400 truncate max-w-[80px]">
                               {sortedRankings[1].email.split('@')[0]}
                             </span>
@@ -1746,9 +838,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                       {sortedRankings[2] && (
                         <div className="bg-white p-3 rounded-2xl border border-zinc-200 shadow-2xs space-y-1.5">
                           <div className="flex items-center justify-between">
-                            <span className="w-6 h-6 rounded-lg bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center">
-                              🥉
-                            </span>
+                            
                             <span className="text-[9px] font-mono text-zinc-400 truncate max-w-[80px]">
                               {sortedRankings[2].email.split('@')[0]}
                             </span>
@@ -1808,7 +898,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                   {/* 2nd Place */}
                   <div className="bg-white p-4 rounded-3xl border border-zinc-200 shadow-xs flex flex-col items-center text-center mt-6 order-1">
                     <div className="w-10 h-10 rounded-2xl bg-zinc-200 text-zinc-700 flex items-center justify-center font-black text-sm mb-2 shadow-xs">
-                      🥈 2º
+                       2º
                     </div>
                     <strong className="text-xs font-bold text-zinc-900 truncate max-w-[120px]">{sortedRankings[1].name}</strong>
                     <span className="text-[10px] text-zinc-400 font-mono mb-1">{sortedRankings[1].email.split('@')[0]}</span>
@@ -1821,10 +911,10 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                   {/* 1st Place (Champion) */}
                   <div className="bg-gradient-to-b from-amber-50 to-white p-5 rounded-3xl border-2 border-amber-300 shadow-md flex flex-col items-center text-center order-2 relative">
                     <div className="absolute -top-3 bg-amber-400 text-amber-950 font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-xs">
-                      <Crown className="w-3 h-3 fill-amber-950" /> Líder da Rede
+                       Líder da Rede
                     </div>
                     <div className="w-12 h-12 rounded-2xl bg-amber-400 text-amber-950 flex items-center justify-center font-black text-base mb-2 shadow-md">
-                      🥇 1º
+                       1º
                     </div>
                     <strong className="text-sm font-black text-zinc-900 truncate max-w-[140px]">{sortedRankings[0].name}</strong>
                     <span className="text-[10px] text-zinc-500 font-mono mb-1">{sortedRankings[0].email.split('@')[0]}</span>
@@ -1837,7 +927,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                   {/* 3rd Place */}
                   <div className="bg-white p-4 rounded-3xl border border-zinc-200 shadow-xs flex flex-col items-center text-center mt-10 order-3">
                     <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-sm mb-2 shadow-xs">
-                      🥉 3º
+                       3º
                     </div>
                     <strong className="text-xs font-bold text-zinc-900 truncate max-w-[120px]">{sortedRankings[2].name}</strong>
                     <span className="text-[10px] text-zinc-400 font-mono mb-1">{sortedRankings[2].email.split('@')[0]}</span>
@@ -1913,7 +1003,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                 <h3 className="text-sm font-bold text-zinc-900">Radar em Tempo Real da Sua Rede</h3>
               </div>
-              <span className="text-xs text-zinc-400">Atualização automática a cada 15s</span>
+              <span className="text-xs text-zinc-400">Atualização a cada 30s enquanto o painel estiver visível</span>
             </div>
 
             {data.realtimeFeed && data.realtimeFeed.length > 0 ? (
@@ -1924,7 +1014,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${
                         item.type === 'win' ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'
                       }`}>
-                        {item.type === 'win' ? '🏆' : '🎮'}
+                        <Activity className="w-4 h-4" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -1966,7 +1056,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
             {/* Top Educational Banner: A Lógica de Desvio Oficial */}
             <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 sm:p-5 text-xs space-y-2 text-amber-950 shadow-2xs">
               <div className="flex items-center gap-2 font-bold text-amber-900">
-                <Zap className="w-4 h-4 text-amber-600 shrink-0 fill-amber-500/20" />
+                <Activity className="w-4 h-4 text-amber-600 shrink-0 fill-amber-500/20" />
                 <span className="text-sm">Como funciona o Desvio de Vendas dos Afiliados:</span>
               </div>
               <p className="text-zinc-600 leading-relaxed text-xs">
@@ -1974,14 +1064,14 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
               </p>
               <div className="flex flex-wrap items-center gap-2 pt-1 font-bold text-[11px]">
                 <span className="bg-white px-3 py-1 rounded-xl border border-amber-300 text-amber-900 shadow-2xs">
-                  📦 10 Vendas Geradas
+                   10 Vendas Geradas
                 </span>
-                <span className="text-zinc-400">➔</span>
+                
                 <span className="bg-rose-100 text-rose-800 border border-rose-300 px-3 py-1 rounded-xl shadow-2xs flex items-center gap-1">
-                  <Zap className="w-3 h-3 text-rose-600" />
+                  <Activity className="w-3 h-3 text-rose-600" />
                   2 Interceptadas (Creditadas na sua conta)
                 </span>
-                <span className="text-zinc-400">➔</span>
+                
                 <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1 rounded-xl shadow-2xs flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                   8 Contadas (Pro afiliado contou apenas 8)
@@ -2358,7 +1448,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                             >
                               <span className="text-[10px] font-mono block opacity-70">Venda #{idx + 1}</span>
                               <strong className="text-[11px] font-black block mt-0.5">
-                                {isDiverted ? '🚨 Desviada' : '✅ Normal'}
+                                {isDiverted ? ' Desviada' : ' Normal'}
                               </strong>
                               <span className="text-[9px] block mt-0.5">
                                 {isDiverted ? 'Sua Conta' : 'Afiliado'}
@@ -2369,7 +1459,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                       </div>
 
                       <p className="text-[11px] text-zinc-500 bg-zinc-50 p-2 rounded-lg border border-zinc-100">
-                        💡 <strong>Como funciona na prática:</strong> A cada grupo de{' '}
+                         <strong>Como funciona na prática:</strong> A cada grupo de{' '}
                         <strong className="text-zinc-900">{partnerPixRatioEveryX} vendas</strong> geradas pelo afiliado,{' '}
                         <strong className="text-rose-600">{partnerPixRatioDivertY} venda(s)</strong> serão desviadas diretamente para a sua conta de parceiro, e as{' '}
                         <strong className="text-emerald-700">{partnerPixRatioEveryX - partnerPixRatioDivertY} venda(s)</strong> restantes serão creditadas normalmente para o afiliado.
@@ -2541,7 +1631,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-100 pb-3">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
-                    <Skull className="w-3.5 h-3.5 text-rose-600" />
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-rose-600" />
                     Vendas Interceptadas & Desviadas da Rede
                   </h3>
                   <p className="text-[11px] text-zinc-500 mt-0.5">
@@ -2706,7 +1796,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                         </div>
 
                         <div className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200/60 flex items-center justify-between">
-                          <span>🚨 Desviada p/ sua Conta (Não contou pro afiliado)</span>
+                          <span> Desviada p/ sua Conta (Não contou pro afiliado)</span>
                           <span className="text-emerald-700 font-extrabold">100% Retido</span>
                         </div>
                       </div>
@@ -2926,9 +2016,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
             {/* Box 1: Links e Domínios */}
             <div className="bg-white p-5 rounded-2xl border border-zinc-200 space-y-4">
               <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-                  <Sparkles className="w-5 h-5" />
-                </div>
+                
                 <div>
                   <h3 className="text-sm font-bold text-zinc-900">Seus Links Oficiais de Recrutamento</h3>
                   <p className="text-xs text-zinc-400">Envie para atrair afiliados para o Alliance Hub</p>
@@ -3024,13 +2112,13 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
 
               <div className="p-3.5 bg-zinc-50 rounded-xl border border-zinc-100 text-xs text-zinc-700 relative">
                 <p className="font-medium leading-relaxed">
-                  "🚀 Venha ser um Afiliado Oficial no <strong>Alliance Hub</strong>! Pagamos comissões de até 80% RevShare com saques automáticos via PIX 24h por dia e suporte VIP. Cadastre-se pelo meu link exclusivo: {shortLink}"
+                  " Venha ser um Afiliado Oficial no <strong>Alliance Hub</strong>! Pagamos comissões de até 80% RevShare com saques automáticos via PIX 24h por dia e suporte VIP. Cadastre-se pelo meu link exclusivo: {shortLink}"
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     onClick={async () => {
                       await navigator.clipboard.writeText(
-                        `🚀 Venha ser um Afiliado Oficial no Alliance Hub! Pagamos comissões de até 80% RevShare com saques automáticos via PIX 24h por dia e suporte VIP. Cadastre-se pelo meu link exclusivo: ${shortLink}`
+                        ` Venha ser um Afiliado Oficial no Alliance Hub! Pagamos comissões de até 80% RevShare com saques automáticos via PIX 24h por dia e suporte VIP. Cadastre-se pelo meu link exclusivo: ${shortLink}`
                       );
                       onShowToast('Texto copiado para a área de transferência!', 'success');
                     }}
@@ -3042,7 +2130,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
 
                   <a
                     href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                      `🚀 Venha ser um Afiliado Oficial no Alliance Hub! Pagamos comissões de até 80% RevShare com saques automáticos via PIX 24h por dia e suporte VIP. Cadastre-se pelo meu link exclusivo: ${shortLink}`
+                      ` Venha ser um Afiliado Oficial no Alliance Hub! Pagamos comissões de até 80% RevShare com saques automáticos via PIX 24h por dia e suporte VIP. Cadastre-se pelo meu link exclusivo: ${shortLink}`
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -3054,7 +2142,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
 
                   <a
                     href={`https://t.me/share/url?url=${encodeURIComponent(shortLink)}&text=${encodeURIComponent(
-                      '🚀 Venha ser um Afiliado Oficial no Alliance Hub! Pagamos até 80% RevShare com saques automáticos via PIX.'
+                      ' Venha ser um Afiliado Oficial no Alliance Hub! Pagamos até 80% RevShare com saques automáticos via PIX.'
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -3165,6 +2253,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
             </div>
           </div>
         )}
+      </main>
       </div>
 
       {/* Popups & Modals */}
@@ -3207,6 +2296,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
           setAlertModalOpen(true);
         }}
         onOpenEditCommission={(aff) => {
+          setDetailModalOpen(false);
           setCommissionTargetAffiliate(aff);
           setEditCommissionModalOpen(true);
         }}

@@ -944,7 +944,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           healed?.formattedPhone || formatPhoneDisplay(u.phone),
           healed?.whatsappNumber || getWhatsAppNumber(u.phone),
           healed?.whatsappLink || getWhatsAppLink(u.phone),
-          healed?.label || 'Válido ✅',
+          healed?.label || 'Válido ',
           u.phone || 'Não informado',
           u.email || '',
           refCode,

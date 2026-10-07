@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import {
   Sliders,
-  Sparkles,
-  Zap,
+  Activity,
   ShieldAlert,
-  Flame,
   Gauge,
   Play,
   RotateCcw,
@@ -16,17 +14,15 @@ import {
   SlidersHorizontal,
   Layers,
   Image as ImageIcon,
-  Activity,
   DollarSign,
   TrendingUp,
   Cpu,
   Target,
-  Award,
+  BarChart3,
   Lock,
   Unlock,
   Radio,
   Clock,
-  Sparkle,
   Globe
 } from 'lucide-react';
 
@@ -435,7 +431,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
       await Promise.all(updatedGames.map((g) => handleSaveGame(g)));
       onShowToast(
         nextState
-          ? '🚨 TRAVA DE EMERGÊNCIA ATIVADA: Retenção global forçada para 99.9% e salva no banco!'
+          ? ' TRAVA DE EMERGÊNCIA ATIVADA: Retenção global forçada para 99.9% e salva no banco!'
           : 'Trava de emergência desativada. Regras normais restauradas e salvas.',
         nextState ? 'error' : 'info'
       );
@@ -455,7 +451,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
       await Promise.all(updatedGames.map((g) => handleSaveGame(g)));
       onShowToast(
         nextState
-          ? '👑 MODO INFLUENCIADOR GLOBAL ATIVADO: Facilitador salvo em todos os jogos!'
+          ? ' MODO INFLUENCIADOR GLOBAL ATIVADO: Facilitador salvo em todos os jogos!'
           : 'Modo influenciador global desativado e salvo.',
         'success'
       );
@@ -543,7 +539,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-black text-slate-900">🚨 Trava de Emergência Global</span>
+                  <span className="text-xs font-black text-slate-900"> Trava de Emergência Global</span>
                   {isEmergencyGlobal && (
                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-600 text-white">
                       ATIVADA (Dreno 100%)
@@ -584,11 +580,11 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   isInfluencerGlobal ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600'
                 }`}
               >
-                <Award className="w-5 h-5" />
+                <BarChart3 className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-black text-slate-900">👑 Modo Influenciador / Lives</span>
+                  <span className="text-xs font-black text-slate-900"> Modo Influenciador / Lives</span>
                   {isInfluencerGlobal && (
                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500 text-white">
                       ATIVO (Física VIP)
@@ -738,14 +734,14 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   }`}
                 >
                   {universalRtp >= 95
-                    ? '🎁 Promoção / VIP'
+                    ? ' Promoção / VIP'
                     : universalRtp >= 85
-                    ? '✅ Padrão iGaming'
+                    ? ' Padrão iGaming'
                     : universalRtp >= 65
-                    ? '⚖️ Equilibrado'
+                    ? ' Equilibrado'
                     : universalRtp >= 35
-                    ? '⚠️ Retenção Pesada'
-                    : '🚨 Modo Dreno Total'}
+                    ? ' Retenção Pesada'
+                    : ' Modo Dreno Total'}
                 </span>
               </div>
             </div>
@@ -865,12 +861,12 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   smartRtpGlobal ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
                 }`}
               >
-                <Zap className="w-5 h-5" />
+                <Activity className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-black text-slate-900">
-                    ⚡ Botão de RTP Inteligente Geral
+                     Botão de RTP Inteligente Geral
                   </span>
                   <span
                     className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
@@ -904,7 +900,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
           {/* Seleção de Jogos Participantes */}
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
             <span className="text-xs font-black text-slate-800 block">
-              🎮 Jogos que Recebem o RTP Geral:
+               Jogos que Recebem o RTP Geral:
             </span>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {[
@@ -1020,7 +1016,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
             {/* Gen Dino */}
             <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                <span className="text-xs font-black text-slate-900">🦖 Gen Dino</span>
+                <span className="text-xs font-black text-slate-900"> Gen Dino</span>
                 <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
                   {universalRtp >= 90 ? 'Suave' : universalRtp >= 75 ? 'Médio' : universalRtp >= 45 ? 'Difícil' : 'Extremo'}
                 </span>
@@ -1044,7 +1040,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
             {/* Block Win */}
             <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                <span className="text-xs font-black text-slate-900">🧱 Block Win</span>
+                <span className="text-xs font-black text-slate-900"> Block Win</span>
                 <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800">
                   {universalRtp >= 85 ? 'Comum' : 'Apertado'}
                 </span>
@@ -1074,7 +1070,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
             {/* Bubble Blast */}
             <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                <span className="text-xs font-black text-slate-900">🫧 Bubble Blast</span>
+                <span className="text-xs font-black text-slate-900"> Bubble Blast</span>
                 <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">
                   {universalRtp >= 85 ? 'Alta Conversão' : 'Normal'}
                 </span>
@@ -1098,7 +1094,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
             {/* Raspa Fortuna */}
             <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                <span className="text-xs font-black text-slate-900">☘️ Raspa Fortuna</span>
+                <span className="text-xs font-black text-slate-900"> Raspa Fortuna</span>
                 <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-teal-100 text-teal-800">
                   {universalRtp >= 80 ? 'Equilibrada' : 'Baixa Odd'}
                 </span>
@@ -1124,7 +1120,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
             {/* Subway Pay */}
             <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                <span className="text-xs font-black text-slate-900">🛹 Subway Pay</span>
+                <span className="text-xs font-black text-slate-900"> Subway Pay</span>
                 <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
                   {universalRtp >= 85 ? 'Normal' : universalRtp >= 60 ? 'Rápido' : 'Extremo'}
                 </span>
@@ -1361,7 +1357,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   : 'bg-white/10 text-slate-300 hover:bg-white/15'
               }`}
             >
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
+              <Activity className="w-3.5 h-3.5 text-amber-500" />
               <span>2. RTP Inteligente</span>
               {selectedGame.smartRtp !== false && (
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -1377,7 +1373,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   : 'bg-white/10 text-slate-300 hover:bg-white/15'
               }`}
             >
-              <Flame className="w-3.5 h-3.5 text-orange-500" />
+              
               <span>3. Física & Motor</span>
             </button>
 
@@ -1608,7 +1604,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
-                      <Zap className="w-5 h-5" />
+                      <Activity className="w-5 h-5" />
                     </div>
                     <div>
                       <h4 className="text-base font-black text-slate-900 flex items-center gap-2">
@@ -1796,7 +1792,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                       <span className="text-[10px] font-bold text-slate-300">Sync Instantâneo Ativo</span>
                     </div>
                     <h4 className="text-lg font-black text-white flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-amber-400" />
+                      
                       <span>Probabilidades, Cartelas & Prêmios (Raspa Fortuna)</span>
                     </h4>
                     <p className="text-xs text-slate-200 max-w-2xl">
@@ -1948,7 +1944,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                       <span className="text-[10px] font-bold text-slate-300">Sync Instantâneo Ativo</span>
                     </div>
                     <h4 className="text-lg font-black text-white flex items-center gap-2">
-                      <Zap className="w-5 h-5 text-amber-400" />
+                      <Activity className="w-5 h-5 text-amber-400" />
                       <span>Física, Velocidades & Multiplicadores (Subway Pay)</span>
                     </h4>
                     <p className="text-xs text-slate-300 max-w-2xl">
@@ -1988,7 +1984,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                       {
                         label: 'Fácil / Onboarding',
                         desc: 'Velocidade suave, trens espaçados e cashout em 1.5x.',
-                        badge: '🟢 95% RTP',
+                        badge: ' 95% RTP',
                         baseSpeed: 120,
                         maxSpeed: 280,
                         speedPct: 85,
@@ -2002,7 +1998,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                       {
                         label: 'Equilibrado (iGaming)',
                         desc: 'Velocidade padrão, moedas equilibradas e cashout em 2.0x.',
-                        badge: '🟡 88% RTP',
+                        badge: ' 88% RTP',
                         baseSpeed: 180,
                         maxSpeed: 320,
                         speedPct: 100,
@@ -2016,7 +2012,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                       {
                         label: 'Desafio / Retenção',
                         desc: 'Alta velocidade, trens frequentes e cashout em 2.5x.',
-                        badge: '🟠 60% RTP',
+                        badge: ' 60% RTP',
                         baseSpeed: 245,
                         maxSpeed: 360,
                         speedPct: 125,
@@ -2030,7 +2026,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                       {
                         label: 'Mata-Banca / Dreno',
                         desc: 'Velocidade extrema, reflexo sobre-humano e cashout 3.0x.',
-                        badge: '🔴 15% RTP',
+                        badge: ' 15% RTP',
                         baseSpeed: 300,
                         maxSpeed: 420,
                         speedPct: 160,
@@ -2103,7 +2099,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                 <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
                   <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-black">
-                      <Zap className="w-5 h-5" />
+                      <Activity className="w-5 h-5" />
                     </div>
                     <div>
                       <label className="text-sm font-black text-slate-900 block">
@@ -2413,7 +2409,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                     <span className="text-[10px] font-bold text-slate-400">Sync Instantâneo Ativo</span>
                   </div>
                   <h4 className="text-lg font-black text-white flex items-center gap-2">
-                    <Flame className="w-5 h-5 text-orange-400" />
+                    
                     <span>Painel de Dificuldade & Velocidade dos Obstáculos (Gen Dino)</span>
                   </h4>
                   <p className="text-xs text-slate-300 max-w-2xl">
@@ -2451,7 +2447,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                     {
                       label: 'Demo / Onboarding',
                       desc: 'Super Lento & Fácil',
-                      badge: '🟢 1400ms Reação',
+                      badge: ' 1400ms Reação',
                       speed: 4.5,
                       maxSpd: 7.0,
                       accel: 0.0005,
@@ -2464,7 +2460,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                     {
                       label: 'Equilibrado (iGaming)',
                       desc: 'Padrão da Indústria',
-                      badge: '🟡 850ms Reação',
+                      badge: ' 850ms Reação',
                       speed: 6.0,
                       maxSpd: 13.0,
                       accel: 0.0010,
@@ -2477,7 +2473,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                     {
                       label: 'Desafio Gamer',
                       desc: 'Velocidade Alta',
-                      badge: '🟠 600ms Reação',
+                      badge: ' 600ms Reação',
                       speed: 8.5,
                       maxSpd: 18.0,
                       accel: 0.0018,
@@ -2490,7 +2486,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                     {
                       label: 'Hardcore / Retenção',
                       desc: 'Aperto Agressivo',
-                      badge: '🔴 380ms Reação',
+                      badge: ' 380ms Reação',
                       speed: 12.0,
                       maxSpd: 24.0,
                       accel: 0.0030,
@@ -2503,7 +2499,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                     {
                       label: 'Muro Travado / Impossível',
                       desc: 'Bloqueio Imediato',
-                      badge: '💀 180ms Reação',
+                      badge: ' 180ms Reação',
                       speed: 18.0,
                       maxSpd: 32.0,
                       accel: 0.0060,
@@ -2580,14 +2576,14 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                       }`}
                     >
                       {(selectedGame.reactionWindowMs ?? 850) >= 1200
-                        ? '🟢 Treino / Lento'
+                        ? ' Treino / Lento'
                         : (selectedGame.reactionWindowMs ?? 850) >= 800
-                        ? '🟡 Casual / Médio'
+                        ? ' Casual / Médio'
                         : (selectedGame.reactionWindowMs ?? 850) >= 500
-                        ? '🟠 Rápido / Gamer'
+                        ? ' Rápido / Gamer'
                         : (selectedGame.reactionWindowMs ?? 850) >= 280
-                        ? '🔴 Hardcore / Extremo'
-                        : '💀 Impossível / Bloqueio'}
+                        ? ' Hardcore / Extremo'
+                        : ' Impossível / Bloqueio'}
                     </span>
                   </div>
                 </div>
@@ -2640,7 +2636,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
               <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-orange-600/10 text-orange-600 flex items-center justify-center font-black">
-                    <Zap className="w-5 h-5" />
+                    <Activity className="w-5 h-5" />
                   </div>
                   <div>
                     <label className="text-sm font-black text-slate-900 block">
@@ -2916,7 +2912,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black text-slate-900">🛡️ Anti-Bailout (Sem Salvação)</span>
+                    <span className="text-xs font-black text-slate-900"> Anti-Bailout (Sem Salvação)</span>
                     <div
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
                         selectedGame.antiBailoutMode ? 'bg-rose-600' : 'bg-slate-300'
@@ -2944,7 +2940,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black text-slate-900">🧱 Peças Pesadas / Cactos Duplos</span>
+                    <span className="text-xs font-black text-slate-900"> Peças Pesadas / Cactos Duplos</span>
                     <div
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
                         selectedGame.heavyBlocksForce ? 'bg-amber-500' : 'bg-slate-300'
@@ -2978,7 +2974,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black text-slate-900">📈 Retenção por Multiplicador</span>
+                    <span className="text-xs font-black text-slate-900"> Retenção por Multiplicador</span>
                     <div
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
                         (selectedGame.dynamicRetention ?? true) ? 'bg-indigo-600' : 'bg-slate-300'
@@ -3006,7 +3002,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black text-slate-900">⚡ Freio de Sequência Vencedora</span>
+                    <span className="text-xs font-black text-slate-900"> Freio de Sequência Vencedora</span>
                     <div
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
                         (selectedGame.winStreakBrake ?? true) ? 'bg-purple-600' : 'bg-slate-300'
@@ -3034,7 +3030,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black text-slate-900">💰 Proteção de Aposta Alta</span>
+                    <span className="text-xs font-black text-slate-900"> Proteção de Aposta Alta</span>
                     <div
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
                         (selectedGame.highBetResistance ?? true) ? 'bg-emerald-600' : 'bg-slate-300'
@@ -3062,7 +3058,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black text-slate-900">🎯 Pressão de Quase-Derrota</span>
+                    <span className="text-xs font-black text-slate-900"> Pressão de Quase-Derrota</span>
                     <div
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
                         selectedGame.nearLossPressure ? 'bg-blue-600' : 'bg-slate-300'
@@ -3118,7 +3114,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   {[
                     {
-                      name: '🎁 100% Bônus Primeiro Depósito',
+                      name: ' 100% Bônus Primeiro Depósito',
                       title: 'DOBRE SEU SALDO AGORA!',
                       desc: 'Deposite R$ 20 e jogue com R$ 40 + 50 rodadas bônus no PIX!',
                       btn: 'DEPOSITAR E DOBRAR SALDO',
@@ -3126,7 +3122,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                       img: '/assets/popups/banner_bonus_100.png'
                     },
                     {
-                      name: '⚡ Modo Turbo 2x Multiplicador',
+                      name: ' Modo Turbo 2x Multiplicador',
                       title: 'MODO TURBO ATIVADO!',
                       desc: 'Recarregue qualquer valor agora para duplicar os pontos na corrida.',
                       btn: 'ATIVAR TURBO NO PIX',
@@ -3134,7 +3130,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                       img: '/assets/popups/banner_turbo_2x.png'
                     },
                     {
-                      name: '🏆 Baú Dourado Premiado',
+                      name: ' Baú Dourado Premiado',
                       title: 'VOCÊ DESBLOQUEOU UM BAÚ!',
                       desc: 'Deposite R$ 10 ou mais para abrir e resgatar até R$ 500 no PIX.',
                       btn: 'ABRIR MEU BAÚ PIX',
@@ -3142,7 +3138,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
                       img: '/assets/popups/banner_bau_dourado.png'
                     },
                     {
-                      name: '💎 Recarga Relâmpago VIP',
+                      name: ' Recarga Relâmpago VIP',
                       title: 'BÔNUS EXCLUSIVO LIBERADO',
                       desc: 'Oferta válida pelos próximos 5 minutos para alavancar sua banca.',
                       btn: 'GARANTIR BÔNUS VIP',

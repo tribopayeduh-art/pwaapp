@@ -7,15 +7,13 @@ import {
   Percent,
   Gamepad2,
   Users,
-  Award,
+  BarChart3,
   DollarSign,
   ArrowDownLeft,
   ArrowUpRight,
-  BarChart3,
   Loader2,
   Server,
-  Database,
-  Crown
+  Database
 } from 'lucide-react';
 import { ReportAnalyticsData } from './adminTypes';
 import {
@@ -61,7 +59,7 @@ export const AdminReportsTab: React.FC<AdminReportsTabProps> = ({
   const subTabOptions = [
     { id: 'dre' as const, label: 'DRE & Caixa', icon: FileText },
     { id: 'gaming' as const, label: 'GGR & Apostas', icon: Gamepad2 },
-    { id: 'affiliates' as const, label: 'Ranking Afiliados', icon: Award },
+    { id: 'affiliates' as const, label: 'Ranking Afiliados', icon: BarChart3 },
     { id: 'players' as const, label: 'Maiores Jogadores', icon: Users },
     { id: 'transactions' as const, label: 'Extrato Transacional', icon: BarChart3 }
   ];
@@ -112,7 +110,7 @@ export const AdminReportsTab: React.FC<AdminReportsTabProps> = ({
             className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 border-amber-500/20 font-bold"
             title="Exportar influenciadores com telefone válido para Excel e WhatsApp"
           >
-            <Crown className="w-3.5 h-3.5 text-amber-600" />
+            
             <span>Exportar Influenciadoras</span>
           </IOSButton>
         </div>
@@ -308,7 +306,7 @@ export const AdminReportsTab: React.FC<AdminReportsTabProps> = ({
                   title="Taxa de Vitória do Jogador"
                   value={`${(summary?.winRatePercent || 42.5).toFixed(1)}%`}
                   subtitle={`${summary?.winsCount || 0} vitórias / ${summary?.lossesCount || 0} derrotas`}
-                  icon={Award}
+                  icon={BarChart3}
                   iconBgColor="bg-[#34C759]"
                 />
               </div>

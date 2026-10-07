@@ -65,7 +65,7 @@ export const PartnerBroadcastModal: React.FC<PartnerBroadcastModalProps> = ({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: 🚀 Nova Campanha de Bonificação Ativa!"
+              placeholder="Ex:  Nova Campanha de Bonificação Ativa!"
               className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
               required
             />

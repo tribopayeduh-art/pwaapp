@@ -3,7 +3,6 @@ import {
   Users,
   Search,
   Filter,
-  Crown,
   Shield,
   Percent,
   Network,
@@ -20,7 +19,7 @@ import {
   TrendingUp,
   UserCheck,
   AlertCircle,
-  Zap,
+  Activity,
   Clock,
   ShieldAlert,
   ArrowUpRight,
@@ -74,7 +73,7 @@ export const getGameInfo = (gameId?: string) => {
     return {
       name: 'Bubble Blast',
       short: 'Bubble',
-      emoji: '🫧',
+      emoji: '',
       badgeClass: 'bg-purple-500/12 text-purple-800 border-purple-500/20'
     };
   }
@@ -82,7 +81,7 @@ export const getGameInfo = (gameId?: string) => {
     return {
       name: 'Gen Dino',
       short: 'Dino',
-      emoji: '🦖',
+      emoji: '',
       badgeClass: 'bg-amber-500/12 text-amber-800 border-amber-500/20'
     };
   }
@@ -90,7 +89,7 @@ export const getGameInfo = (gameId?: string) => {
     return {
       name: 'Subway Pay',
       short: 'Subway',
-      emoji: '🏃',
+      emoji: '',
       badgeClass: 'bg-amber-500/12 text-amber-800 border-amber-500/20'
     };
   }
@@ -98,14 +97,14 @@ export const getGameInfo = (gameId?: string) => {
     return {
       name: 'Raspa Fortuna',
       short: 'Raspa',
-      emoji: '🍀',
+      emoji: '',
       badgeClass: 'bg-teal-500/12 text-teal-800 border-teal-500/20'
     };
   }
   return {
     name: 'Block Win',
     short: 'Block Win',
-    emoji: '🧩',
+    emoji: '',
     badgeClass: 'bg-blue-500/12 text-blue-800 border-blue-500/20'
   };
 };
@@ -182,9 +181,9 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     { id: 'all', label: 'Todos' },
     { id: 'players', label: 'Jogadores' },
     { id: 'affiliates', label: 'Afiliados' },
-    { id: 'auto_withdraw', label: '⚡ Saque Auto' },
-    { id: 'manual_withdraw', label: '⏳ Saque Manual' },
-    { id: 'withdraw_blocked', label: '🚫 Saques Bloqueados' },
+    { id: 'auto_withdraw', label: ' Saque Auto' },
+    { id: 'manual_withdraw', label: ' Saque Manual' },
+    { id: 'withdraw_blocked', label: ' Saques Bloqueados' },
     { id: 'influencers', label: 'Influenciadores' },
     { id: 'with_sponsor', label: 'Com Patrocinador' },
     { id: 'organic', label: 'Orgânicos' },
@@ -333,7 +332,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
         <div className="bg-white p-4 rounded-2xl border border-black/[0.05] shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
             <span>Parceiros & VIPs</span>
-            <Crown className="w-4 h-4 text-amber-500" />
+            
           </div>
           <div className="text-xl sm:text-2xl font-black text-amber-600 mt-1">
             {metrics.affiliatesCount}
@@ -432,7 +431,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 className="bg-amber-600 hover:bg-amber-700 text-white font-bold shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
                 title="Exportar apenas influenciadoras com telefone válido ou auto-corrigido para WhatsApp"
               >
-                <Crown className="w-3.5 h-3.5 text-amber-200 shrink-0" />
+                
                 <span className="hidden sm:inline">Exportar Válidas</span>
                 <span className="sm:hidden">Válidas</span>
                 <span className="px-1.5 py-0.5 rounded-full bg-amber-500/30 text-white text-[10px] font-black border border-white/20">
@@ -468,7 +467,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 : 'bg-purple-50 text-purple-800 hover:bg-purple-100'
             }`}
           >
-            <span>🫧 Bubble Blast</span>
+            <span> Bubble Blast</span>
           </button>
           <button
             type="button"
@@ -479,7 +478,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
             }`}
           >
-            <span>🧩 Block Win</span>
+            <span> Block Win</span>
           </button>
           <button
             type="button"
@@ -490,7 +489,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
             }`}
           >
-            <span>🦖 Gen Dino</span>
+            <span> Gen Dino</span>
           </button>
           <button
             type="button"
@@ -501,7 +500,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 : 'bg-teal-50 text-teal-800 hover:bg-teal-100'
             }`}
           >
-            <span>🍀 Raspa Fortuna</span>
+            <span> Raspa Fortuna</span>
           </button>
           <button
             type="button"
@@ -512,7 +511,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
             }`}
           >
-            <span>🏃 Subway Pay</span>
+            <span> Subway Pay</span>
           </button>
         </div>
 
@@ -575,12 +574,12 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 cursor-pointer outline-none ${gameInfo.badgeClass}`}
                           title="Alterar jogo de origem deste usuário"
                         >
-                          <option value="g_subway_pay">🏃 Subway Pay</option>
-                          <option value="g_block_puzzle">🧩 Block Win</option>
-                          <option value="g_bubble_blast">🫧 Bubble Blast</option>
-                          <option value="g_gen_dino">🦖 Gen Dino</option>
-                          <option value="g_raspa_fortuna">🍀 Raspa</option>
-                          <option value="alliance_hub">🏛️ Hub</option>
+                          <option value="g_subway_pay"> Subway Pay</option>
+                          <option value="g_block_puzzle"> Block Win</option>
+                          <option value="g_bubble_blast"> Bubble Blast</option>
+                          <option value="g_gen_dino"> Gen Dino</option>
+                          <option value="g_raspa_fortuna"> Raspa</option>
+                          <option value="alliance_hub"> Hub</option>
                         </select>
                       ) : (
                         <span
@@ -605,10 +604,10 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                       )}
                       {isInfluencer && <IOSBadge variant="orange">Influenciador VIP</IOSBadge>}
                       {user.isPartner && user.partnerApproved && (
-                        <IOSBadge variant="green">💎 Parceiro ({user.partnerCode || 'VIP'})</IOSBadge>
+                        <IOSBadge variant="green"> Parceiro ({user.partnerCode || 'VIP'})</IOSBadge>
                       )}
                       {user.partnerRequested && !user.partnerApproved && (
-                        <IOSBadge variant="orange">⚠️ Pedido Parceiro</IOSBadge>
+                        <IOSBadge variant="orange"> Pedido Parceiro</IOSBadge>
                       )}
                       {(user.affiliateInfo?.cpaKillerActive || user.cpaKillerActive) && (
                         <IOSBadge variant="red">
@@ -618,16 +617,16 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                       )}
                       {user.autoWithdrawBlocked ? (
                         <IOSBadge variant="orange" title="Saque em análise manual">
-                          ⏳ Saque Manual
+                           Saque Manual
                         </IOSBadge>
                       ) : (
                         <IOSBadge variant="green" title="Saque automático ativo (Instantâneo)">
-                          ⚡ Saque Auto
+                           Saque Auto
                         </IOSBadge>
                       )}
                       {user.withdrawBlocked && (
                         <IOSBadge variant="red" title="Saques desativados pelo admin">
-                          🚫 Saques Off
+                           Saques Off
                         </IOSBadge>
                       )}
                       {user.isBlocked && <IOSBadge variant="red">Bloqueado</IOSBadge>}
@@ -662,7 +661,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                         <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 text-[11px]">
                           <span className="text-slate-400 font-medium">Parceiro Responsável:</span>
                           <span className="font-bold text-indigo-700 flex items-center gap-1">
-                            <span>🤝 {user.partnerName || `Código ${user.partnerCode}`}</span>
+                            <span> {user.partnerName || `Código ${user.partnerCode}`}</span>
                             {user.partnerCode && user.partnerName && (
                               <span className="font-mono text-[10px] text-indigo-400">({user.partnerCode})</span>
                             )}
@@ -838,7 +837,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                             className="w-full mt-1.5 py-1.5 px-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs hover:bg-blue-100 transition-all"
                             title="Definir percentual que o parceiro ganha sobre os afiliados dele"
                           >
-                            <Crown className="w-3.5 h-3.5 text-blue-600" />
+                            
                             <span>Comissão Parceiro s/ Afiliados: {user.partnerCommissionPercent ?? 20}%</span>
                           </button>
                         )}
@@ -910,7 +909,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                             </>
                           ) : (
                             <>
-                              <Zap className="w-3.5 h-3.5 text-emerald-600 fill-current shrink-0" />
+                              <Activity className="w-3.5 h-3.5 text-emerald-600 fill-current shrink-0" />
                               <span className="truncate">Definir Manual</span>
                             </>
                           )}
@@ -952,7 +951,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                             onClick={() => onTogglePartner(user, false)}
                             className="w-full py-2 rounded-xl bg-emerald-50 hover:bg-rose-50 text-emerald-800 hover:text-rose-700 text-xs font-semibold border border-emerald-200 hover:border-rose-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            <Crown className="w-3.5 h-3.5 text-amber-500" />
+                            
                             <span>Parceiro Oficial Ativo (Clique p/ Revogar)</span>
                           </button>
                         ) : (
@@ -965,8 +964,8 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                                 : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
                             }`}
                           >
-                            <Crown className="w-3.5 h-3.5 text-amber-500" />
-                            <span>{user.partnerRequested ? '⭐ Aprovar Pedido de Parceiro VIP' : 'Promover a Parceiro VIP (Aprovar)'}</span>
+                            
+                            <span>{user.partnerRequested ? ' Aprovar Pedido de Parceiro VIP' : 'Promover a Parceiro VIP (Aprovar)'}</span>
                           </button>
                         )}
                       </div>
@@ -1032,14 +1031,14 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                                     variant="orange"
                                     title="Saques deste usuário vão para aprovação manual"
                                   >
-                                    ⏳ Manual
+                                     Manual
                                   </IOSBadge>
                                 ) : (
                                   <IOSBadge
                                     variant="green"
                                     title="Saque automático ativo (Instantâneo padrão)"
                                   >
-                                    ⚡ Auto Saque
+                                     Auto Saque
                                   </IOSBadge>
                                 )}
                                 {user.withdrawBlocked && (
@@ -1047,7 +1046,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                                     variant="red"
                                     title="Saques desativados pelo administrador para este usuário"
                                   >
-                                    🚫 Saques Off
+                                     Saques Off
                                   </IOSBadge>
                                 )}
                                 {user.isBlocked && <IOSBadge variant="red">Bloqueado</IOSBadge>}
@@ -1075,12 +1074,12 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border cursor-pointer outline-none ${gameInfo.badgeClass}`}
                                 title="Alterar jogo de origem deste usuário"
                               >
-                                <option value="g_subway_pay">🏃 Subway Pay</option>
-                                <option value="g_block_puzzle">🧩 Block Win</option>
-                                <option value="g_bubble_blast">🫧 Bubble Blast</option>
-                                <option value="g_gen_dino">🦖 Gen Dino</option>
-                                <option value="g_raspa_fortuna">🍀 Raspa Fortuna</option>
-                                <option value="alliance_hub">🏛️ Alliance Hub</option>
+                                <option value="g_subway_pay"> Subway Pay</option>
+                                <option value="g_block_puzzle"> Block Win</option>
+                                <option value="g_bubble_blast"> Bubble Blast</option>
+                                <option value="g_gen_dino"> Gen Dino</option>
+                                <option value="g_raspa_fortuna"> Raspa Fortuna</option>
+                                <option value="alliance_hub"> Alliance Hub</option>
                               </select>
                             ) : (
                               <span
@@ -1123,7 +1122,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
 
                             {(user.partnerName || user.partnerCode) && (
                               <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/50 px-1.5 py-0.5 rounded truncate max-w-[130px]" title={`Parceiro: ${user.partnerName || user.partnerCode}`}>
-                                <span>🤝</span>
+                                
                                 <span className="truncate">{user.partnerName || user.partnerCode}</span>
                               </div>
                             )}
@@ -1349,7 +1348,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                                     className="mt-1 px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-rose-50 text-emerald-800 hover:text-rose-700 text-[10px] font-bold border border-emerald-200 transition-all flex items-center justify-center gap-1 mx-auto cursor-pointer"
                                     title="Clique para revogar acesso do parceiro"
                                   >
-                                    <Crown className="w-3 h-3 text-amber-500" />
+                                    
                                     <span>Parceiro ({user.partnerCode || 'VIP'})</span>
                                   </button>
                                   <button
@@ -1369,7 +1368,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                                   className="mt-1 px-2 py-0.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-black border border-amber-300 animate-pulse transition-all flex items-center justify-center gap-1 mx-auto cursor-pointer"
                                   title="Clique para aprovar pedido de parceiro"
                                 >
-                                  <Crown className="w-3 h-3 text-amber-600" />
+                                  
                                   <span>Aprovar Parceiro</span>
                                 </button>
                               ) : (
@@ -1379,7 +1378,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                                   className="mt-1 px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-[10px] font-bold border border-amber-200 transition-all flex items-center justify-center gap-1 mx-auto cursor-pointer shadow-2xs active:scale-95"
                                   title="Conceder acesso de Parceiro VIP ao painel parceiro.goalliancehub.com ou /parceiros"
                                 >
-                                  <Crown className="w-3 h-3 text-amber-600" />
+                                  
                                   <span>Definir Parceiro</span>
                                 </button>
                               )
@@ -1399,7 +1398,7 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                               Ajustar
                             </IOSButton>
 
-                            {/* Toggle Auto-Withdraw (⚡ Auto vs ⏳ Manual) */}
+                            {/* Toggle Auto-Withdraw ( Auto vs  Manual) */}
                             {onToggleAutoWithdraw && (
                               <button
                                 type="button"
@@ -1422,14 +1421,14 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                                   </>
                                 ) : (
                                   <>
-                                    <Zap className="w-3.5 h-3.5 text-emerald-600 fill-current shrink-0" />
+                                    <Activity className="w-3.5 h-3.5 text-emerald-600 fill-current shrink-0" />
                                     <span className="hidden xl:inline">Auto</span>
                                   </>
                                 )}
                               </button>
                             )}
 
-                            {/* Toggle Withdraw Access (🚫 Desativar vs ✅ Reativar) */}
+                            {/* Toggle Withdraw Access ( Desativar vs  Reativar) */}
                             {onToggleWithdraw && (
                               <button
                                 type="button"

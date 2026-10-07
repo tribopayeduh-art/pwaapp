@@ -261,11 +261,11 @@ export const PartnerEditCommissionModal: React.FC<PartnerEditCommissionModalProp
             <div className="space-y-1">
               <strong className="block font-bold">Dinâmica Oficial de Comissões:</strong>
               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] opacity-90">
-                <span>• Afiliado 85% ➔ Parceiro 5%</span>
-                <span>• Afiliado 75% ➔ Parceiro 10%</span>
-                <span>• Afiliado 80% ➔ Parceiro 7.5%</span>
-                <span>• Afiliado 70% ➔ Parceiro 15%</span>
-                <span className="col-span-2">• Afiliado 65% ➔ Parceiro 18%</span>
+                <span>• Afiliado 85%  Parceiro 5%</span>
+                <span>• Afiliado 75%  Parceiro 10%</span>
+                <span>• Afiliado 80%  Parceiro 7.5%</span>
+                <span>• Afiliado 70%  Parceiro 15%</span>
+                <span className="col-span-2">• Afiliado 65%  Parceiro 18%</span>
               </div>
             </div>
           </div>

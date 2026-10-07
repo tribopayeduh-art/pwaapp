@@ -3,7 +3,6 @@ import {
   Radio,
   Gamepad2,
   Users,
-  Flame,
   TrendingUp,
   DollarSign,
   Clock,
@@ -16,11 +15,9 @@ import {
   ArrowDownRight,
   ShieldAlert,
   ChevronRight,
-  Sparkles,
-  Zap,
+  Activity,
   Smartphone,
   Monitor,
-  Trophy,
   Sliders,
   CheckCircle2,
   AlertTriangle
@@ -396,7 +393,7 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Ticket Médio
             </span>
-            <Trophy className="w-4 h-4 text-purple-500" />
+            
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-extrabold text-slate-900">
@@ -647,7 +644,7 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
                           <td className="py-3 px-3">
                             {s.betAmount > 0 ? (
                               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-extrabold text-xs border border-emerald-200">
-                                <Zap className="w-3 h-3 text-emerald-600 fill-emerald-500 animate-pulse" />
+                                <Activity className="w-3 h-3 text-emerald-600 fill-emerald-500 animate-pulse" />
                                 <span>{(Number(s.multiplier) || 1.0).toFixed(2)}x</span>
                               </div>
                             ) : (
@@ -831,7 +828,7 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
           <IOSCard className="p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-black/[0.04] pb-3">
               <div className="flex items-center gap-2">
-                <Flame className="w-4 h-4 text-amber-500" />
+                
                 <h3 className="font-bold text-sm text-slate-900">
                   Feed de Resultados Recentes
                 </h3>

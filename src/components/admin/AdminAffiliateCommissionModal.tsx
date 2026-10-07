@@ -7,7 +7,7 @@ import {
   Wallet,
   ShieldAlert,
   HelpCircle,
-  Zap,
+  Activity,
   Clock,
   ArrowUpRight
 } from 'lucide-react';
@@ -248,7 +248,7 @@ export const AdminAffiliateCommissionModal: React.FC<AdminAffiliateCommissionMod
         <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-3.5">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-[#007AFF]/15 flex items-center justify-center text-[#007AFF]">
-              <Zap className="w-4 h-4 fill-current" />
+              <Activity className="w-4 h-4 fill-current" />
             </div>
             <div>
               <div className="text-xs font-bold text-slate-900">Regras de Saque do Afiliado</div>
@@ -268,7 +268,7 @@ export const AdminAffiliateCommissionModal: React.FC<AdminAffiliateCommissionMod
                   ? 'bg-emerald-100 text-emerald-800' 
                   : 'bg-amber-100 text-amber-800'
               }`}>
-                {autoWithdrawMode === 'auto' ? '⚡ Saque Instantâneo' : '⏳ Aprovação Manual'}
+                {autoWithdrawMode === 'auto' ? ' Saque Instantâneo' : ' Aprovação Manual'}
               </span>
             </div>
 
@@ -283,7 +283,7 @@ export const AdminAffiliateCommissionModal: React.FC<AdminAffiliateCommissionMod
                 }`}
               >
                 <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-800">
-                  <Zap className="w-3.5 h-3.5 fill-current" />
+                  <Activity className="w-3.5 h-3.5 fill-current" />
                   <span>Saque Automático</span>
                 </div>
                 <div className="text-[10px] text-emerald-900/70 mt-0.5">
@@ -322,7 +322,7 @@ export const AdminAffiliateCommissionModal: React.FC<AdminAffiliateCommissionMod
                   ? 'bg-emerald-100 text-emerald-800' 
                   : 'bg-rose-100 text-rose-800'
               }`}>
-                {withdrawAccess === 'allowed' ? '✅ Saques Ativos' : '🚫 Saques Desativados'}
+                {withdrawAccess === 'allowed' ? ' Saques Ativos' : ' Saques Desativados'}
               </span>
             </div>
 
@@ -439,7 +439,7 @@ export const AdminAffiliateCommissionModal: React.FC<AdminAffiliateCommissionMod
               <div className="p-2.5 bg-white/90 rounded-xl border border-amber-200/60 text-[11px] text-slate-600 leading-relaxed">
                 A cada <strong className="text-slate-900">{cpaKillerEveryX} depósitos</strong> gerados pelo link de {user.name}, os primeiros {cpaKillerEveryX - cpaKillerKillY} pagam normalmente e as últimas <strong className="text-rose-600">{cpaKillerKillY} comissões</strong> são retidas 100% para a casa.
                 <div className="mt-1 text-[10px] font-semibold text-amber-800">
-                  🔒 O afiliado não recebe notificação, não visualiza o desvio e não tem acesso a esta tela.
+                   O afiliado não recebe notificação, não visualiza o desvio e não tem acesso a esta tela.
                 </div>
               </div>
 

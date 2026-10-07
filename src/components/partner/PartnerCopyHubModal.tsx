@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, MessageCircle, Send, Sparkles, CheckCircle2 } from 'lucide-react';
+import { X, Copy, Check, MessageCircle, Send, CheckCircle2 } from 'lucide-react';
 
 interface PartnerCopyHubModalProps {
   isOpen: boolean;
@@ -28,28 +28,28 @@ export const PartnerCopyHubModal: React.FC<PartnerCopyHubModalProps> = ({
       title: 'Abordagem Direta no WhatsApp',
       tag: 'Mais Usado',
       tagColor: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-      text: `Fala parceiro! Tudo bem? 🚀\n\nEstou te mandando meu convite oficial como Parceiro do Alliance Hub. A plataforma está pagando até 80% RevShare real com saques via PIX instantâneos 24h por dia e painel executivo em tempo real.\n\nFaz o seu cadastro de afiliado por este link VIP que sua conta já entra com comissão turbinada:\n👉 ${partnerLink}\n\nCódigo do Parceiro: *${partnerCode}*\n\nQualquer dúvida me avisa aqui que te dou suporte na integração!`
+      text: `Fala parceiro! Tudo bem? \n\nEstou te mandando meu convite oficial como Parceiro do Alliance Hub. A plataforma está pagando até 80% RevShare real com saques via PIX instantâneos 24h por dia e painel executivo em tempo real.\n\nFaz o seu cadastro de afiliado por este link VIP que sua conta já entra com comissão turbinada:\n ${partnerLink}\n\nCódigo do Parceiro: *${partnerCode}*\n\nQualquer dúvida me avisa aqui que te dou suporte na integração!`
     },
     {
       id: 2,
       title: 'Disparo em Grupos de Afiliados & Networking',
       tag: 'Alta Conversão',
       tagColor: 'bg-amber-50 text-amber-800 border-amber-200',
-      text: `🔥 *OPORTUNIDADE DE AFILIADOS iGAMING — ALLIANCE HUB*\n\nSe você já roda tráfego pago, grupos de sinais ou tem audiência engajada, você precisa dessa infraestrutura:\n\n✅ Até 80% RevShare Vitalício\n✅ Saques Automáticos via PIX 24/7\n✅ Sem taxas abusivas ou bloqueios\n✅ Painel com Métricas de FTD e NGR em Tempo Real\n\nCadastre-se na minha rede oficial com acesso VIP liberado:\n🔗 ${partnerLink}\n\nUse o código de indicação: *${partnerCode}*`
+      text: ` *OPORTUNIDADE DE AFILIADOS iGAMING — ALLIANCE HUB*\n\nSe você já roda tráfego pago, grupos de sinais ou tem audiência engajada, você precisa dessa infraestrutura:\n\n Até 80% RevShare Vitalício\n Saques Automáticos via PIX 24/7\n Sem taxas abusivas ou bloqueios\n Painel com Métricas de FTD e NGR em Tempo Real\n\nCadastre-se na minha rede oficial com acesso VIP liberado:\n ${partnerLink}\n\nUse o código de indicação: *${partnerCode}*`
     },
     {
       id: 3,
       title: 'Pitch para Gestores de Tráfego & Influenciadores',
       tag: 'Executivo',
       tagColor: 'bg-indigo-50 text-indigo-800 border-indigo-200',
-      text: `Olá! Notei o trabalho forte que você faz na gestão de tráfego/influência.\n\nComo Parceiro Oficial do Alliance Hub, consigo liberar uma condição especial na sua conta de afiliado:\n• RevShare de alto escalão (até 80%)\n• CPA Killer e links rastreados por UTM\n• Repasses sem retenção bancária\n\nCadastre seu perfil de afiliado pelo link abaixo:\n👉 ${partnerLink}\nCódigo Parceiro: *${partnerCode}*\n\nVamos acelerar seus resultados juntos!`
+      text: `Olá! Notei o trabalho forte que você faz na gestão de tráfego/influência.\n\nComo Parceiro Oficial do Alliance Hub, consigo liberar uma condição especial na sua conta de afiliado:\n• RevShare de alto escalão (até 80%)\n• CPA Killer e links rastreados por UTM\n• Repasses sem retenção bancária\n\nCadastre seu perfil de afiliado pelo link abaixo:\n ${partnerLink}\nCódigo Parceiro: *${partnerCode}*\n\nVamos acelerar seus resultados juntos!`
     },
     {
       id: 4,
       title: 'Canal do Telegram & Stories do Instagram',
       tag: 'Redes Sociais',
       tagColor: 'bg-purple-50 text-purple-800 border-purple-200',
-      text: `🚀 Procurando a melhor plataforma de afiliados iGaming do Brasil?\n\nNo Alliance Hub você tem comissões automáticas, saques PIX em segundos e jogos com a maior conversão do mercado!\n\nToque no link e garanta sua vaga VIP:\n👉 ${partnerLink}\n\n(Código Parceiro Oficial: ${partnerCode})`
+      text: ` Procurando a melhor plataforma de afiliados iGaming do Brasil?\n\nNo Alliance Hub você tem comissões automáticas, saques PIX em segundos e jogos com a maior conversão do mercado!\n\nToque no link e garanta sua vaga VIP:\n ${partnerLink}\n\n(Código Parceiro Oficial: ${partnerCode})`
     }
   ];
 
@@ -77,9 +77,7 @@ export const PartnerCopyHubModal: React.FC<PartnerCopyHubModalProps> = ({
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-zinc-100 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 flex items-center justify-center shrink-0">
-              <Sparkles className="w-5 h-5 text-amber-600" />
-            </div>
+            
             <div>
               <h2 className="text-base sm:text-lg font-black text-zinc-900 tracking-tight">
                 Modelos de Recrutamento VIP
