@@ -6,7 +6,7 @@ import {
   Shuffle,
   Grid,
   BarChart3,
-  Sparkles,
+  Share2,
   Calculator,
   Megaphone,
   QrCode,
@@ -16,7 +16,7 @@ import {
   Percent
 } from 'lucide-react';
 
-export type PartnerTabType = 'affiliates' | 'ranking' | 'realtime' | 'diversion' | 'reports' | 'recruiting' | 'simulator';
+export type PartnerTabType = 'affiliates' | 'dashboards' | 'ranking' | 'realtime' | 'diversion' | 'reports' | 'recruiting' | 'simulator';
 
 interface PartnerMobileTabBarProps {
   activeTab: PartnerTabType;
@@ -39,10 +39,11 @@ export const PartnerMobileTabBar: React.FC<PartnerMobileTabBarProps> = ({
   moreDrawerOpen,
   setMoreDrawerOpen
 }) => {
-  const isMoreTabActive = activeTab === 'reports' || activeTab === 'recruiting' || activeTab === 'simulator';
+  const isMoreTabActive = activeTab === 'realtime' || activeTab === 'reports' || activeTab === 'recruiting' || activeTab === 'simulator';
 
   const getMoreTabLabel = () => {
-    if (activeTab === 'reports') return 'Relatórios';
+    if (activeTab === 'realtime') return 'Ao Vivo';
+    if (activeTab === 'reports') return 'Comissões';
     if (activeTab === 'recruiting') return 'Kit';
     if (activeTab === 'simulator') return 'Simulador';
     return 'Mais';
@@ -79,25 +80,25 @@ export const PartnerMobileTabBar: React.FC<PartnerMobileTabBarProps> = ({
 
             {/* Grid of extra tools */}
             <div className="grid grid-cols-2 gap-2.5 pt-1">
-              {/* Relatórios & Gráficos */}
+              {/* Radar Ao Vivo */}
               <button
                 type="button"
                 onClick={() => {
-                  onSelectTab('reports');
+                  onSelectTab('realtime');
                   setMoreDrawerOpen(false);
                 }}
                 className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition cursor-pointer active:scale-95 ${
-                  activeTab === 'reports'
+                  activeTab === 'realtime'
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-950 shadow-xs'
                     : 'bg-zinc-50/70 border-zinc-200 hover:bg-zinc-100 text-zinc-800'
                 }`}
               >
                 <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2">
-                  <BarChart3 className="w-4 h-4" />
+                  <Activity className="w-4 h-4" />
                 </div>
                 <div>
-                  <strong className="text-xs font-bold block">Relatórios</strong>
-                  <span className="text-[10px] text-zinc-500">Histórico de 14 dias & FTD</span>
+                  <strong className="text-xs font-bold block">Radar Ao Vivo</strong>
+                  <span className="text-[10px] text-zinc-500">Fluxo em tempo real</span>
                 </div>
               </button>
 
@@ -115,7 +116,7 @@ export const PartnerMobileTabBar: React.FC<PartnerMobileTabBarProps> = ({
                 }`}
               >
                 <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center mb-2">
-                  <Sparkles className="w-4 h-4" />
+                  <Share2 className="w-4 h-4" />
                 </div>
                 <div>
                   <strong className="text-xs font-bold block">Kit Recrutamento</strong>
@@ -217,7 +218,24 @@ export const PartnerMobileTabBar: React.FC<PartnerMobileTabBarProps> = ({
           <span className="text-[10px]">Afiliados</span>
         </button>
 
-        {/* Tab 2: Ranking */}
+        {/* Tab 2: Dashboards & Gráficos */}
+        <button
+          type="button"
+          onClick={() => {
+            onSelectTab('dashboards');
+            setMoreDrawerOpen(false);
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition cursor-pointer active:scale-95 min-w-[56px] ${
+            activeTab === 'dashboards'
+              ? 'text-emerald-700 font-bold'
+              : 'text-zinc-500 hover:text-zinc-800 font-medium'
+          }`}
+        >
+          <BarChart3 className="w-5 h-5" />
+          <span className="text-[10px]">Dashboard</span>
+        </button>
+
+        {/* Tab 3: Ranking */}
         <button
           type="button"
           onClick={() => {
@@ -232,26 +250,6 @@ export const PartnerMobileTabBar: React.FC<PartnerMobileTabBarProps> = ({
         >
           <Trophy className="w-5 h-5" />
           <span className="text-[10px]">Ranking</span>
-        </button>
-
-        {/* Tab 3: Ao Vivo */}
-        <button
-          type="button"
-          onClick={() => {
-            onSelectTab('realtime');
-            setMoreDrawerOpen(false);
-          }}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition cursor-pointer active:scale-95 min-w-[56px] ${
-            activeTab === 'realtime'
-              ? 'text-emerald-700 font-bold'
-              : 'text-zinc-500 hover:text-zinc-800 font-medium'
-          }`}
-        >
-          <div className="relative">
-            <Activity className="w-5 h-5" />
-            <span className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          </div>
-          <span className="text-[10px]">Ao Vivo</span>
         </button>
 
         {/* Tab 4: Desvio PIX */}

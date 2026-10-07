@@ -14,7 +14,6 @@ import {
   RotateCcw,
   Trophy,
   Flame,
-  Sparkles,
   Volume2,
   VolumeX,
   TrendingUp,
@@ -813,7 +812,7 @@ export const GameBoardView: React.FC<GameBoardViewProps> = ({
               <span>GANHOS ACUMULADOS</span>
               {isUserInfluencer ? (
                 <span className="bg-gradient-to-r from-amber-500/30 to-emerald-500/30 text-amber-300 border border-amber-500/40 text-[8px] font-black px-1.5 py-0.2 rounded flex items-center gap-0.5 animate-pulse">
-                  ⭐ INFLUENCIADOR (80% WIN)
+                  INFLUENCIADOR (80% WIN)
                 </span>
               ) : (
                 <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded ${
@@ -1128,7 +1127,7 @@ export const GameBoardView: React.FC<GameBoardViewProps> = ({
 
             {isNewRecord && (
               <div className="p-2 bg-amber-500/20 border border-amber-400/40 text-amber-300 rounded-xl text-xs font-bold font-mono animate-bounce flex items-center justify-center gap-1.5">
-                <Sparkles className="w-4 h-4" />
+                <Trophy className="w-4 h-4" />
                 <span>NOVO RECORDE PESSOAL!</span>
               </div>
             )}

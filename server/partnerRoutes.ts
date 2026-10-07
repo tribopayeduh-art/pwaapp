@@ -1,5 +1,6 @@
-import express from 'express';
-import type { Request, Response, NextFunction, Router } from 'express';
+import { fetchWithTimeout as fetch } from './network.ts';
+import { Router } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { dbService } from './db.ts';
 import type { UserDB, AffiliateDB, TransactionDB, GameBetDB } from './db.ts';
@@ -21,7 +22,7 @@ export function createPartnerRouter(
   sendPushNotification: (userId: string | null, payload: any) => Promise<any>,
   logSecurityEvent: (action: string, metadata: any) => void
 ): Router {
-  const router = express.Router();
+  const router = Router();
 
   // Middleware: Require partner access (user.isPartner && user.partnerApproved, or superadmin)
   const requirePartner = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -339,7 +340,7 @@ export function createPartnerRouter(
             affiliateName: affUser?.name || 'Direto do Parceiro',
             playerName: maskedName,
             type: (b.status === 'cashed_out' ? 'win' : 'bet') as 'deposit' | 'bet' | 'win' | 'withdrawal' | 'signup',
-            gameName: b.gameId === 'g_block_puzzle' ? 'Block Win' : (b.gameId === 'g_gen_dino' ? 'GEN DINO' : (b.gameId === 'g_zumbla' ? 'Zumbla Win' : 'Raspa Fortuna')),
+            gameName: b.gameId === 'g_block_puzzle' ? 'Block Win' : (b.gameId === 'g_gen_dino' ? 'GEN DINO' : (b.gameId === 'g_bubble_blast' ? 'Bubble Blast' : (b.gameId === 'g_subway_pay' ? 'Subway Pay' : 'Raspa Fortuna'))),
             amount: b.payoutAmount > 0 ? b.payoutAmount : b.betAmount,
             multiplier: b.multiplier || 1.0,
             status: b.status,
@@ -452,10 +453,10 @@ export function createPartnerRouter(
               affiliateName: directAff?.name || 'Afiliado da Rede',
               affiliateCode: directAff?.referralCode || u?.referredBy || '',
               saleNumber: undefined,
-              divertedKey: t.partnerDivertedKey || partnerUser.partnerPixDiversion?.pixKey || '',
+              divertedKey: t.partnerDivertedKey || 'Conta do Parceiro',
               divertedAt: t.createdAt || new Date().toISOString(),
               status: 'intercepted',
-              cycleInfo: 'Desviado para seu PIX'
+              cycleInfo: 'Creditado na conta do Parceiro'
             });
           }
         }
@@ -828,10 +829,10 @@ export function createPartnerRouter(
               playerEmail: '',
               affiliateName: 'Afiliado da Rede',
               saleNumber: undefined,
-              divertedKey: t.partnerDivertedKey || current?.pixKey || '',
+              divertedKey: t.partnerDivertedKey || 'Conta do Parceiro',
               divertedAt: t.createdAt || new Date().toISOString(),
               status: 'intercepted',
-              cycleInfo: 'Desviado para seu PIX'
+              cycleInfo: 'Creditado na conta do parceiro'
             });
           }
         }

@@ -14,7 +14,7 @@ export const AuthDesktopPanel: React.FC = () => (
       <div className="auth-desktop-features">
         <article><i><BadgeDollarSign /></i><span><b>Financeiro consolidado</b><small>Carteira e comissões atualizadas</small></span></article>
         <article><i><Users /></i><span><b>Rede de afiliados</b><small>Influenciadores e conversões</small></span></article>
-        <article><i><Gamepad2 /></i><span><b>Métricas por jogo</b><small>Block Win, Zumbla e GEN DINO</small></span></article>
+        <article><i><Gamepad2 /></i><span><b>Métricas por jogo</b><small>Block Win, Bubble Blast e GEN DINO</small></span></article>
       </div>
       <div className="auth-desktop-security"><ShieldCheck /><span><b>Ambiente protegido</b><small>Sessão autenticada e dados sincronizados</small></span></div>
     </div>

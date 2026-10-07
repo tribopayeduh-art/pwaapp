@@ -1,6 +1,15 @@
 import React from 'react';
 import { Transaction } from '../types';
-import { ArrowDownLeft, ArrowUpRight, CheckCircle2, Gamepad2, BadgeDollarSign } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CheckCircle2,
+  Clock3,
+  XCircle,
+  AlertCircle,
+  Gamepad2,
+  BadgeDollarSign
+} from 'lucide-react';
 
 interface TransactionItemProps {
   transaction: Transaction;
@@ -9,6 +18,7 @@ interface TransactionItemProps {
 export const TransactionItem: React.FC<TransactionItemProps> = ({ transaction }) => {
   const isDeposit = transaction.type === 'deposit';
   const isCommission = transaction.type === 'commission';
+  const isWithdrawal = transaction.type === 'withdrawal';
 
   const formatCurrency = (val: number) => {
     return val.toLocaleString('pt-BR', {
@@ -40,12 +50,46 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ transaction })
   const desc = transaction.description || '';
   const isFromBlockWin = desc.toLowerCase().includes('blockwin') || desc.toLowerCase().includes('block win');
 
+  const statusInfo = (() => {
+    const s = (transaction.status || 'pending').toLowerCase();
+    if (s === 'approved' || s === 'completed' || s === 'paid') {
+      return {
+        label: 'Aprovado',
+        color: 'text-emerald-700 bg-emerald-50 border-emerald-200/60',
+        icon: <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+      };
+    }
+    if (s === 'pending' || s === 'processing') {
+      return {
+        label: 'Pendente',
+        color: 'text-amber-700 bg-amber-50 border-amber-200/60',
+        icon: <Clock3 className="w-3 h-3 text-amber-600" />
+      };
+    }
+    if (s === 'rejected' || s === 'failed') {
+      return {
+        label: 'Recusado',
+        color: 'text-rose-700 bg-rose-50 border-rose-200/60',
+        icon: <XCircle className="w-3 h-3 text-rose-600" />
+      };
+    }
+    return {
+      label: 'Cancelado',
+      color: 'text-zinc-600 bg-zinc-100 border-zinc-200',
+      icon: <AlertCircle className="w-3 h-3 text-zinc-500" />
+    };
+  })();
+
   return (
-    <div className="flex items-center justify-between py-3 px-3.5 bg-white rounded-xl border border-[#E5E5E5] hover:border-zinc-300 transition-all">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between py-3 px-3.5 bg-white rounded-xl border border-[#E5E5E5] hover:border-zinc-300 transition-all shadow-2xs">
+      <div className="flex items-center gap-3 min-w-0">
         <div
-          className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-            isDeposit ? 'bg-[#F5F5F5] text-[#111111]' : 'bg-[#F5F5F5] text-[#111111]'
+          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+            isCommission
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+              : isDeposit
+              ? 'bg-emerald-50/50 border-emerald-100 text-emerald-700'
+              : 'bg-zinc-100 border-zinc-200 text-zinc-800'
           }`}
         >
           {isCommission ? (
@@ -57,10 +101,10 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ transaction })
           )}
         </div>
 
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <h4 className="font-semibold text-xs text-[#111111] leading-tight">
-              {isCommission ? 'Comissão recebida' : isDeposit ? 'Depósito via Pix' : 'Saque efetuado'}
+            <h4 className="font-bold text-xs text-[#111111] leading-tight truncate">
+              {isCommission ? 'Comissão recebida' : isDeposit ? 'Depósito via Pix' : 'Saque PIX'}
             </h4>
             {isFromBlockWin && (
               <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9px] font-bold rounded-md flex items-center gap-0.5">
@@ -68,24 +112,28 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({ transaction })
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5 mt-0.5">
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             <span className="text-[10px] text-[#737373] font-normal">
               {formatDate(transaction.createdAt)}
             </span>
             <span className="text-zinc-300">•</span>
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#737373]">
-              <CheckCircle2 className="w-3 h-3 text-[#111111]" />
-              {transaction.status === 'approved' ? 'Aprovado' : transaction.status}
+            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${statusInfo.color}`}>
+              {statusInfo.icon}
+              <span>{statusInfo.label}</span>
             </span>
           </div>
-          {isCommission && <p className="mt-1 max-w-[210px] truncate text-[9px] font-medium text-emerald-700">{transaction.description}</p>}
+          {transaction.description && (
+            <p className="mt-1 max-w-[280px] sm:max-w-md truncate text-[10px] text-zinc-500 font-medium">
+              {transaction.description}
+            </p>
+          )}
         </div>
       </div>
 
-      <div className="text-right">
+      <div className="text-right shrink-0 pl-2">
         <span
-          className={`font-bold text-xs ${
-            isDeposit || isCommission ? 'text-green-600' : 'text-[#111111]'
+          className={`font-black text-xs sm:text-sm tabular-nums block ${
+            isDeposit || isCommission ? 'text-emerald-600' : 'text-zinc-900'
           }`}
         >
           {isDeposit || isCommission ? '+ ' : '- '}{formatCurrency(transaction.amount)}

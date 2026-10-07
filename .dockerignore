@@ -1,10 +1,16 @@
 node_modules
+node_modules/**
 dist
+dist/**
 .git
+.git/**
 .data
+.data/**
 *.zip
 *.tar
 *.tar.gz
+*.tgz
+*.log
 npm-debug.log*
 .DS_Store
 *.md
@@ -12,3 +18,6 @@ npm-debug.log*
 .system_secrets.vault
 *.vault
 bun.lock
+bun.lockb
+.vscode
+.idea

@@ -28,16 +28,16 @@
     </image:image>
   </url>
 
-  <!-- Zumbla Win -->
+  <!-- Bubble Blast -->
   <url>
-    <loc>https://goalliancehub.com/?game=zumbla</loc>
-    <xhtml:link rel="canonical" href="https://zumblapay.site/" />
-    <lastmod>2026-09-18</lastmod>
+    <loc>https://goalliancehub.com/?game=bubbleblast</loc>
+    <xhtml:link rel="canonical" href="https://jogarbubble.online/" />
+    <lastmod>2026-10-02</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
     <image:image>
-      <image:loc>https://goalliancehub.com/zumbla/banner-zumbla-win.webp</image:loc>
-      <image:title>Zumbla Win - Jogo de Bolinhas Mágicas e Multiplicador x5.00</image:title>
+      <image:loc>https://goalliancehub.com/bubbleblast.png</image:loc>
+      <image:title>Bubble Blast - Jogo de Bolhas e Multiplicador x5.00</image:title>
     </image:image>
   </url>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, X, ExternalLink, Sparkles } from 'lucide-react';
+import { Bell, X, ExternalLink, Zap } from 'lucide-react';
 import { InAppNotificationItem } from '../lib/pwaNotification';
 
 export const InAppNotificationBanner: React.FC = () => {
@@ -67,7 +67,7 @@ export const InAppNotificationBanner: React.FC = () => {
                   }}
                 />
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center text-[9px] text-black font-bold">
-                  <Sparkles className="w-2.5 h-2.5 text-black" />
+                  <Zap className="w-2.5 h-2.5 text-black" />
                 </div>
               </div>
 

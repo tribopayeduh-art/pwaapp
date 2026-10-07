@@ -1,6 +1,6 @@
-import { initializeApp, getApps } from 'firebase/app';
 import {
   getFirestore,
+  runTransaction,
   collection,
   doc,
   getDoc,
@@ -10,7 +10,7 @@ import {
   deleteDoc,
   query,
   where
-} from 'firebase/firestore';
+} from './firestoreAdapter.ts';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -23,11 +23,10 @@ try {
     firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
   }
 } catch (e) {
-  console.warn('Could not read firebase-applet-config.json:', e);
+  console.error('[Firebase] Failed to load config:', e);
 }
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-export const firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+export const firestoreDb = getFirestore(firebaseConfig);
 
 export interface PushSubscriptionDB {
   id?: string;
@@ -136,6 +135,7 @@ export interface UserDB {
   name: string;
   email: string;
   phone: string;
+  cpf?: string;
   passwordHash: string;
   affiliateId?: string;
   parentAffiliateId?: string;
@@ -143,6 +143,8 @@ export interface UserDB {
   referredBy?: string;
   referralCode: string;
   balance: number;
+  totalDeposited?: number;
+  totalWithdrawn?: number;
   minWithdraw?: number;
   withdrawFee?: number;
   isInfluencer?: boolean;
@@ -256,9 +258,11 @@ export interface TransactionDB {
   type: 'deposit' | 'withdrawal';
   amount: number;
   status: 'approved' | 'pending' | 'rejected';
-  paymentMethod: string;
+  paymentMethod?: string;
   description: string;
   createdAt: string;
+  gateway?: string;
+  correlationId?: string;
   dotfyWithdrawalId?: string;
   pixKeyId?: string;
   isAutoCashout?: boolean;
@@ -375,10 +379,12 @@ export interface GameBetDB {
   betAmount: number;
   multiplier: number;
   payoutAmount: number;
-  profitAmount: number;
-  status: 'active' | 'cashed_out' | 'lost';
+  profitAmount?: number;
+  profit?: number;
+  score?: number;
+  status: 'active' | 'cashed_out' | 'lost' | 'won';
   difficulty: 'easy' | 'medium' | 'hard' | 'extreme';
-  rtpPercent: number;
+  rtpPercent?: number;
   createdAt: string;
   updatedAt?: string;
 }
@@ -483,7 +489,8 @@ const memoryInfluencerRequests = new Map<string, InfluencerCommissionRequestDB>(
 
 export class FirestoreDB {
   constructor() {
-    // Seed default admin in memory cache
+    if (process.env.NODE_ENV === "production" || process.env.ENABLE_DEMO_ADMIN !== "true") return;
+    // Explicit local development bootstrap only
     const defaultAdmin: UserDB = {
       id: 'usr_admin_master',
       name: 'Administrador Geral',
@@ -567,6 +574,25 @@ export class FirestoreDB {
     }
   }
 
+  async getUserByPhone(phone: string): Promise<UserDB | null> {
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone) return null;
+    try {
+      const q = query(collection(firestoreDb, 'users'), where('phone', '==', cleanPhone));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const user = snap.docs[0].data() as UserDB;
+        memoryUsers.set(user.id, user);
+        memoryUsers.set(`phone_${cleanPhone}`, user);
+        return user;
+      }
+      return memoryUsers.get(`phone_${cleanPhone}`) || null;
+    } catch (e) {
+      console.warn('[Firestore] Error on getUserByPhone, checking memory fallback:', e);
+      return memoryUsers.get(`phone_${cleanPhone}`) || null;
+    }
+  }
+
   async getUserById(id: string): Promise<UserDB | null> {
     try {
       const snap = await getDoc(doc(firestoreDb, 'users', id));
@@ -644,22 +670,178 @@ export class FirestoreDB {
     try {
       await setDoc(doc(firestoreDb, 'users', user.id), sanitizeForFirestore(user));
     } catch (e) {
-      console.warn('[Firestore] Warning: createUser could not immediately sync to cloud, stored in memory:', e);
+      memoryUsers.delete(user.id);
+      memoryUsers.delete(user.email.toLowerCase());
+      throw e;
     }
   }
 
   async updateUserBalance(id: string, newBalance: number): Promise<void> {
+    if (!Number.isFinite(newBalance) || newBalance < 0) throw new Error('Saldo inválido.');
+    const balance = Math.round(newBalance * 100) / 100;
+    // Never report a successful financial write when persistence failed.
+    await updateDoc(doc(firestoreDb, 'users', id), { balance });
     const existing = memoryUsers.get(id);
-    if (existing) {
-      existing.balance = newBalance;
-      memoryUsers.set(id, existing);
-      memoryUsers.set(existing.email.toLowerCase(), existing);
-    }
-    try {
-      await updateDoc(doc(firestoreDb, 'users', id), { balance: newBalance });
-    } catch (e) {
-      console.warn('[Firestore] Warning: updateUserBalance sync failed:', e);
-    }
+    if (existing) existing.balance = balance;
+  }
+
+  async getAdminOperationNotes(): Promise<any[]> {
+    const snap = await getDocs(collection(firestoreDb, 'admin_operation_notes'));
+    return snap.docs.map((item: any) => ({ ...item.data(), id: item.id }));
+  }
+
+  async saveAdminOperationNote(id: string, data: Record<string, any>, expectedRevision: number): Promise<any> {
+    return runTransaction(firestoreDb, async transaction => {
+      const ref = doc(firestoreDb, 'admin_operation_notes', id);
+      const current = (await transaction.get(ref)).data();
+      const revision = Number(current?.revision || 0);
+      if (revision !== expectedRevision) {
+        const error = new Error('Outro operador atualizou esta anotação. Atualize a central antes de salvar.');
+        (error as any).status = 409;
+        throw error;
+      }
+      const result = { ...data, id, revision: revision + 1, updatedAt: new Date().toISOString() };
+      transaction.set(ref, result);
+      return result;
+    });
+  }
+
+  async revokeSession(token: string): Promise<void> {
+    const id = crypto.createHash('sha256').update(token).digest('hex');
+    await setDoc(doc(firestoreDb, 'revoked_sessions', id), { revokedAt: new Date().toISOString() });
+  }
+
+  async isSessionRevoked(token: string): Promise<boolean> {
+    const id = crypto.createHash('sha256').update(token).digest('hex');
+    return (await getDoc(doc(firestoreDb, 'revoked_sessions', id))).exists();
+  }
+
+  async startGameBetAtomic(bet: GameBetDB): Promise<number> {
+    return runTransaction(firestoreDb, async transaction => {
+      const userRef = doc(firestoreDb, 'users', bet.userId);
+      const betRef = doc(firestoreDb, 'gameBets', bet.id);
+      const user = await transaction.get(userRef);
+      const previous = await transaction.get(betRef);
+      if (!user.exists() || previous.exists()) throw new Error('Aposta inválida ou já registrada.');
+      const balance = Number(user.data().balance);
+      const amount = Number(bet.betAmount);
+      if (!Number.isFinite(balance) || !Number.isFinite(amount) || amount <= 0 || amount > balance) throw new Error('Saldo insuficiente ou aposta inválida.');
+      const newBalance = Math.round((balance - amount) * 100) / 100;
+      transaction.update(userRef, { balance: newBalance });
+      transaction.set(betRef, sanitizeForFirestore(bet));
+      return newBalance;
+    });
+  }
+
+  async settleGameBetAtomic(betId: string, userId: string, payout: number, status: 'cashed_out' | 'lost', paymentMethod: string): Promise<number> {
+    return runTransaction(firestoreDb, async transaction => {
+      const betRef = doc(firestoreDb, 'gameBets', betId);
+      const userRef = doc(firestoreDb, 'users', userId);
+      const bet = (await transaction.get(betRef)).data();
+      const user = (await transaction.get(userRef)).data();
+      if (!bet || bet.userId !== userId || bet.status !== 'active' || !user) throw new Error('Aposta inválida ou já liquidada.');
+      if (!Number.isFinite(payout) || payout < 0 || (status === 'lost' && payout !== 0)) throw new Error('Prêmio inválido.');
+      const balance = Math.round((Number(user.balance) + payout) * 100) / 100;
+      if (!Number.isFinite(balance)) throw new Error('Saldo inválido.');
+      const multiplier = payout / bet.betAmount;
+      transaction.update(userRef, { balance });
+      transaction.update(betRef, { payoutAmount: payout, profitAmount: Math.round((payout - bet.betAmount) * 100) / 100, multiplier, status });
+      if (payout > 0) transaction.set(doc(firestoreDb, 'transactions', 'game_' + betId), {
+        id: 'game_' + betId, userId, type: 'deposit', amount: payout, status: 'approved', paymentMethod,
+        description: `Prêmio de jogo (${betId})`, createdAt: new Date().toISOString()
+      });
+      return balance;
+    });
+  }
+
+  async claimWithdrawal(id: string): Promise<void> {
+    await runTransaction(firestoreDb, async transaction => {
+      const ref = doc(firestoreDb, 'transactions', id);
+      const snap = await transaction.get(ref);
+      const tx = snap.data();
+      if (!tx || tx.type !== 'withdrawal' || tx.status !== 'pending' || tx.gatewayProcessing || tx.dotfyWithdrawalId) {
+        throw new Error('Saque já processado ou aguardando conciliação do gateway.');
+      }
+      transaction.update(ref, { gatewayProcessing: true, processingStartedAt: new Date().toISOString() });
+    });
+  }
+
+  async rejectPlayerWithdrawal(id: string, extraData: Record<string, any> = {}): Promise<void> {
+    await runTransaction(firestoreDb, async transaction => {
+      const ref = doc(firestoreDb, 'transactions', id);
+      const snap = await transaction.get(ref);
+      const tx = snap.data();
+      if (!tx || tx.type !== 'withdrawal' || tx.status !== 'pending' || tx.gatewayProcessing || tx.dotfyWithdrawalId) {
+        throw new Error('Somente saques pendentes e não enviados podem ser estornados.');
+      }
+      const userRef = doc(firestoreDb, 'users', tx.userId);
+      const userSnap = await transaction.get(userRef);
+      if (!userSnap.exists()) throw new Error('Jogador não encontrado.');
+      const balance = Number(userSnap.data().balance);
+      const amount = Number(tx.amount);
+      if (!Number.isFinite(balance) || !Number.isFinite(amount) || amount <= 0) throw new Error('Valores financeiros inválidos.');
+      transaction.update(userRef, { balance: Math.round((balance + amount) * 100) / 100 });
+      transaction.update(ref, { ...extraData, status: 'rejected', processedAt: new Date().toISOString() });
+    });
+
+  }
+
+  async settleGatewayWithdrawal(id: string, gatewayId: string, completed: boolean): Promise<boolean> {
+    return runTransaction(firestoreDb, async transaction => {
+      const ref = doc(firestoreDb, 'transactions', id);
+      const snap = await transaction.get(ref);
+      const tx = snap.data();
+      if (!tx || tx.type !== 'withdrawal' || tx.dotfyWithdrawalId !== gatewayId) throw new Error('Saque não vinculado ao gateway.');
+      if (tx.gatewaySettledAt || tx.status === 'rejected') return false;
+      if (!completed) {
+        const amount = Number(tx.amount);
+        if (!Number.isFinite(amount) || amount <= 0) throw new Error('Valor de estorno inválido.');
+        const isAffiliateWallet = tx.walletKind === 'affiliate' || id.startsWith('tx_aff_wd_');
+        let walletRef: any;
+        let field = 'balance';
+        if (isAffiliateWallet) {
+          const aff = await this.getAffiliateByUserId(tx.userId);
+          if (!aff) throw new Error('Carteira de comissões não encontrada.');
+          walletRef = doc(firestoreDb, 'affiliates', aff.id);
+          field = 'affiliateBalance';
+        } else walletRef = doc(firestoreDb, 'users', tx.userId);
+        const wallet = await transaction.get(walletRef);
+        if (!wallet.exists()) throw new Error('Carteira não encontrada.');
+        const balance = Number(wallet.data()[field] || 0);
+        if (!Number.isFinite(balance)) throw new Error('Saldo de estorno inválido.');
+        transaction.update(walletRef, { [field]: Math.round((balance + amount) * 100) / 100 });
+      }
+      transaction.update(ref, { status: completed ? 'approved' : 'rejected', gatewayProcessing: false, gatewaySettledAt: new Date().toISOString() });
+      return true;
+    });
+  }
+
+  async creditChargeOnce(charge: StoredChargeDB): Promise<TransactionDB | null> {
+    const txId = 'pix_' + crypto.createHash('sha256').update(charge.correlationID).digest('hex');
+    const result = await runTransaction(firestoreDb, async transaction => {
+      const chargeRef = doc(firestoreDb, 'charges', charge.correlationID);
+      const txRef = doc(firestoreDb, 'transactions', txId);
+      const chargeSnap = await transaction.get(chargeRef);
+      const txSnap = await transaction.get(txRef);
+      if (chargeSnap.data()?.credited || txSnap.exists()) return null;
+      const userRef = doc(firestoreDb, 'users', charge.userId!);
+      const userSnap = await transaction.get(userRef);
+      if (!userSnap.exists()) throw new Error('Usuário do depósito não encontrado.');
+      const amount = Number(charge.valueInReais ?? charge.value / 100);
+      const balance = Number(userSnap.data().balance);
+      if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(balance)) throw new Error('Valor do depósito inválido.');
+      const tx: TransactionDB = {
+        id: txId, userId: charge.userId!, type: 'deposit', amount: Math.round(amount * 100) / 100,
+        status: 'approved', paymentMethod: 'Pix', description: charge.description || 'Depósito via Pix',
+        createdAt: new Date().toISOString()
+      };
+      transaction.update(userRef, { balance: Math.round((balance + tx.amount) * 100) / 100 });
+      transaction.set(txRef, tx);
+      transaction.set(chargeRef, sanitizeForFirestore({ ...charge, status: 'PAID', credited: true }), { merge: true });
+      return tx;
+    });
+    if (result) memoryTransactions.set(result.id, result);
+    return result;
   }
 
   async updateUserFields(id: string, fields: Partial<UserDB & { isInfluencer?: boolean }>): Promise<void> {
@@ -873,7 +1055,8 @@ export class FirestoreDB {
     try {
       await setDoc(doc(firestoreDb, 'transactions', tx.id), sanitizeForFirestore(tx));
     } catch (e) {
-      console.warn('[Firestore] createTransaction fallback:', e);
+      memoryTransactions.delete(tx.id);
+      throw e;
     }
   }
 
@@ -1271,7 +1454,8 @@ export class FirestoreDB {
     const isZumbla = gameId === 'g_zumbla' || gameId === 'zumbla' || gameId === 'zumbla-game';
     const isRaspa = gameId === 'g_raspa_fortuna' || gameId === 'raspa_fortuna' || gameId === 'raspafortuna' || gameId === 'raspa-fortuna';
     const isSubway = gameId === 'g_subway_pay' || gameId === 'subwaypay' || gameId === 'subway-pay' || gameId === 'subway_pay' || gameId === 'subwaysurfers';
-    const cleanId = isDino ? 'g_gen_dino' : (isZumbla ? 'g_zumbla' : (isRaspa ? 'g_raspa_fortuna' : (isSubway ? 'g_subway_pay' : 'g_block_puzzle')));
+    const isBubble = gameId === 'g_bubble_blast' || gameId === 'bubbleblast' || gameId === 'bubble-blast' || gameId === 'bubbles' || gameId === 'bubbles-win';
+    const cleanId = isDino ? 'g_gen_dino' : (isZumbla ? 'g_zumbla' : (isRaspa ? 'g_raspa_fortuna' : (isSubway ? 'g_subway_pay' : (isBubble ? 'g_bubble_blast' : 'g_block_puzzle'))));
 
     const defaultDinoCfg: GameConfigDB = {
       id: 'g_gen_dino',
@@ -1488,6 +1672,50 @@ export class FirestoreDB {
       updatedAt: new Date().toISOString(),
     };
 
+    const defaultBubbleCfg: GameConfigDB = {
+      id: 'g_bubble_blast',
+      name: 'Bubble Blast (Estoure & Ganhe PIX)',
+      category: 'Arcade & Habilidade',
+      status: 'active',
+      rtpPercent: 95.0,
+      difficulty: 'medium',
+      minBet: 5.0,
+      maxBet: 100.0,
+      totalWagered: 0,
+      totalPayout: 0,
+      ggr: 0,
+      totalBetsCount: 0,
+      houseEdgeMode: 'balanced',
+      maxMultiplier: 25.0,
+      smartRtp: true,
+      smartRtpEasyThreshold: 40.0,
+      smartRtpHardThreshold: 85.0,
+      smartRtpMaxTarget: 100.0,
+      antiBailoutMode: false,
+      heavyBlocksForce: false,
+      dynamicRetention: true,
+      streakLimiterMultiplier: 25.0,
+      nearLossPressure: false,
+      winStreakBrake: true,
+      antiComboBlocker: false,
+      highBetResistance: true,
+      giantPieceFrequency: 20,
+      instantLossOnTargetProfit: 0,
+      tightenOnHighOccupancy: true,
+      minCashoutMultiplier: 1.10,
+      lineMultiplierStep: 0.25,
+      initialMultiplier: 1.0,
+      retentionAggressiveness: 'moderate',
+      forceLossOnMaxMultiplier: true,
+      consecutiveWinDecay: 0.05,
+      heroBannerImageUrl: '/bubbleblast/images/banners/deposito.png',
+      heroBannerTitle: 'BUBBLE WIN SHOOTER',
+      heroBannerSubtitle: 'Estoure bolhas e ganhe até 25x o valor da entrada!',
+      heroBannerBadge: 'POPULAR',
+      configVersion: 1,
+      updatedAt: new Date().toISOString(),
+    };
+
     const defaultSubwayCfg: GameConfigDB = {
       id: 'g_subway_pay',
       name: 'Subway Pay (Subway Surfers PIX)',
@@ -1551,7 +1779,7 @@ export class FirestoreDB {
       updatedAt: new Date().toISOString(),
     };
 
-    const defaultCfg = isDino ? defaultDinoCfg : (isZumbla ? defaultZumblaCfg : (isRaspa ? defaultRaspaCfg : (isSubway ? defaultSubwayCfg : defaultBlockCfg)));
+    const defaultCfg = isDino ? defaultDinoCfg : (isBubble ? defaultBubbleCfg : (isZumbla ? defaultZumblaCfg : (isRaspa ? defaultRaspaCfg : (isSubway ? defaultSubwayCfg : defaultBlockCfg))));
 
     try {
       const snap = await getDoc(doc(firestoreDb, 'gameConfigs', cleanId));
@@ -1579,6 +1807,9 @@ export class FirestoreDB {
         } else if (cleanId === 'g_subway_pay') {
           result.name = 'Subway Pay (Subway Surfers PIX)';
           result.category = 'Runner & Habilidade';
+        } else if (cleanId === 'g_bubble_blast') {
+          result.name = 'Bubble Blast (Estoure & Ganhe PIX)';
+          result.category = 'Arcade & Habilidade';
         }
 
         return result;
@@ -1643,7 +1874,7 @@ export class FirestoreDB {
         .slice(0, limitCount);
     } catch (e) {
       console.error('Error fetching game bets from Firestore:', e);
-      return [];
+      throw e;
     }
   }
 
@@ -1678,7 +1909,8 @@ export class FirestoreDB {
     const isZumbla = gameId === 'g_zumbla' || gameId === 'zumbla' || gameId === 'zumbla-game';
     const isRaspa = gameId === 'g_raspa_fortuna' || gameId === 'raspa_fortuna' || gameId === 'raspafortuna' || gameId === 'raspa-fortuna';
     const isSubway = gameId === 'g_subway_pay' || gameId === 'subwaypay' || gameId === 'subway-pay' || gameId === 'subway_pay' || gameId === 'subwaysurfers';
-    const cleanId = isDino ? 'g_gen_dino' : (isZumbla ? 'g_zumbla' : (isRaspa ? 'g_raspa_fortuna' : (isSubway ? 'g_subway_pay' : 'g_block_puzzle')));
+    const isBubble = gameId === 'g_bubble_blast' || gameId === 'bubbleblast' || gameId === 'bubble-blast' || gameId === 'bubbles' || gameId === 'bubbles-win';
+    const cleanId = isDino ? 'g_gen_dino' : (isZumbla ? 'g_zumbla' : (isRaspa ? 'g_raspa_fortuna' : (isSubway ? 'g_subway_pay' : (isBubble ? 'g_bubble_blast' : 'g_block_puzzle'))));
 
     const config = await this.getGameConfig(cleanId);
     const allBets = await this.getAllGameBets(200);
@@ -1687,6 +1919,9 @@ export class FirestoreDB {
     const gameBets = allBets.filter((b) => {
       if (isDino) {
         return b.gameId === 'g_gen_dino' || b.gameId === 'gendino' || b.gameId === 'gen-dino' || b.gameId === 'dino';
+      }
+      if (isBubble) {
+        return b.gameId === 'g_bubble_blast' || b.gameId === 'bubbleblast' || b.gameId === 'bubble-blast' || b.gameId === 'bubbles';
       }
       if (isZumbla) {
         return b.gameId === 'g_zumbla' || b.gameId === 'zumbla';
@@ -1829,13 +2064,15 @@ export class FirestoreDB {
 
   // --- CHARGES (DOTFY PIX) IN FIRESTORE ---
   async saveCharge(charge: StoredChargeDB): Promise<void> {
-    try {
-      const docId = charge.correlationID || charge.id;
-      const docRef = doc(firestoreDb, 'charges', docId);
-      await setDoc(docRef, charge, { merge: true });
-    } catch (err) {
-      console.warn('[FirestoreDB] Could not save charge to Firestore:', err);
-    }
+    const ref = doc(firestoreDb, 'charges', charge.correlationID || charge.id);
+    await runTransaction(firestoreDb, async transaction => {
+      const current = await transaction.get(ref);
+      const stored = current.data();
+      // A delayed poll cannot clear the durable credit marker.
+      transaction.set(ref, sanitizeForFirestore({ ...charge,
+        ...(stored?.credited ? { credited: true, status: 'PAID' } : {})
+      }), { merge: true });
+    });
   }
 
   async getChargeByCorrelationID(correlationID: string): Promise<StoredChargeDB | null> {

@@ -127,7 +127,7 @@ export const MoreView: React.FC<MoreViewProps> = ({
   ];
 
   return (
-    <div className="more-view space-y-6 pb-24 px-4 pt-4">
+    <div className="more-view space-y-4 pb-24 px-2 sm:px-3.5 lg:px-4 pt-2.5 sm:pt-3">
       {/* Header Profile Summary */}
       <div className="bg-white p-4 rounded-[24px] border border-[#E5E5E5] flex items-center gap-3.5 shadow-xs">
         <div className="w-12 h-12 rounded-full bg-[#111111] text-white font-bold text-lg flex items-center justify-center shrink-0 uppercase">

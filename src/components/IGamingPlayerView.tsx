@@ -314,10 +314,10 @@ export const IGamingPlayerView: React.FC<IGamingPlayerViewProps> = ({
           <button
             type="button"
             onClick={onOpenReferral}
-            className="flex flex-col items-center gap-1 text-slate-300 hover:text-white transition-colors cursor-pointer py-1 group"
+            className="flex flex-col items-center gap-1 text-white hover:text-cyan-300 transition-colors cursor-pointer py-1 group"
           >
-            <Users className="w-6 h-6 group-hover:text-purple-400 transition-colors drop-shadow-md" />
-            <span className="text-[10px] sm:text-xs font-extrabold font-mono tracking-tight">Indicar</span>
+            <Users className="w-6 h-6 text-white group-hover:text-cyan-300 transition-colors drop-shadow-md" />
+            <span className="text-[10px] sm:text-xs font-extrabold font-mono tracking-tight text-white">Indicar</span>
           </button>
 
           {/* Perfil */}

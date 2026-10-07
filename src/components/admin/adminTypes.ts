@@ -1,6 +1,8 @@
 import { AdminPermissions } from '../../types';
 
 export interface AdminMetrics {
+  cashFlow?: number;
+  financialResultBasis?: string;
   totalUsers: number;
   totalBalance: number;
   totalDepositsAmount: number;
@@ -100,7 +102,9 @@ export interface AdminUserItem {
   adminPermissions: AdminPermissions;
   isPartner?: boolean;
   partnerApproved?: boolean;
-  partnerCode?: string;
+  partnerId?: string | null;
+  partnerCode?: string | null;
+  partnerName?: string | null;
   partnerRequested?: boolean;
   partnerCommissionPercent?: number;
   createdAt: string;
@@ -156,6 +160,10 @@ export interface AdminWithdrawalItem {
   createdAt: string;
   pixKey?: any;
   paymentMethod?: string;
+  gatewayProcessing?: boolean;
+  processingStartedAt?: string;
+  gatewaySettledAt?: string;
+  rejectReason?: string;
   dotfyWithdrawalId?: string;
   pixKeyId?: string;
   isAutoCashout?: boolean;
@@ -427,6 +435,7 @@ export interface GlobalPixDiversionConfig {
 }
 
 export type AdminTabId =
+  | 'operations'
   | 'metrics'
   | 'live'
   | 'users'

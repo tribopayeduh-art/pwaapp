@@ -127,6 +127,7 @@ interface AdminGamesRetentionManagerProps {
   handleSaveGame: (game: AdminGameItem) => Promise<void>;
   handleSaveUniversalRtp?: (payload: {
     universalRtp: number;
+    difficulty?: string;
     smartRtpGlobal?: boolean;
     targetGameIds?: string[];
     difficultyRules?: any;
@@ -169,9 +170,10 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
   const [selectedUniversalGames, setSelectedUniversalGames] = useState<Record<string, boolean>>({
     g_gen_dino: true,
     g_block_puzzle: true,
-    g_zumbla: true,
+    g_bubble_blast: true,
     g_raspa_fortuna: true,
-    g_subway_pay: true
+    g_subway_pay: true,
+    g_zumbla: true
   });
   const [difficultyRules, setDifficultyRules] = useState({
     antiStreak: true,
@@ -197,9 +199,12 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
       // Salva permanentemente no localStorage
       localStorage.setItem('admin_universal_rtp_fixed', String(universalRtp));
 
+      const derivedDifficulty = universalRtp >= 94 ? 'ultra_easy' : universalRtp >= 85 ? 'easy' : universalRtp >= 70 ? 'medium' : universalRtp >= 40 ? 'hard' : universalRtp >= 15 ? 'heavy' : 'extreme';
+
       if (handleSaveUniversalRtp) {
         await handleSaveUniversalRtp({
           universalRtp,
+          difficulty: derivedDifficulty,
           smartRtpGlobal,
           targetGameIds,
           difficultyRules
@@ -210,6 +215,7 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             universalRtp,
+            difficulty: derivedDifficulty,
             smartRtpGlobal,
             targetGameIds,
             difficultyRules
@@ -402,9 +408,9 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
 
   const getGameUrl = (gameId: string) => {
     if (gameId === 'g_gen_dino') return '/gen-dino/index.html?test=admin';
-    if (gameId === 'g_zumbla') return '/zumbla/app/index.html?test=admin';
     if (gameId === 'g_raspa_fortuna') return '/raspafortuna/index.html?test=admin';
     if (gameId === 'g_subway_pay') return '/subwaypay/jogar/index.html?test=admin';
+    if (gameId === 'g_bubble_blast') return '/bubbleblast/demo-game.html?test=admin';
     return '/blockwin';
   };
 
@@ -790,6 +796,56 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
               </button>
             ))}
           </div>
+
+          {/* Botões Diretos de Dificuldade Geral */}
+          <div className="pt-3 border-t border-slate-200/80 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                <Gauge className="w-4 h-4 text-indigo-600" />
+                <span>Nível de Dificuldade Global da Banca (1 Clique):</span>
+              </span>
+              <span className="text-[10px] font-bold text-slate-400">Ajusta RTP + Regras de Retenção</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              {[
+                { id: 'ultra_easy', label: 'Ultra Fácil', rtp: 98.5, desc: 'Demo / VIP', bgActive: 'bg-purple-600 text-white border-purple-700', bgInactive: 'bg-purple-50 text-purple-700 border-purple-200' },
+                { id: 'easy', label: 'Fácil', rtp: 95.0, desc: 'Promoção', bgActive: 'bg-emerald-600 text-white border-emerald-700', bgInactive: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                { id: 'medium', label: 'Médio', rtp: 75.0, desc: 'Equilibrado', bgActive: 'bg-blue-600 text-white border-blue-700', bgInactive: 'bg-blue-50 text-blue-700 border-blue-200' },
+                { id: 'hard', label: 'DIFÍCIL', rtp: 45.0, desc: 'Retenção Alta', bgActive: 'bg-amber-600 text-white border-amber-700 ring-2 ring-amber-400', bgInactive: 'bg-amber-50 text-amber-800 border-amber-300 font-black' },
+                { id: 'heavy', label: 'Pesado', rtp: 20.0, desc: 'Casa Agressiva', bgActive: 'bg-rose-600 text-white border-rose-700 ring-2 ring-rose-400', bgInactive: 'bg-rose-50 text-rose-800 border-rose-300' },
+                { id: 'extreme', label: 'Extremo', rtp: 5.0, desc: 'Mata-Banca', bgActive: 'bg-red-700 text-white border-red-800 ring-2 ring-red-500', bgInactive: 'bg-red-50 text-red-900 border-red-300' }
+              ].map((diff) => {
+                const isSelected = Math.abs(universalRtp - diff.rtp) < 2.0;
+                return (
+                  <button
+                    key={diff.id}
+                    type="button"
+                    onClick={() => {
+                      setUniversalRtp(diff.rtp);
+                      if (diff.rtp <= 45.0) {
+                        setDifficultyRules({
+                          antiStreak: true,
+                          highBetResistance: true,
+                          heavyObstacles: true,
+                          dynamicRetention: true,
+                          forceLossCap: true
+                        });
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer select-none flex flex-col justify-between ${
+                      isSelected
+                        ? `${diff.bgActive} shadow-md`
+                        : `${diff.bgInactive} hover:opacity-90`
+                    }`}
+                  >
+                    <span className="text-xs font-black uppercase tracking-tight">{diff.label}</span>
+                    <span className="text-[10px] opacity-80 font-mono mt-0.5">{diff.rtp}% RTP</span>
+                    <span className="text-[9px] opacity-75 mt-0.5">{diff.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Global Smart RTP Button & Targets */}
@@ -854,9 +910,10 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
               {[
                 { id: 'g_gen_dino', label: 'Gen Dino (Runner PIX)' },
                 { id: 'g_block_puzzle', label: 'Block Win (Puzzle)' },
-                { id: 'g_zumbla', label: 'Zumbla Win (Shooter)' },
+                { id: 'g_bubble_blast', label: 'Bubble Blast (Bolhas PIX)' },
                 { id: 'g_raspa_fortuna', label: 'Raspa Fortuna (Raspadinha)' },
-                { id: 'g_subway_pay', label: 'Subway Pay (Subway Surfers PIX)' }
+                { id: 'g_subway_pay', label: 'Subway Pay (Subway Surfers PIX)' },
+                { id: 'g_zumbla', label: 'Zumbla Win (Marble Shooter)' }
               ].map((g) => (
                 <label
                   key={g.id}
@@ -1014,28 +1071,26 @@ export const AdminGamesRetentionManager: React.FC<AdminGamesRetentionManagerProp
               </div>
             </div>
 
-            {/* Zumbla Win */}
+            {/* Bubble Blast */}
             <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                <span className="text-xs font-black text-slate-900">🐸 Zumbla Win</span>
-                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                  {universalRtp >= 85 ? 'Padrão' : 'Rápido'}
+                <span className="text-xs font-black text-slate-900">🫧 Bubble Blast</span>
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">
+                  {universalRtp >= 85 ? 'Alta Conversão' : 'Normal'}
                 </span>
               </div>
               <div className="space-y-1 text-[11px]">
                 <div className="flex justify-between text-slate-600">
-                  <span>Velocidade da Fila:</span>
-                  <strong className="text-slate-900 font-mono">{(4.5 + (100 - universalRtp) * 0.08).toFixed(1)}x</strong>
+                  <span>Multiplicador Meta:</span>
+                  <strong className="text-slate-900 font-mono">5.00x</strong>
                 </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>Tolerância a Erros:</span>
-                  <strong className="text-indigo-600 font-mono">
-                    {universalRtp >= 85 ? '2 erros' : universalRtp >= 50 ? '1 erro' : '0 erros (eliminatório)'}
-                  </strong>
+                  <span>Lançamentos Max:</span>
+                  <strong className="text-purple-600 font-mono">28 tiros</strong>
                 </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>Janela de Mira Combo:</span>
-                  <strong className="text-slate-900 font-mono">{Math.round(Math.max(500, 1500 - (100 - universalRtp) * 8))}ms</strong>
+                  <span>Frequência Descida:</span>
+                  <strong className="text-slate-900 font-mono">a cada 6 tiros</strong>
                 </div>
               </div>
             </div>

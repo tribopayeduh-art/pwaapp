@@ -12,7 +12,7 @@ import {
   Gamepad2,
   DollarSign,
   Share2,
-  Sparkles,
+  Crown,
   Users,
   TrendingUp,
   CheckCircle2,
@@ -308,7 +308,7 @@ export const GameProfile: React.FC<GameProfileProps> = ({
                   : 'text-amber-400 hover:text-amber-300'
               }`}
             >
-              <Sparkles className="w-4 h-4" />
+              <Crown className="w-4 h-4 fill-current" />
               <span>Modo Influenciador</span>
               <span className="text-[9px] bg-black/30 px-1.5 py-0.5 rounded-full uppercase font-black tracking-wider">
                 VIP

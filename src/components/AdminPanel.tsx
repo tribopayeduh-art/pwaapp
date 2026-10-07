@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import { User, AdminPermissions } from '../types';
 import { getGameCover } from '../config/gameAssets';
@@ -14,7 +14,11 @@ import {
 import { AdminHeader } from './admin/AdminHeader';
 import { AdminSidebar } from './admin/AdminSidebar';
 import { AdminMobileTabBar } from './admin/AdminMobileTabBar';
-import { AdminMetricsTab } from './admin/AdminMetricsTab';
+import { AdminOverview } from './admin/AdminOverview';
+import { AdminOperationsTab } from './admin/AdminOperationsTab';
+import { AdminCommandPalette } from './admin/AdminCommandPalette';
+import { adminNavigation, canAccessAdminTab } from './admin/adminNavigation';
+import '../styles/admin.css';
 import { AdminLivePlayersTab } from './admin/AdminLivePlayersTab';
 import { AdminUsersTab } from './admin/AdminUsersTab';
 import { AdminWithdrawalsTab } from './admin/AdminWithdrawalsTab';
@@ -30,6 +34,13 @@ import { AdminAffiliateCommissionModal } from './admin/AdminAffiliateCommissionM
 import { AdminAffiliateNetworkModal } from './admin/AdminAffiliateNetworkModal';
 import { AdminGameTesterModal } from './admin/AdminGameTesterModal';
 import { AdminVpsMigrationModal } from './admin/AdminVpsMigrationModal';
+import {
+  isValidBrazilianPhone,
+  healPhoneNumber,
+  formatPhoneDisplay,
+  getWhatsAppNumber,
+  getWhatsAppLink
+} from '../lib/phoneValidation';
 
 export interface AdminGameItem {
   id: string;
@@ -133,7 +144,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const isSuperAdmin = currentUser?.role === 'superadmin';
   const isAdmin = !!(currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin'));
 
-  const [activeTab, setActiveTab] = useState<AdminTabId>('metrics');
+  const canNavigate = useCallback((tab: AdminTabId) => canAccessAdminTab(tab, currentUser.role, currentUser.adminPermissions), [currentUser.role, currentUser.adminPermissions]);
+  const can = (permission: keyof AdminPermissions) => isSuperAdmin || !!currentUser.adminPermissions?.[permission];
+  const allowedTabs = adminNavigation.filter(item => canNavigate(item.id)).map(item => item.id);
+  const [activeTab, setActiveTab] = useState<AdminTabId>(() => allowedTabs[0] || 'metrics');
+  const navigateTab = (tab: AdminTabId) => { if (canNavigate(tab)) { setActiveTab(tab); setGlobalSearchQuery(''); } };
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [compact, setCompact] = useState(() => { try { return localStorage.getItem('admin_density') === 'compact'; } catch { return false; } });
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [dataErrors, setDataErrors] = useState<Record<string, string>>({});
+  const refreshLock = useRef(false);
+  const requestPool = useRef(new Map<string, Promise<boolean>>());
+  useEffect(() => { try { localStorage.setItem('admin_density', compact ? 'compact' : 'comfortable'); } catch {} }, [compact]);
+  useEffect(() => { const handleKey = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setCommandOpen(value => !value); } }; document.addEventListener('keydown', handleKey); return () => document.removeEventListener('keydown', handleKey); }, []);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [migrationModalOpen, setMigrationModalOpen] = useState(false);
@@ -169,88 +195,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [depositFilter, setDepositFilter] = useState<'all' | 'approved' | 'pending' | 'failed'>('all');
 
   // Games
-  const [games, setGames] = useState<AdminGameItem[]>([
-    {
-      id: 'g_gen_dino',
-      name: 'GEN DINO (Arcade Runner PIX)',
-      category: 'Runner & Habilidade',
-      status: 'active',
-      minBet: 1.0,
-      maxBet: 500.0,
-      rtpPercent: 95.0,
-      difficulty: 'medium',
-      totalWagered: 245300.0,
-      totalPayout: 233035.0,
-      ggr: 12265.0,
-      totalBetsCount: 6120,
-      totalWinsCount: 5740,
-      totalLossesCount: 380,
-      effectiveRtp: 95.0,
-      effectiveHouseEdge: 5.0,
-      houseEdgeMode: 'balanced',
-      maxMultiplier: 100.0
-    },
-    {
-      id: 'g_block_puzzle',
-      name: 'Block Win (Block Puzzle iGaming)',
-      category: 'Estratégia & Habilidade',
-      status: 'active',
-      minBet: 1.0,
-      maxBet: 500.0,
-      rtpPercent: 96.0,
-      difficulty: 'easy',
-      totalWagered: 184200.0,
-      totalPayout: 176832.0,
-      ggr: 7368.0,
-      totalBetsCount: 4210,
-      totalWinsCount: 3950,
-      totalLossesCount: 260,
-      effectiveRtp: 96.0,
-      effectiveHouseEdge: 4.0,
-      houseEdgeMode: 'easy',
-      maxMultiplier: 100.0
-    },
-    {
-      id: 'g_zumbla',
-      name: 'Zumbla Win (Marble Shooter)',
-      category: 'Arcade & Pontaria',
-      status: 'active',
-      minBet: 1.0,
-      maxBet: 500.0,
-      rtpPercent: 95.0,
-      difficulty: 'medium',
-      totalWagered: 129400.0,
-      totalPayout: 122930.0,
-      ggr: 6470.0,
-      totalBetsCount: 3100,
-      totalWinsCount: 2890,
-      totalLossesCount: 210,
-      effectiveRtp: 95.0,
-      effectiveHouseEdge: 5.0,
-      houseEdgeMode: 'balanced',
-      maxMultiplier: 100.0
-    },
-    {
-      id: 'g_raspa_fortuna',
-      name: 'Raspa Fortuna (Raspadinha PIX)',
-      category: 'Raspadinha & Prêmios Instantâneos',
-      status: 'active',
-      minBet: 1.0,
-      maxBet: 500.0,
-      rtpPercent: 95.0,
-      difficulty: 'medium',
-      totalWagered: 98000.0,
-      totalPayout: 93100.0,
-      ggr: 4900.0,
-      totalBetsCount: 2450,
-      totalWinsCount: 2280,
-      totalLossesCount: 170,
-      effectiveRtp: 95.0,
-      effectiveHouseEdge: 5.0,
-      houseEdgeMode: 'balanced',
-      maxMultiplier: 100.0
-    }
-  ]);
+  const [games, setGames] = useState<AdminGameItem[]>([]);
   const [loadingGames, setLoadingGames] = useState(false);
   const [lastGamesUpdated, setLastGamesUpdated] = useState<string>('');
   const [savingGameId, setSavingGameId] = useState<string | null>(null);
@@ -279,9 +224,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   );
 
   // Clipboard Helper
-  const handleCopyText = (text: string, label?: string) => {
+  const handleCopyText = async (text: string, label?: string) => {
     try {
-      navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(text);
       setCopiedText(text);
       onShowToast(label ? `${label} copiado!` : 'Copiado para a área de transferência!', 'success');
       setTimeout(() => setCopiedText(null), 2000);
@@ -290,188 +235,97 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  // Initial Data Fetching
-  useEffect(() => {
-    if (!isAdmin) {
-      onShowToast('Usuário bloqueado para essa ação.', 'error');
-      const timer = setTimeout(() => {
-        onClose();
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-    fetchMetrics();
-    fetchUsers();
-    fetchWithdrawals();
-    fetchDeposits();
-    fetchGames();
-    fetchReports('7d');
-    fetchAdmins();
-  }, [token, isAdmin]);
-
-  // Background polling for games when in games tab
-  useEffect(() => {
-    if (!isAdmin || activeTab !== 'games' || !token) return;
-    const timer = window.setInterval(() => fetchGames(false), 8000);
-    return () => window.clearInterval(timer);
-  }, [activeTab, token, isAdmin]);
-
-  // Master Refresh
-  const handleRefreshAll = () => {
-    if (!isAdmin) {
-      onShowToast('Usuário bloqueado para essa ação.', 'error');
-      onClose();
-      return;
-    }
-    fetchMetrics();
-    fetchUsers();
-    fetchWithdrawals();
-    fetchDeposits();
-    fetchGames(true);
-    fetchReports();
-    fetchAdmins();
-    onShowToast('Dados sincronizados em tempo real!', 'success');
+  const loadResource = (key: string, path: string, accept: (data: any) => void): Promise<boolean> => {
+    if (!token || !isAdmin) return Promise.resolve(false);
+    const pending = requestPool.current.get(key);
+    if (pending) return pending;
+    const task = (async () => {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(path, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `Não foi possível carregar ${key}.`);
+        accept(data);
+        setDataErrors(current => { const next = { ...current }; delete next[key]; return next; });
+        setLastUpdated(new Date().toISOString());
+        return true;
+      } catch (error: any) {
+        setDataErrors(current => ({ ...current, [key]: error.name === 'AbortError' ? 'A consulta demorou além do esperado. Tente atualizar.' : error.message || 'Falha de conexão.' }));
+        return false;
+      } finally { window.clearTimeout(timer); requestPool.current.delete(key); }
+    })();
+    requestPool.current.set(key, task);
+    return task;
   };
-
-  // API: Fetch Metrics
   const fetchMetrics = async () => {
-    if (!token) return;
+    if (!canNavigate('metrics')) return true;
     setLoadingMetrics(true);
-    try {
-      const res = await fetch('/api/admin/metrics', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.status === 401 || res.status === 403) {
-        onShowToast('Usuário bloqueado para essa ação.', 'error');
-        onClose();
-        return;
-      }
-      const data = await res.json();
-      if (res.ok && data.metrics) {
-        setMetrics(data.metrics);
-      }
-    } catch {
-      // Keep existing data
-    } finally {
-      setLoadingMetrics(false);
-    }
+    try { return await loadResource('metrics', '/api/admin/metrics', data => { if (!data.metrics) throw Error('Indicadores indisponíveis.'); setMetrics(data.metrics); }); }
+    finally { setLoadingMetrics(false); }
   };
-
-  // API: Fetch Users
   const fetchUsers = async () => {
-    if (!token) return;
+    if (!canNavigate('users')) return true;
     setLoadingUsers(true);
-    try {
-      const res = await fetch('/api/admin/users', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.users)) {
-        setUsers(data.users);
-      }
-    } catch {
-      onShowToast('Erro ao listar usuários.', 'error');
-    } finally {
-      setLoadingUsers(false);
-    }
+    try { return await loadResource('users', '/api/admin/users', data => { if (!Array.isArray(data.users)) throw Error('Lista de usuários indisponível.'); setUsers(data.users); }); }
+    finally { setLoadingUsers(false); }
   };
-
-  // API: Fetch Withdrawals
   const fetchWithdrawals = async () => {
-    if (!token) return;
+    if (!canNavigate('withdrawals')) return true;
     setLoadingWithdrawals(true);
-    try {
-      const res = await fetch('/api/admin/withdrawals', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.withdrawals)) {
-        setWithdrawals(data.withdrawals);
-      }
-    } catch {
-      onShowToast('Erro de rede ao buscar saques.', 'error');
-    } finally {
-      setLoadingWithdrawals(false);
-    }
+    try { return await loadResource('withdrawals', '/api/admin/withdrawals', data => { if (!Array.isArray(data.withdrawals)) throw Error('Lista de saques indisponível.'); setWithdrawals(data.withdrawals); }); }
+    finally { setLoadingWithdrawals(false); }
   };
-
-  // API: Fetch Deposits
   const fetchDeposits = async () => {
-    if (!token) return;
+    if (!canNavigate('deposits')) return true;
     setLoadingDeposits(true);
-    try {
-      const res = await fetch('/api/admin/deposits', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.deposits)) {
-        setDeposits(data.deposits);
-      }
-    } catch {
-      // silent fallback
-    } finally {
-      setLoadingDeposits(false);
-    }
+    try { return await loadResource('deposits', '/api/admin/deposits', data => { if (!Array.isArray(data.deposits)) throw Error('Lista de depósitos indisponível.'); setDeposits(data.deposits); }); }
+    finally { setLoadingDeposits(false); }
   };
-
-  // API: Fetch Games
-  const fetchGames = async (showToast = false) => {
-    if (!token) return;
-    if (showToast) setLoadingGames(true);
-    try {
-      const res = await fetch('/api/admin/games', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.games)) {
-        // Direct assignment from Firestore so RTP and parameters are fixed and never revert to defaults
-        setGames(data.games);
-        setLastGamesUpdated(new Date().toLocaleTimeString('pt-BR'));
-      }
-    } catch {
-      // silent
-    } finally {
-      if (showToast) setLoadingGames(false);
-    }
+  const fetchGames = async (showLoading = false) => {
+    if (!canNavigate('games')) return true;
+    if (showLoading) setLoadingGames(true);
+    try { return await loadResource('games', '/api/admin/games', data => { if (!Array.isArray(data.games)) throw Error('Jogos indisponíveis.'); setGames(data.games); setLastGamesUpdated(new Date().toLocaleTimeString('pt-BR')); }); }
+    finally { if (showLoading) setLoadingGames(false); }
   };
-
-  // API: Fetch Reports
   const fetchReports = async (period?: string) => {
-    if (!token) return;
+    if (!canNavigate('reports')) return true;
     setLoadingReports(true);
-    try {
-      const p = period || reportPeriod;
-      const res = await fetch(`/api/admin/reports/analytics?period=${p}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setReportData(data);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoadingReports(false);
-    }
+    try { return await loadResource('reports', `/api/admin/reports/analytics?period=${encodeURIComponent(period || reportPeriod)}`, data => { if (!data.success) throw Error('Relatório indisponível.'); setReportData(data); }); }
+    finally { setLoadingReports(false); }
   };
-
-  // API: Fetch Admins
   const fetchAdmins = async () => {
-    if (!token) return;
+    if (!canNavigate('admins')) return true;
     setLoadingAdmins(true);
-    try {
-      const res = await fetch('/api/admin/admins', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok && Array.isArray(data.admins)) {
-        setAdminsList(data.admins);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoadingAdmins(false);
-    }
+    try { return await loadResource('admins', '/api/admin/admins', data => { if (!Array.isArray(data.admins)) throw Error('Equipe indisponível.'); setAdminsList(data.admins); }); }
+    finally { setLoadingAdmins(false); }
   };
+  const handleRefreshAll = async (silent = false) => {
+    if (!isAdmin || !token || refreshLock.current) return;
+    refreshLock.current = true; setRefreshing(true);
+    try {
+      const results = await Promise.all([fetchMetrics(), fetchUsers(), fetchWithdrawals(), fetchDeposits(), fetchGames(true), fetchReports(), fetchAdmins()]);
+      if (!silent) onShowToast(results.every(Boolean) ? 'Dados atualizados.' : 'Algumas consultas falharam. Confira o aviso no painel.', results.every(Boolean) ? 'success' : 'error');
+    } finally { refreshLock.current = false; setRefreshing(false); }
+  };
+  useEffect(() => { if (isAdmin && token) void handleRefreshAll(true); }, [token, isAdmin, currentUser.role, currentUser.adminPermissions]);
+  useEffect(() => {
+    if (!canNavigate(activeTab)) { const first = adminNavigation.find(item => canNavigate(item.id)); if (first) setActiveTab(first.id); }
+  }, [canNavigate, activeTab]);
+  useEffect(() => {
+    if (!autoRefresh || !isAdmin || !token) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible' || refreshLock.current) return;
+      if (activeTab === 'metrics') void Promise.all([fetchMetrics(), fetchWithdrawals(), fetchDeposits()]);
+      if (activeTab === 'operations' || activeTab === 'withdrawals') void fetchWithdrawals();
+      if (activeTab === 'users') void fetchUsers();
+      if (activeTab === 'deposits') void fetchDeposits();
+      if (activeTab === 'games') void fetchGames();
+      if (activeTab === 'reports') void fetchReports();
+      if (activeTab === 'admins') void fetchAdmins();
+    }, 30000);
+    return () => window.clearInterval(interval);
+  }, [autoRefresh, activeTab, token, isAdmin, reportPeriod]);
 
   // API: Quick 1-Click Balance Adjust
   const handleQuickAdjustBalance = async (userItem: AdminUserItem, delta: number, isSetZero = false) => {
@@ -871,61 +725,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  // API: Approve Withdrawal
+  // Mutations keep the bank-confirmed state; never optimistically mark a transfer paid.
   const handleApproveWithdrawal = async (id: string) => {
-    if (!token) return;
+    if (!token || processingWithdrawalId) throw new Error('Aguarde a operação em andamento.');
     setProcessingWithdrawalId(id);
     try {
-      const res = await fetch(`/api/admin/withdrawals/${id}/approve`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        onShowToast(data.message || 'Saque aprovado e liquidado via PIX!', 'success');
-        setWithdrawals((prev) =>
-          prev.map((w) => (w.id === id ? { ...w, status: 'approved' } : w))
-        );
-        fetchMetrics();
-      } else {
-        onShowToast(data.error || 'Erro ao aprovar saque.', 'error');
-      }
-    } catch {
-      onShowToast('Erro de rede ao aprovar saque.', 'error');
-    } finally {
-      setProcessingWithdrawalId(null);
-    }
+      const response = await fetch(`/api/admin/withdrawals/${encodeURIComponent(id)}/approve`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Não foi possível enviar o saque.');
+      onShowToast(data.message || 'Saque enviado; aguardando confirmação bancária.', 'success');
+    } catch (error: any) { onShowToast(error.message || 'Falha de conexão.', 'error'); throw error; }
+    finally { await Promise.all([fetchWithdrawals(), fetchMetrics()]); setProcessingWithdrawalId(null); }
   };
-
-  // API: Reject Withdrawal
-  const handleRejectWithdrawal = async (id: string) => {
-    if (!token) return;
-    const reason = prompt('Informe o motivo da rejeição do saque (opcional):') || 'Rejeitado pela administração';
+  const handleRejectWithdrawal = async (id: string, reason = 'Rejeitado pela administração') => {
+    if (!token || processingWithdrawalId) throw new Error('Aguarde a operação em andamento.');
     setProcessingWithdrawalId(id);
     try {
-      const res = await fetch(`/api/admin/withdrawals/${id}/reject`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ reason })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        onShowToast(data.message || 'Saque rejeitado e saldo estornado!', 'success');
-        setWithdrawals((prev) =>
-          prev.map((w) => (w.id === id ? { ...w, status: 'rejected' } : w))
-        );
-        fetchMetrics();
-      } else {
-        onShowToast(data.error || 'Erro ao rejeitar saque.', 'error');
-      }
-    } catch {
-      onShowToast('Erro de rede.', 'error');
-    } finally {
-      setProcessingWithdrawalId(null);
-    }
+      const response = await fetch(`/api/admin/withdrawals/${encodeURIComponent(id)}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ reason }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Não foi possível recusar o saque.');
+      onShowToast(data.message || 'Saque recusado e saldo estornado.', 'success');
+    } catch (error: any) { onShowToast(error.message || 'Falha de conexão.', 'error'); throw error; }
+    finally { await Promise.all([fetchWithdrawals(), fetchMetrics()]); setProcessingWithdrawalId(null); }
   };
 
   // API: Save Game Config
@@ -958,6 +779,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // API: Save Universal RTP across All Games
   const handleSaveUniversalRtp = async (payload: {
     universalRtp: number;
+    difficulty?: string;
     smartRtpGlobal?: boolean;
     targetGameIds?: string[];
     difficultyRules?: any;
@@ -1086,6 +908,66 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Export CSV Helper
   const handleExportCsv = (type: string) => {
+    if (type === 'influencers') {
+      const validInfluencers = users
+        .map((u) => ({ user: u, healed: healPhoneNumber(u.phone) }))
+        .filter((item) => Boolean(item.user.isInfluencer) && Boolean(item.healed));
+
+      if (validInfluencers.length === 0) {
+        onShowToast('Nenhum influenciador com telefone válido ou recuperável encontrado.', 'info');
+        return;
+      }
+      const host = typeof window !== 'undefined' ? window.location.host : 'goalliancehub.com';
+      const proto = typeof window !== 'undefined' ? window.location.protocol : 'https:';
+
+      const headers = [
+        'Nome',
+        'Telefone_Formatado_WhatsApp',
+        'Telefone_WhatsApp',
+        'Link_WhatsApp',
+        'Status_Validacao',
+        'Telefone_Original',
+        'Email',
+        'Codigo_Indicacao',
+        'Link_Indicacao',
+        'Saldo_Jogos_R$',
+        'Saldo_Comissoes_R$',
+        'Total_Comissoes_R$',
+        'Jogo_Origem',
+        'Status',
+        'Data_Cadastro'
+      ];
+      const rows = validInfluencers.map(({ user: u, healed }) => {
+        const refCode = u.affiliateInfo?.referralCode || '';
+        return [
+          u.name || 'Influenciador',
+          healed?.formattedPhone || formatPhoneDisplay(u.phone),
+          healed?.whatsappNumber || getWhatsAppNumber(u.phone),
+          healed?.whatsappLink || getWhatsAppLink(u.phone),
+          healed?.label || 'Válido ✅',
+          u.phone || 'Não informado',
+          u.email || '',
+          refCode,
+          refCode ? `${proto}//${host}/?ref=${refCode}` : '',
+          Number(u.balance || 0).toFixed(2),
+          Number(u.affiliateInfo?.affiliateBalance || 0).toFixed(2),
+          Number(u.affiliateInfo?.commissionTotal || 0).toFixed(2),
+          u.registeredGame || u.acquisitionGame || 'g_block_puzzle',
+          u.isBlocked ? 'Bloqueada' : 'Ativa',
+          u.createdAt || ''
+        ];
+      });
+      const csvContent =
+        'data:text/csv;charset=utf-8,\uFEFF' +
+        [headers.join(';'), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';'))].join('\n');
+      const link = document.createElement('a');
+      link.href = encodeURI(csvContent);
+      link.download = `influenciadores_validados_whatsapp_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      onShowToast(`Exportados ${validInfluencers.length} influenciadores validados para WhatsApp!`, 'success');
+      return;
+    }
+
     if (!reportData) {
       onShowToast('Carregando dados para exportação...', 'info');
       return;
@@ -1122,9 +1004,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Titles mapping
   const tabTitles: Record<AdminTabId, { label: string; desc: string }> = {
+    operations: { label: 'Central de pendências', desc: 'Fila operacional, prioridades e anotações da equipe' },
     metrics: {
       label: 'Visão Geral',
-      desc: 'Indicadores financeiros consolidados, margem líquida e liquidez'
+      desc: 'Indicadores financeiros e acompanhamento da operação'
     },
     live: {
       label: 'Jogadores em Tempo Real',
@@ -1148,7 +1031,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     },
     reports: {
       label: 'Relatórios & DRE',
-      desc: 'Inteligência analítica, DRE contábil e extratos transacionais'
+      desc: 'Análise financeira e extratos transacionais'
     },
     notifications: {
       label: 'Notificações',
@@ -1172,7 +1055,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  if (!isAdmin) {
+  if (!isAdmin || allowedTabs.length === 0) {
     return (
       <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
         <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-6 sm:p-8 max-w-md w-full text-center space-y-4 shadow-2xl animate-in fade-in zoom-in duration-200">
@@ -1202,11 +1085,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   }
 
   return (
-    <div className="admin-refined fixed inset-0 z-50 bg-[#F2F2F7] flex overflow-hidden font-sans text-slate-900 select-none">
+    <div className={`admin-refined admin-modern ${compact ? "admin-compact" : ""} fixed inset-0 z-50 flex overflow-hidden text-slate-900`}>
       {/* 1. iOS Authentic Sidebar */}
       <AdminSidebar
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={navigateTab}
         mobileMenuOpen={mobileMenuOpen}
         onCloseMobileMenu={() => setMobileMenuOpen(false)}
         pendingWithdrawalsCount={pendingWithdrawalsCount}
@@ -1214,10 +1097,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         adminRole={currentUser.role}
         adminPermissions={currentUser.adminPermissions}
         onCloseAdmin={onClose}
+        onOpenCommand={() => setCommandOpen(true)}
       />
 
       {/* 2. Main Content Canvas */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F2F2F7]">
+      <div className="admin-main-canvas flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* iOS Styled Top Navigation Bar */}
         <AdminHeader
           activeTab={activeTab}
@@ -1226,30 +1110,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           searchQuery={globalSearchQuery}
           onSearchChange={setGlobalSearchQuery}
           pendingWithdrawalsCount={pendingWithdrawalsCount}
-          loadingMetrics={loadingMetrics}
-          onRefresh={handleRefreshAll}
+          loadingMetrics={refreshing}
+          onRefresh={() => void handleRefreshAll()}
           onClose={onClose}
+          onOpenCommand={() => setCommandOpen(true)}
+          lastUpdated={lastUpdated}
+          autoRefresh={autoRefresh}
+          onAutoRefreshChange={setAutoRefresh}
+          compact={compact}
+          onCompactChange={() => setCompact(value => !value)}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
-          onOpenNotifications={() => setActiveTab('notifications')}
+          canOpenPending={canNavigate('operations')}
+          onOpenNotifications={() => navigateTab('operations')}
           onOpenMigrationModal={() => setMigrationModalOpen(true)}
         />
 
         {/* Dynamic Tab Body */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 md:pb-8">
-          <div className="w-full max-w-[1840px] mx-auto">
-            {activeTab === 'metrics' && (
-              <AdminMetricsTab
-                token={token}
-                metrics={metrics}
-                loading={loadingMetrics}
-                onNavigateTab={setActiveTab}
-              />
-            )}
+        <main className="admin-main-scroll flex-1 overflow-y-auto">
+          <div className="admin-main-content w-full">
+            {Object.keys(dataErrors).length > 0 && <div className="admin-notice warning" role="alert"><span>Alguns dados não foram atualizados: {Object.entries(dataErrors).map(([key, message]) => `${tabTitles[key as AdminTabId]?.label || key}: ${message}`).join(' · ')} Os últimos dados disponíveis foram mantidos.</span></div>}
+            {activeTab === 'metrics' && canNavigate('metrics') && <AdminOverview metrics={metrics} withdrawals={withdrawals} deposits={deposits} users={users} loading={loadingMetrics} onNavigate={navigateTab} canNavigate={canNavigate} canExport={can('canExportReports')} adminName={currentUser.name || 'Administrador'} />}
+            {activeTab === 'operations' && canNavigate('operations') && <AdminOperationsTab token={token} withdrawals={withdrawals} loading={loadingWithdrawals} onNavigate={navigateTab} canExport={can('canExportReports')} onShowToast={onShowToast} />}
 
             {activeTab === 'live' && (
               <AdminLivePlayersTab
                 token={token}
-                onNavigateTab={setActiveTab}
+                onNavigateTab={navigateTab}
                 onOpenUserModal={(user) => {
                   setInitialBalanceWallet('player');
                   setSelectedUserForBalance(user);
@@ -1284,12 +1170,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 copiedText={copiedText}
                 onChangeUserGame={handleChangeUserGame}
                 onTogglePartner={handleTogglePartner}
+                onShowToast={onShowToast}
               />
             )}
 
             {activeTab === 'withdrawals' && (
               <AdminWithdrawalsTab
                 withdrawals={withdrawals}
+                searchQuery={globalSearchQuery}
+                onSearchChange={setGlobalSearchQuery}
+                canManage={can("canApproveWithdrawals")}
+                canExport={can("canExportReports")}
                 loading={loadingWithdrawals}
                 filter={withdrawalFilter}
                 onFilterChange={setWithdrawalFilter}
@@ -1376,7 +1267,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             {activeTab === 'security' && (
               <AdminSecurityTab
-                onOpenMigrationModal={() => setMigrationModalOpen(true)}
+                token={token}
+                canExport={can("canExportReports")}
+                onOpenMigrationModal={can("canExportReports") ? () => setMigrationModalOpen(true) : undefined}
               />
             )}
           </div>
@@ -1386,10 +1279,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* 3. iOS Authentic Mobile Bottom Tab Bar */}
       <AdminMobileTabBar
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={navigateTab}
         pendingWithdrawalsCount={pendingWithdrawalsCount}
+        onOpenMenu={() => setMobileMenuOpen(true)}
+        allowedTabs={allowedTabs}
       />
 
+      <AdminCommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} users={users} canNavigate={canNavigate} onNavigate={navigateTab} onSelectUser={user => { navigateTab('users'); setGlobalSearchQuery(user.email || user.name); }} />
       {/* 4. All Connected Modals */}
       <AdminBalanceModal
         user={selectedUserForBalance}

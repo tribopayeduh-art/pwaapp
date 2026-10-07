@@ -865,7 +865,7 @@ export const AdminMetricsTab: React.FC<AdminMetricsTabProps> = ({
 
       {/* 1. HERO SUMMARY SECTION: Apple Card Inspired Financial Snapshot */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Card 1: Lucro Líquido & Margem Geral */}
+        {/* Card 1: Resultado dos Jogos & Margem */}
         <div className="lg:col-span-2 bg-[#1C1C1E] text-white p-6 rounded-3xl shadow-lg relative overflow-hidden flex flex-col justify-between space-y-4">
           <div className="absolute top-0 right-0 w-80 h-80 bg-[#007AFF]/15 rounded-full blur-3xl pointer-events-none" />
 
@@ -879,7 +879,7 @@ export const AdminMetricsTab: React.FC<AdminMetricsTabProps> = ({
                   Visão Consolidada
                 </span>
                 <h2 className="text-lg font-bold tracking-tight text-white">
-                  Lucro Líquido & Margem Geral
+                  Resultado dos Jogos & Margem
                 </h2>
               </div>
             </div>
@@ -893,7 +893,7 @@ export const AdminMetricsTab: React.FC<AdminMetricsTabProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
             <div className="space-y-1">
-              <span className="text-[11px] text-white/60 font-medium block">Lucro Líquido Retido</span>
+              <span className="text-[11px] text-white/60 font-medium block">Resultado após comissões</span>
               <div className="text-2xl font-bold tracking-tight text-[#30D158]">
                 R$ {netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
@@ -995,7 +995,7 @@ export const AdminMetricsTab: React.FC<AdminMetricsTabProps> = ({
                 </span>
               </div>
               <p className="text-xs text-white/60 font-medium">
-                Partidas ativas nos jogos Block Win, GEN DINO, Zumbla e Raspadinha
+                Partidas ativas nos jogos Block Win, GEN DINO, Bubble Blast e Raspadinha
               </p>
             </div>
           </div>
@@ -1105,7 +1105,7 @@ export const AdminMetricsTab: React.FC<AdminMetricsTabProps> = ({
         <IOSStatCard
           title="GGR dos Jogos"
           value={`R$ ${gameGgr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          subtitle="Lucro bruto retido nos 3 jogos"
+          subtitle="Resultado bruto dos jogos"
           isPositive={true}
           icon={Activity}
           iconBgColor="bg-[#FF2D55]"

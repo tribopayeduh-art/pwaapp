@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Megaphone, Send, Users, Sparkles, Loader2 } from 'lucide-react';
+import { X, Megaphone, Send, Users, Loader2 } from 'lucide-react';
 
 interface PartnerBroadcastModalProps {
   isOpen: boolean;

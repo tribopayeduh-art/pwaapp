@@ -460,7 +460,9 @@ function choosePrize(){
 
   if (isSmart) {
     if (balance < (gameConfig.smartRtpEasyThreshold || 30)) {
-      winChance = Math.min(0.60, winChance * 1.4);
+      if (rtp >= 75 && gameConfig.difficulty !== 'hard' && gameConfig.difficulty !== 'heavy' && gameConfig.difficulty !== 'extreme') {
+        winChance = Math.min(0.60, winChance * 1.4);
+      }
     } else if (balance >= (gameConfig.smartRtpMaxTarget || 100)) {
       winChance = 0.02;
     } else if (balance >= (gameConfig.smartRtpHardThreshold || 85)) {

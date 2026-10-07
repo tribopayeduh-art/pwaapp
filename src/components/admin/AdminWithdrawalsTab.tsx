@@ -1,338 +1,74 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import {
-  ArrowUpRight,
-  CheckCircle2,
-  XCircle,
-  Copy,
-  Check,
-  AlertCircle,
-  DollarSign,
-  Clock,
-  ExternalLink,
-  ShieldCheck,
-  Loader2,
-  Calendar
-} from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, XCircle, Copy, Search, Download, Clock3, AlertTriangle, ChevronRight, Loader2, ReceiptText, ShieldCheck } from 'lucide-react';
 import { AdminWithdrawalItem } from './adminTypes';
-import {
-  IOSCard,
-  IOSStatCard,
-  IOSSegmentedControl,
-  IOSBadge,
-  IOSButton
-} from './IOSComponents';
+import { money, dateTime, waitLabel, downloadAdminCsv } from './adminUiUtils';
+import { Modal } from '../Modal';
 import { Pagination } from '../Pagination';
-
-interface AdminWithdrawalsTabProps {
-  withdrawals: AdminWithdrawalItem[];
-  loading: boolean;
-  filter: 'all' | 'pending' | 'approved' | 'rejected';
+interface Props {
+  withdrawals: AdminWithdrawalItem[]; loading: boolean; filter: 'all' | 'pending' | 'approved' | 'rejected';
   onFilterChange: (filter: 'all' | 'pending' | 'approved' | 'rejected') => void;
-  processingId: string | null;
-  onApproveWithdrawal: (id: string) => Promise<void>;
-  onRejectWithdrawal: (id: string) => Promise<void>;
-  onCopyText: (text: string, label?: string) => void;
-  copiedText: string | null;
+  processingId: string | null; onApproveWithdrawal: (id: string) => Promise<void>;
+  onRejectWithdrawal: (id: string, reason?: string) => Promise<void>;
+  onCopyText: (text: string, label?: string) => void; copiedText: string | null;
+  searchQuery?: string; onSearchChange?: (query: string) => void; canManage?: boolean; canExport?: boolean;
 }
-
-export const AdminWithdrawalsTab: React.FC<AdminWithdrawalsTabProps> = ({
-  withdrawals,
-  loading,
-  filter,
-  onFilterChange,
-  processingId,
-  onApproveWithdrawal,
-  onRejectWithdrawal,
-  onCopyText,
-  copiedText
-}) => {
-  const [approvingAll, setApprovingAll] = useState(false);
-
-  // Computed metrics
-  const pendingList = useMemo(() => withdrawals.filter((w) => w.status === 'pending'), [withdrawals]);
-  const approvedList = useMemo(() => withdrawals.filter((w) => w.status === 'approved'), [withdrawals]);
-  const rejectedList = useMemo(() => withdrawals.filter((w) => w.status === 'rejected'), [withdrawals]);
-
-  const pendingTotal = useMemo(() => pendingList.reduce((acc, w) => acc + (w.amount || 0), 0), [pendingList]);
-  const approvedTotal = useMemo(() => approvedList.reduce((acc, w) => acc + (w.amount || 0), 0), [approvedList]);
-
-  // Filtered withdrawals
-  const filteredWithdrawals = useMemo(() => {
-    if (filter === 'all') return withdrawals;
-    return withdrawals.filter((w) => w.status === filter);
-  }, [withdrawals, filter]);
-
-  // 40 withdrawals per page pagination
-  const PAGE_SIZE = 40;
-  const [currentPage, setCurrentPage] = useState<number>(1);
-
-  // Reset page when filter changes
+function withdrawalState(item: AdminWithdrawalItem) {
+  if (item.status === 'approved') return { label: 'Confirmado', className: 'success' };
+  if (item.status === 'rejected') return { label: 'Recusado', className: 'danger' };
+  if (item.dotfyWithdrawalId) return { label: 'Aguardando banco', className: '' };
+  if (item.gatewayProcessing) return { label: 'Em conciliação', className: 'warning' };
+  return { label: 'Em análise', className: 'warning' };
+}
+export const AdminWithdrawalsTab: React.FC<Props> = ({ withdrawals, loading, filter, onFilterChange, processingId, onApproveWithdrawal, onRejectWithdrawal, onCopyText, copiedText, searchQuery = '', onSearchChange, canManage = true, canExport = false }) => {
+  const [sort, setSort] = useState('oldest'); const [period, setPeriod] = useState('all'); const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<AdminWithdrawalItem | null>(null); const [action, setAction] = useState<'view' | 'approve' | 'reject'>('view'); const [reason, setReason] = useState('');
+  const [actionError, setActionError] = useState('');
+  const pending = withdrawals.filter(item => item.status === 'pending');
+  const approved = withdrawals.filter(item => item.status === 'approved');
+  const rejected = withdrawals.filter(item => item.status === 'rejected');
+  const total = (list: AdminWithdrawalItem[]) => list.reduce((sum, item) => sum + item.amount, 0);
+  const filtered = useMemo(() => withdrawals.filter(item => {
+    if (filter !== 'all' && item.status !== filter) return false;
+    if (period !== 'all' && Date.parse(item.createdAt) < Date.now() - Number(period) * 86400000) return false;
+    return [item.id, item.userName, item.userEmail, item.userPhone, item.dotfyWithdrawalId].join(' ').toLowerCase().includes(searchQuery.toLowerCase());
+  }).sort((a, b) => sort === 'amount' ? b.amount - a.amount : sort === 'newest' ? Date.parse(b.createdAt) - Date.parse(a.createdAt) : Date.parse(a.createdAt) - Date.parse(b.createdAt)), [withdrawals, filter, period, sort, searchQuery]);
+  useEffect(() => setPage(1), [filter, period, sort, searchQuery]);
   useEffect(() => {
-    setCurrentPage(1);
-  }, [filter]);
-
-  const paginatedWithdrawals = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredWithdrawals.slice(start, start + PAGE_SIZE);
-  }, [filteredWithdrawals, currentPage, PAGE_SIZE]);
-
-  // Handle batch approve all pending
-  const handleApproveAllPending = async () => {
-    if (pendingList.length === 0) return;
-    const confirm = window.confirm(
-      `Deseja aprovar todos os ${pendingList.length} saques pendentes (Total: R$ ${pendingTotal.toFixed(2)})?`
-    );
-    if (!confirm) return;
-
-    setApprovingAll(true);
-    try {
-      for (const w of pendingList) {
-        await onApproveWithdrawal(w.id);
-      }
-    } finally {
-      setApprovingAll(false);
+    if (!selected) return;
+    const fresh = withdrawals.find(item => item.id === selected.id);
+    if (fresh && fresh !== selected) {
+      setSelected(fresh);
+      if (fresh.status !== 'pending' || fresh.gatewayProcessing || fresh.dotfyWithdrawalId) setAction('view');
     }
+  }, [withdrawals, selected]);
+  const pageSize = 20; const effectivePage = Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize))); const rows = filtered.slice((effectivePage - 1) * pageSize, effectivePage * pageSize);
+  const open = (item: AdminWithdrawalItem) => { setSelected(item); setAction('view'); setReason(''); setActionError(''); };
+  const eligible = (item: AdminWithdrawalItem) => item.status === 'pending' && !item.gatewayProcessing && !item.dotfyWithdrawalId;
+  const confirm = async () => {
+    if (!selected || processingId) return;
+    setActionError('');
+    try { if (action === 'approve') await onApproveWithdrawal(selected.id); else if (action === 'reject') await onRejectWithdrawal(selected.id, reason.trim()); setSelected(null); }
+    catch (error: any) { setActionError(error.message || 'Não foi possível concluir. Atualize os dados antes de tentar novamente.'); }
   };
-
-  const filterOptions = [
-    { id: 'pending' as const, label: 'Pendentes', count: pendingList.length },
-    { id: 'approved' as const, label: 'Aprovados', count: approvedList.length },
-    { id: 'rejected' as const, label: 'Rejeitados', count: rejectedList.length },
-    { id: 'all' as const, label: 'Todos', count: withdrawals.length }
-  ];
-
-  return (
-    <div className="space-y-5">
-      {/* Top 3 Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <IOSStatCard
-          title="Saques Pendentes"
-          value={`R$ ${pendingTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          subtitle={`${pendingList.length} solicitações aguardando liberação`}
-          icon={Clock}
-          iconBgColor="bg-[#FF9500]"
-          change={pendingList.length > 0 ? `${pendingList.length} pendentes` : undefined}
-          isPositive={false}
-        />
-
-        <IOSStatCard
-          title="Saques Aprovados"
-          value={`R$ ${approvedTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          subtitle={`${approvedList.length} pagamentos realizados`}
-          icon={CheckCircle2}
-          iconBgColor="bg-[#34C759]"
-          isPositive={true}
-        />
-
-        <IOSStatCard
-          title="Total de Solicitações"
-          value={withdrawals.length}
-          subtitle={`Histórico completo de pedidos de saque`}
-          icon={ArrowUpRight}
-          iconBgColor="bg-[#007AFF]"
-        />
-      </div>
-
-      {/* Action & Filter Bar */}
-      <IOSCard className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <IOSSegmentedControl
-          options={filterOptions}
-          value={filter}
-          onChange={onFilterChange}
-        />
-
-        {pendingList.length > 0 && (
-          <IOSButton
-            variant="success"
-            disabled={approvingAll}
-            onClick={handleApproveAllPending}
-          >
-            {approvingAll ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="w-4 h-4" />
-            )}
-            <span>Aprovar Todos os Pendentes ({pendingList.length})</span>
-          </IOSButton>
-        )}
-      </IOSCard>
-
-      {/* Withdrawals Inset Grouped Table */}
-      <IOSCard className="overflow-hidden">
-        {loading ? (
-          <div className="p-12 text-center text-slate-400 text-xs font-semibold">
-            Carregando saques...
-          </div>
-        ) : filteredWithdrawals.length === 0 ? (
-          <div className="p-12 text-center space-y-2">
-            <CheckCircle2 className="w-10 h-10 text-[#34C759]/60 mx-auto" />
-            <p className="text-sm font-bold text-slate-800">
-              {filter === 'pending'
-                ? 'Nenhum saque pendente no momento!'
-                : 'Nenhum registro encontrado nesta categoria.'}
-            </p>
-            <p className="text-xs text-slate-400 font-medium">
-              Todos os pedidos de saque foram processados com sucesso.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-              <thead className="bg-[#F2F2F7] text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-black/[0.04]">
-                <tr>
-                  <th className="py-3 px-4">Solicitante</th>
-                  <th className="py-3 px-4">Origem</th>
-                  <th className="py-3 px-4 text-right">Valor do Saque</th>
-                  <th className="py-3 px-4">Chave PIX</th>
-                  <th className="py-3 px-4">Data & Horário</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/[0.04]">
-                {paginatedWithdrawals.map((item) => {
-                  const isPending = item.status === 'pending';
-                  const isApproved = item.status === 'approved';
-                  const isRejected = item.status === 'rejected';
-                  const isBusy = processingId === item.id;
-                  const pixKeyVal =
-                    typeof item.pixKey === 'string'
-                      ? item.pixKey
-                      : item.pixKey?.key || item.pixKey?.pixKey || 'Não informada';
-                  const pixKeyType = item.pixKey?.type || 'PIX';
-
-                  return (
-                    <tr key={item.id} className="hover:bg-black/[0.015] transition-colors">
-                      {/* User Info */}
-                      <td className="py-3.5 px-4">
-                        <div className="min-w-[180px]">
-                          <div className="font-bold text-slate-900 truncate">{item.userName || 'Jogador'}</div>
-                          <div className="text-[11px] text-slate-400 truncate">{item.userEmail}</div>
-                          {item.userPhone && (
-                            <div className="text-[10px] font-mono text-slate-400">{item.userPhone}</div>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Origin */}
-                      <td className="py-3.5 px-4 text-slate-500">
-                        {item.referredBy ? (
-                          <div>
-                            <span className="font-semibold text-slate-700 block truncate max-w-[120px]">
-                              {item.referredBy.sponsorName}
-                            </span>
-                            <span className="text-[10px] font-mono text-slate-400">
-                              {item.referredBy.referralCode}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 font-medium">Orgânico</span>
-                        )}
-                      </td>
-
-                      {/* Amount */}
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-sm text-slate-900 whitespace-nowrap">
-                        R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-
-                      {/* PIX Key */}
-                      <td className="py-3.5 px-4">
-                        <div className="min-w-[180px] space-y-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/[0.05] text-slate-600">
-                              {pixKeyType}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => onCopyText(pixKeyVal, 'Chave PIX')}
-                              className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-[#007AFF] hover:underline cursor-pointer"
-                              title="Copiar chave PIX"
-                            >
-                              {copiedText === pixKeyVal ? (
-                                <Check className="w-3 h-3 text-[#34C759]" />
-                              ) : (
-                                <Copy className="w-3 h-3" />
-                              )}
-                              <span className="truncate max-w-[130px]">{pixKeyVal}</span>
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Date */}
-                      <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">
-                        <div className="text-xs font-medium text-slate-700">
-                          {new Date(item.createdAt).toLocaleDateString('pt-BR')}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          {new Date(item.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3.5 px-4 text-center">
-                        {isPending ? (
-                          <IOSBadge variant="orange">Pendente</IOSBadge>
-                        ) : isApproved ? (
-                          <IOSBadge variant="green">Aprovado</IOSBadge>
-                        ) : (
-                          <IOSBadge variant="red">Rejeitado</IOSBadge>
-                        )}
-                      </td>
-
-                      {/* Action Buttons */}
-                      <td className="py-3.5 px-4 text-center">
-                        {isPending ? (
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => onApproveWithdrawal(item.id)}
-                              className="h-7 px-2.5 rounded-lg bg-[#34C759] hover:bg-[#28A745] text-white font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer active:scale-[0.98] transition-all disabled:opacity-40"
-                              title="Aprovar PIX"
-                            >
-                              {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                              <span>Aprovar</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => onRejectWithdrawal(item.id)}
-                              className="h-7 px-2 rounded-lg bg-[#FF3B30]/12 hover:bg-[#FF3B30]/20 text-[#FF3B30] font-bold text-xs flex items-center gap-1 cursor-pointer active:scale-[0.98] transition-all disabled:opacity-40"
-                              title="Rejeitar e Devolver Saldo"
-                            >
-                              <XCircle className="w-3 h-3" />
-                              <span>Rejeitar</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-[11px] font-medium">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* 40 per page Pagination */}
-          {filteredWithdrawals.length > 0 && (
-            <div className="p-4 border-t border-black/[0.05] bg-slate-50/50">
-              <Pagination
-                currentPage={currentPage}
-                totalItems={filteredWithdrawals.length}
-                pageSize={PAGE_SIZE}
-                onPageChange={setCurrentPage}
-                itemLabel="saques"
-              />
-            </div>
-          )}
-        </>
-      )}
-      </IOSCard>
-    </div>
-  );
+  const exportList = () => downloadAdminCsv('saques-filtrados.csv', ['Protocolo', 'Solicitante', 'E-mail', 'Bruto BRL', 'Taxa BRL', 'Líquido BRL', 'Situação', 'Data', 'ID Gateway'], filtered.map(item => [item.id, item.userName, item.userEmail, item.amount, item.fee ?? 0, item.netAmount ?? item.amount, withdrawalState(item).label, item.createdAt, item.dotfyWithdrawalId || '']));
+  return <div className="admin-withdrawals"><div className="admin-page-heading"><div><span className="admin-eyebrow">FINANCEIRO</span><h1>Gestão de saques<span className="admin-heading-dot">.</span></h1><p>Confira o solicitante, os valores e o andamento bancário antes de agir.</p></div>{canExport && <button className="admin-btn" onClick={exportList} disabled={!filtered.length}><Download size={15} />Exportar lista</button>}</div>
+    <div className="admin-kpi-grid admin-kpi-grid-three">{[
+      { label: 'Aguardando conclusão', value: total(pending), sub: `${pending.length} solicitações em análise ou processamento`, icon: Clock3 },
+      { label: 'Confirmados no histórico', value: total(approved), sub: `${approved.length} saques registrados como confirmados`, icon: CheckCircle2 },
+      { label: 'Total solicitado', value: total(withdrawals), sub: `${withdrawals.length} solicitações na base carregada`, icon: ReceiptText }
+    ].map(item => <div className="admin-kpi" key={item.label}><div className="admin-kpi-top"><span>{item.label}</span><item.icon size={19} /></div><strong>{money(item.value)}</strong><div className="admin-kpi-sub">{item.sub}</div></div>)}</div>
+    <section className="admin-surface"><div className="admin-withdrawal-filters"><div className="admin-filter-tabs">{[{ id: 'pending', label: 'Pendentes', count: pending.length }, { id: 'approved', label: 'Confirmados', count: approved.length }, { id: 'rejected', label: 'Recusados', count: rejected.length }, { id: 'all', label: 'Todos', count: withdrawals.length }].map(item => <button key={item.id} className={filter === item.id ? 'active' : ''} aria-pressed={filter === item.id} onClick={() => onFilterChange(item.id as typeof filter)}>{item.label}<b>{item.count}</b></button>)}</div></div>
+      <div className="admin-list-toolbar"><div className="admin-search-input"><Search size={16} /><input aria-label="Pesquisar saques" placeholder="Buscar nome, e-mail ou protocolo…" value={searchQuery} onChange={event => onSearchChange?.(event.target.value)} /></div><select className="admin-select" aria-label="Período dos saques" value={period} onChange={event => setPeriod(event.target.value)}><option value="all">Todo o histórico</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option></select><select className="admin-select" aria-label="Ordenar saques" value={sort} onChange={event => setSort(event.target.value)}><option value="oldest">Mais antigos</option><option value="newest">Mais recentes</option><option value="amount">Maior valor</option></select></div>
+      {loading && !withdrawals.length ? <div className="admin-empty"><Loader2 className="animate-spin" size={26} /><p>Carregando saques…</p></div> : !rows.length ? <div className="admin-empty"><Search size={30} /><strong>Nenhum saque encontrado</strong><p>Experimente outro filtro ou termo de busca.</p></div> : <><div className="admin-table-wrap admin-desktop-table"><table className="admin-data-table"><thead><tr><th>Solicitante</th><th>Bruto / líquido</th><th>Solicitado em</th><th>Andamento</th><th>Protocolo</th><th aria-label="Ações" /></tr></thead><tbody>{rows.map(item => <tr key={item.id}><td><div className="admin-table-person"><span>{(item.userName || 'U').slice(0, 1)}</span><div><strong>{item.userName || 'Usuário'}</strong><small>{item.userEmail}</small></div></div></td><td><div className="admin-table-value"><strong>{money(item.amount)}</strong><small>{money(item.netAmount ?? item.amount)} líquido</small></div></td><td><div className="admin-table-value"><span>{dateTime(item.createdAt)}</span><small>{item.status === 'pending' ? `${waitLabel(item.createdAt)} de espera` : 'Histórico'}</small></div></td><td><span className={`admin-status ${withdrawalState(item).className}`}>{withdrawalState(item).label}</span></td><td><button className="admin-protocol" onClick={() => onCopyText(item.id, 'Protocolo')} title={item.id}><span>{item.id.length > 16 ? item.id.slice(0, 8) + '…' + item.id.slice(-5) : item.id}</span>{copiedText === item.id ? <CheckCircle2 size={12} /> : <Copy size={12} />}</button></td><td><button className="admin-btn admin-btn-sm" onClick={() => open(item)}>Detalhes<ChevronRight size={13} /></button></td></tr>)}</tbody></table></div><div className="admin-withdrawal-cards">{rows.map(item => <button key={item.id} className="admin-withdrawal-card" onClick={() => open(item)}><div><strong>{item.userName || 'Usuário'}</strong><b>{money(item.amount)}</b></div><span>{item.userEmail}</span><div><span className={`admin-status ${withdrawalState(item).className}`}>{withdrawalState(item).label}</span><small>{dateTime(item.createdAt)} <ChevronRight size={13} /></small></div></button>)}</div></>}
+      <div className="admin-list-footer"><Pagination currentPage={effectivePage} totalItems={filtered.length} pageSize={pageSize} onPageChange={setPage} itemLabel="saques" /></div>
+    </section>
+    <Modal isOpen={!!selected} onClose={() => { if (!processingId) setSelected(null); }} title={action === 'approve' ? 'Conferir envio ao banco' : action === 'reject' ? 'Recusar e estornar saque' : 'Detalhes do saque'}>{selected && <div className="admin-withdrawal-detail"><div className="admin-detail-person"><strong>{selected.userName}</strong><span>{selected.userEmail}</span><span className={`admin-status ${withdrawalState(selected).className}`}>{withdrawalState(selected).label}</span></div><div className="admin-detail-grid"><div><span>Valor solicitado</span><strong>{money(selected.amount)}</strong></div><div><span>Valor a enviar</span><strong>{money(selected.netAmount ?? selected.amount)}</strong></div><div><span>Taxa registrada</span><strong>{money(selected.fee ?? 0)}</strong></div><div><span>Solicitado em</span><strong>{dateTime(selected.createdAt)}</strong></div></div><div className="admin-detail-reference"><span>Protocolo</span><button onClick={() => onCopyText(selected.id, 'Protocolo')}><code>{selected.id}</code><Copy size={14} /></button>{selected.dotfyWithdrawalId && <><span>ID no gateway</span><code>{selected.dotfyWithdrawalId}</code></>}<span>Chave PIX registrada</span><code>{typeof selected.pixKey === 'string' ? selected.pixKey : selected.pixKey?.key || selected.pixKeyId || 'Não informada'}</code></div>
+      {(selected.dotfyWithdrawalId || selected.gatewayProcessing) && <div className="admin-notice warning"><AlertTriangle size={18} /><span>Este saque já foi enviado ou reservado. Confira a confirmação no gateway; enviar novamente pode duplicar a transferência.</span></div>}
+      {selected.rejectReason && <div className="admin-small-note"><XCircle size={16} /><p>Motivo da recusa: {selected.rejectReason}</p></div>}
+      {action === 'approve' && <div className="admin-notice"><ShieldCheck size={18} /><span>O envio utiliza o valor líquido registrado. A confirmação do pagamento depende do retorno bancário.</span></div>}
+      {action === 'reject' && <div className="admin-field"><label htmlFor="withdrawal-reject-reason">Motivo da recusa</label><textarea id="withdrawal-reject-reason" maxLength={500} rows={3} value={reason} onChange={event => setReason(event.target.value)} placeholder="Descreva o motivo para o solicitante…" /><small>O valor reservado será estornado se o servidor confirmar a recusa.</small></div>}
+      {actionError && <div className="admin-notice warning" role="alert">{actionError}</div>}
+      {eligible(selected) && canManage && (action === 'view' ? <div className="admin-detail-actions"><button className="admin-btn admin-btn-danger" onClick={() => setAction('reject')}><XCircle size={15} />Recusar</button><button className="admin-btn admin-btn-primary" onClick={() => setAction('approve')}><ArrowUpRight size={15} />Conferir envio</button></div> : <div className="admin-detail-actions"><button className="admin-btn" disabled={!!processingId} onClick={() => setAction('view')}>Voltar</button><button className={`admin-btn ${action === 'reject' ? 'admin-btn-danger' : 'admin-btn-primary'}`} disabled={!!processingId || (action === 'reject' && reason.trim().length < 3)} onClick={confirm}>{processingId && <Loader2 size={15} className="animate-spin" />}{action === 'reject' ? 'Confirmar recusa' : 'Confirmar envio ao banco'}</button></div>)}
+    </div>}</Modal>
+  </div>;
 };

@@ -1,7 +1,12 @@
 import React from 'react';
 import { User } from '../types';
 import logoImg from './logo.webp';
-import { Bell, Crown, Sparkles } from 'lucide-react';
+import {
+  Bell,
+  Crown,
+  ShieldCheck,
+  ChevronDown
+} from 'lucide-react';
 
 interface HeaderProps {
   user?: User | null;
@@ -10,9 +15,20 @@ interface HeaderProps {
   onOpenSettings?: () => void;
   onOpenAdmin?: () => void;
   onOpenPartner?: () => void;
+  onDeposit?: () => void;
+  onWithdraw?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ user, title, onProfileClick, onOpenSettings, onOpenAdmin, onOpenPartner }) => {
+export const Header: React.FC<HeaderProps> = ({
+  user,
+  title,
+  onProfileClick,
+  onOpenSettings,
+  onOpenAdmin,
+  onOpenPartner,
+  onDeposit,
+  onWithdraw
+}) => {
   const isAdminUser = !!user && (user.role === 'admin' || user.role === 'superadmin');
   const isApprovedPartner = !!user && (
     isAdminUser ||
@@ -20,63 +36,83 @@ export const Header: React.FC<HeaderProps> = ({ user, title, onProfileClick, onO
   );
 
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#E5E5E5] px-4 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <img
-          src={logoImg}
-          alt="Logo"
-          className="h-8 max-w-[160px] object-contain"
-        />
-      </div>
+    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-zinc-200/80 px-2 sm:px-3.5 lg:px-4 py-2 transition-all">
+      <div className="flex items-center justify-between gap-1.5 sm:gap-2 max-w-full">
+        {/* Left: Platform Logo */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="relative flex items-center">
+            <img
+              src={logoImg}
+              alt="Alliance Hub"
+              className="h-7 sm:h-8 max-w-[130px] sm:max-w-[160px] object-contain cursor-pointer hover:opacity-95 transition"
+            />
+          </div>
+        </div>
 
-      <div className="flex items-center gap-2">
-        {user && (
-          <>
-            {isAdminUser && onOpenAdmin && (
+        {/* Right: Actions, Panels & Profile */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {user && (
+            <>
+              {/* Partner VIP Button */}
+              {isApprovedPartner && onOpenPartner && (
+                <button
+                  type="button"
+                  onClick={onOpenPartner}
+                  title="Acessar Painel do Parceiro (VIP)"
+                  className="h-8 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:brightness-105 active:brightness-95 text-zinc-950 font-black text-xs flex items-center gap-1.5 shadow-2xs border border-amber-300 transition-all cursor-pointer active:scale-95"
+                >
+                  <Crown className="w-3.5 h-3.5 fill-zinc-950 text-zinc-950" />
+                  <span className="text-[11px] sm:text-xs">Parceiro</span>
+                  <span className="hidden md:inline px-1 py-0.2 rounded bg-black/10 text-[9px] font-black uppercase">
+                    VIP
+                  </span>
+                </button>
+              )}
+
+              {/* Admin Panel Button */}
+              {isAdminUser && onOpenAdmin && (
+                <button
+                  type="button"
+                  onClick={onOpenAdmin}
+                  title="Acessar Painel Administrativo Geral"
+                  className="h-8 px-2.5 sm:px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 active:bg-black text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline text-[11px]">Admin</span>
+                </button>
+              )}
+
+              {/* Settings / Notifications Icon */}
+              {onOpenSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  title="Configurações de Gateway e Alertas"
+                  className="w-8 h-8 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 active:bg-zinc-200 text-zinc-700 transition flex items-center justify-center cursor-pointer border border-zinc-200/80 active:scale-95 relative"
+                >
+                  <Bell className="w-3.5 h-3.5 text-zinc-700" />
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                </button>
+              )}
+
+              {/* User Profile Capsule */}
               <button
-                onClick={onOpenAdmin}
-                title="Acessar Painel Administrativo"
-                className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 hover:from-amber-300 hover:to-amber-400 transition-all cursor-pointer border border-amber-500/70 font-black text-xs flex items-center gap-1.5 shadow-2xs hover:shadow-xs active:scale-95 shrink-0"
+                type="button"
+                onClick={onProfileClick}
+                className="h-8 pl-1.5 pr-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 active:bg-zinc-200 text-zinc-900 border border-zinc-200/80 flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+                title="Minha Conta e Perfil"
               >
-                <Crown className="w-3.5 h-3.5 fill-zinc-950" />
-                <span className="hidden sm:inline">Painel Admin</span>
+                <div className="w-5 h-5 rounded-lg bg-zinc-900 text-white flex items-center justify-center text-[10px] font-black uppercase shadow-2xs">
+                  {user.name ? user.name.charAt(0) : 'U'}
+                </div>
+                <span className="text-xs font-bold max-w-[70px] sm:max-w-[90px] truncate">
+                  {user.name ? user.name.split(' ')[0] : 'Conta'}
+                </span>
+                <ChevronDown className="w-3 h-3 text-zinc-400 hidden sm:inline" />
               </button>
-            )}
-
-            {isApprovedPartner && onOpenPartner && (
-              <button
-                onClick={onOpenPartner}
-                title="Acessar Painel do Parceiro (VIP)"
-                className="px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500 transition-all cursor-pointer border border-emerald-700/70 font-black text-xs flex items-center gap-1.5 shadow-2xs hover:shadow-xs active:scale-95 shrink-0"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span className="hidden sm:inline">Parceiro</span>
-              </button>
-            )}
-
-            {onOpenSettings && (
-              <button
-                onClick={onOpenSettings}
-                title="Configurações do Gateway & Notificações"
-                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200/90 transition-all cursor-pointer border border-zinc-200/80 flex items-center justify-center text-zinc-700 active:scale-95 shrink-0 shadow-2xs"
-              >
-                <Bell className="w-4 h-4 text-emerald-600" />
-              </button>
-            )}
-
-            <button
-              onClick={onProfileClick}
-              className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-full bg-zinc-100 hover:bg-zinc-200/90 transition-all cursor-pointer border border-zinc-200/80 active:scale-95 shrink-0 shadow-2xs"
-            >
-              <div className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold uppercase shadow-2xs">
-                {user.name ? user.name.charAt(0) : 'U'}
-              </div>
-              <span className="text-xs font-bold text-zinc-900 max-w-[80px] sm:max-w-[110px] truncate">
-                {user.name.split(' ')[0]}
-              </span>
-            </button>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </header>
   );

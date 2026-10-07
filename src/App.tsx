@@ -19,7 +19,6 @@ import { TermsModal } from './components/TermsModal';
 import { ProfileModal } from './components/ProfileModal';
 import { GatewaySettingsModal } from './components/GatewaySettingsModal';
 import { PixKeysModal } from './components/PixKeysModal';
-import { BannerModal } from './components/BannerModal';
 import { Toast, ToastType } from './components/Toast';
 import { trackDepositInitiated, trackDepositSuccess, trackRegistration } from './lib/tracking';
 import {
@@ -37,16 +36,15 @@ import {
   playSaleSound,
 } from './lib/pwaNotification';
 import { applyGameSEO } from './lib/seo';
-import { Loader2, Gamepad2, ShieldCheck, ExternalLink, Wallet, Activity, Layers3, Crown } from 'lucide-react';
+import { Loader2, Gamepad2, ShieldCheck, ExternalLink, Crown } from 'lucide-react';
 import logoImg from './components/logo.webp';
 import { GAME_ASSETS, publicAsset } from './config/gameAssets';
-import { BubbleBlastPlayerView } from './components/BubbleBlastPlayerView';
 
 const AdminPanel = lazy(() => import('./components/AdminPanel').then((module) => ({ default: module.AdminPanel })));
 const BlockPuzzleApp = lazy(() => import('./game/BlockPuzzleApp').then((module) => ({ default: module.BlockPuzzleApp })));
 const LazyScreen = () => <div className="min-h-screen bg-white grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-zinc-800" /></div>;
 
-type AppContext = 'alliance-hub' | 'blockwin' | 'zumbla' | 'gen-dino' | 'raspa-fortuna' | 'subwaypay' | 'bubble-blast';
+type AppContext = 'alliance-hub' | 'blockwin' | 'gen-dino' | 'raspa-fortuna' | 'subwaypay' | 'bubbleblast';
 
 const detectAppContext = (): AppContext => {
   const host = window.location.hostname.toLowerCase();
@@ -55,19 +53,15 @@ const detectAppContext = (): AppContext => {
   const pathname = window.location.pathname.toLowerCase();
 
   if (host.includes('goalliancehub')) return 'alliance-hub';
-
-  // Zumbla domain (zumblapay.site, zumbla, etc.) & Bubble Blast aliases route directly to Bubble Blast
   if (
-    host.includes('zumblapay') || host.includes('zumbla') ||
-    site === 'zumbla' || site === 'zumbla-win' || site === 'zumblapay' ||
-    search.includes('site=zumbla') || search.includes('game=zumbla') || search.includes('site=zumblapay') ||
-    pathname.startsWith('/zumbla') ||
-    host.includes('bubbleblast') || host.includes('bubble-blast') ||
-    site === 'bubble-blast' || site === 'bubbleblast' ||
-    search.includes('site=bubble') || search.includes('game=bubble') || search.includes('site=bubbleblast') || search.includes('game=bubbleblast') ||
-    pathname.startsWith('/bubble')
-  ) return 'bubble-blast';
-
+    host.includes('jogarbubble') || host.includes('bubbleswin') || host.includes('bubbleblast') ||
+    host.includes('zumbla') || host.includes('zumblawin') || host.includes('zumblapay') ||
+    site === 'bubbleblast' || site === 'bubble-blast' || site === 'bubble' || site === 'bubbles' || site === 'bubbles-win' ||
+    site === 'jogarbubble' || site === 'zumbla' || site === 'zumblawin' || site === 'zumbla-win' ||
+    search.includes('site=bubble') || search.includes('game=bubble') || search.includes('site=jogarbubble') ||
+    search.includes('site=zumbla') || search.includes('game=zumbla') ||
+    pathname.startsWith('/bubble') || pathname.startsWith('/zumbla')
+  ) return 'bubbleblast';
   if (
     host.includes('joguesubway') || host.includes('subwaypay') || host.includes('subway') ||
     site === 'subway' || site === 'subwaypay' || site === 'subway-pay' || site === 'joguesubway' ||
@@ -95,18 +89,7 @@ const detectAppContext = (): AppContext => {
   return 'alliance-hub';
 };
 
-const gameTrackingId = (context: AppContext) =>
-  context === 'bubble-blast' || context === 'zumbla'
-    ? 'g_bubble_blast'
-    : context === 'gen-dino'
-      ? 'g_gen_dino'
-      : context === 'raspa-fortuna'
-        ? 'g_raspa_fortuna'
-        : context === 'subwaypay'
-          ? 'g_subway_pay'
-          : context === 'blockwin'
-            ? 'g_block_puzzle'
-            : 'platform';
+const gameTrackingId = (context: AppContext) => context === 'gen-dino' ? 'g_gen_dino' : context === 'raspa-fortuna' ? 'g_raspa_fortuna' : context === 'subwaypay' ? 'g_subway_pay' : context === 'bubbleblast' ? 'g_bubble_blast' : context === 'blockwin' ? 'g_block_puzzle' : 'platform';
 
 const resolveAcquisitionGame = (context: AppContext): string => {
   const searchParams = new URLSearchParams(window.location.search);
@@ -122,7 +105,7 @@ const resolveAcquisitionGame = (context: AppContext): string => {
   return 'alliance-hub';
 };
 
-const DirectGameFrame: React.FC<{ context: 'zumbla' | 'gen-dino' | 'raspa-fortuna' | 'subwaypay' }> = ({ context }) => {
+const DirectGameFrame: React.FC<{ context: 'gen-dino' | 'raspa-fortuna' | 'subwaypay' | 'bubbleblast' }> = ({ context }) => {
   const [depositOpen, setDepositOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
@@ -138,12 +121,12 @@ const DirectGameFrame: React.FC<{ context: 'zumbla' | 'gen-dino' | 'raspa-fortun
 
   const [targetSrc] = useState<string>(() => {
     const base =
-      context === 'zumbla'
-        ? GAME_ASSETS.zumbla.app
-        : context === 'gen-dino'
-          ? GAME_ASSETS.genDino.app
-          : context === 'subwaypay'
-            ? GAME_ASSETS.subwayPay.app
+      context === 'gen-dino'
+        ? GAME_ASSETS.genDino.app
+        : context === 'subwaypay'
+          ? GAME_ASSETS.subwayPay.app
+          : context === 'bubbleblast'
+            ? GAME_ASSETS.bubbleBlast.app
             : GAME_ASSETS.raspaFortuna.app;
     const target = new URL(base, window.location.href);
     const incoming = new URLSearchParams(window.location.search);
@@ -218,7 +201,7 @@ const DirectGameFrame: React.FC<{ context: 'zumbla' | 'gen-dino' | 'raspa-fortun
         ref={iframeRef}
         src={targetSrc}
         onLoad={sendTokenToGame}
-        title={context === 'zumbla' ? 'Zumbla Win' : context === 'gen-dino' ? 'GEN DINO' : 'Raspa Fortuna'}
+        title={context === 'gen-dino' ? 'GEN DINO' : context === 'subwaypay' ? 'Subway Pay' : context === 'bubbleblast' ? 'Bubble Blast' : 'Raspa Fortuna'}
         className="fixed inset-0 h-[100dvh] w-full border-0 bg-black"
         allow="autoplay; fullscreen; clipboard-write"
       />
@@ -294,7 +277,6 @@ export default function App() {
       search.includes('parceiro')
     );
   });
-  const [bannerOpen, setBannerOpen] = useState(true);
   const [depositOpen, setDepositOpen] = useState(false);
   const [depositGameId, setDepositGameId] = useState('platform');
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -583,7 +565,7 @@ export default function App() {
     }
 
     // Never poll platform affiliate/finance data if user is in a direct full-screen game context
-    if (appContext === 'gen-dino' || appContext === 'zumbla') {
+    if (appContext === 'gen-dino' || appContext === 'subwaypay' || appContext === 'bubbleblast' || appContext === 'raspa-fortuna') {
       return;
     }
 
@@ -1000,18 +982,7 @@ export default function App() {
     );
   }
 
-  if (appContext === 'bubble-blast') {
-    return (
-      <BubbleBlastPlayerView
-        user={user || undefined}
-        onBack={() => setAppContext('alliance-hub')}
-        onDeposit={() => { setDepositGameId('g_bubble_blast'); setDepositOpen(true); }}
-        onShowToast={showToast}
-      />
-    );
-  }
-
-  if (appContext === 'zumbla' || appContext === 'gen-dino' || appContext === 'raspa-fortuna' || appContext === 'subwaypay') {
+  if (appContext === 'gen-dino' || appContext === 'raspa-fortuna' || appContext === 'subwaypay' || appContext === 'bubbleblast') {
     return <DirectGameFrame context={appContext} />;
   }
 
@@ -1071,9 +1042,9 @@ export default function App() {
 
   // Render Authenticated Mobile Container
   return (
-    <div className="min-h-screen bg-zinc-900/5 sm:py-4 lg:py-2.5 sm:px-2 lg:px-4 flex items-center justify-center">
-      {/* Responsive Shell Frame: clean mobile-first that smoothly expands for tablet & desktop */}
-      <div className="alliance-app-shell w-full max-w-md md:max-w-4xl lg:max-w-[97vw] xl:max-w-[98vw] 2xl:max-w-[1880px] bg-white min-h-screen sm:min-h-[820px] border border-zinc-200/90 shadow-2xl relative overflow-hidden flex flex-col justify-between transition-[max-width,border-radius] duration-300 sm:rounded-3xl lg:rounded-[28px]">
+    <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-0 sm:px-1.5 lg:px-2 sm:py-1 lg:py-1.5">
+      {/* Responsive Shell Frame: edge-to-edge mobile and expansive fluid layout for tablet & desktop */}
+      <div className="alliance-app-shell w-full max-w-full lg:max-w-[99.2vw] 2xl:max-w-[2400px] bg-white min-h-screen sm:min-h-[820px] border-x-0 sm:border sm:border-zinc-200/90 shadow-2xl relative overflow-hidden flex flex-col justify-between transition-[max-width,border-radius] duration-300 sm:rounded-2xl lg:rounded-[22px]">
         {/* Toast */}
         {toast && (
           <Toast message={toast.message} type={toast.type} duration={3000} onClose={() => setToast(null)} />
@@ -1089,15 +1060,6 @@ export default function App() {
 
         {/* Scrollable Main Content Area */}
         <main className="alliance-main-content flex-1 overflow-y-auto no-scrollbar">
-          {!(activeTab === 'games' || (activeTab === 'more' && subView === 'campaigns')) && (
-            <section className="desktop-context-strip" aria-label="Resumo da seção atual">
-              <div><span>ÁREA ATUAL</span><strong>{activeTab === 'home' ? 'Visão geral' : activeTab === 'finance' ? 'Financeiro' : activeTab === 'games' ? 'Central de jogos' : subView === 'affiliates' ? 'Programa de afiliados' : 'Conta e configurações'}</strong></div>
-              <div><i><Wallet/></i><span>Saldo total<strong>R$ {(user.balance + Number(affiliateInfo?.affiliateBalance || 0)).toLocaleString('pt-BR', { minimumFractionDigits:2 })}</strong></span></div>
-              <div><i><Activity/></i><span>Movimentações<strong>{transactions.length}</strong></span></div>
-              <div><i><Layers3/></i><span>Jogos disponíveis<strong>{games.length || 3}</strong></span></div>
-              <div className="desktop-live-pill"><span/> Sistema atualizado</div>
-            </section>
-          )}
           <div key={`${activeTab}-${subView}`} className="alliance-section-transition">
           {activeTab === 'home' && (
             <HomeView
@@ -1280,18 +1242,6 @@ export default function App() {
             showToast(msg, 'success');
             if (user && pixKeyData) {
               setUser({ ...user, pixKey: pixKeyData });
-            }
-          }}
-        />
-
-        <BannerModal
-          isOpen={bannerOpen}
-          onClose={() => setBannerOpen(false)}
-          onAction={() => {
-            if (!user) {
-              setAuthView('register');
-            } else {
-              setDepositOpen(true);
             }
           }}
         />

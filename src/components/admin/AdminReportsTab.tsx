@@ -11,11 +11,11 @@ import {
   DollarSign,
   ArrowDownLeft,
   ArrowUpRight,
-  Sparkles,
   BarChart3,
   Loader2,
   Server,
-  Database
+  Database,
+  Crown
 } from 'lucide-react';
 import { ReportAnalyticsData } from './adminTypes';
 import {
@@ -103,6 +103,17 @@ export const AdminReportsTab: React.FC<AdminReportsTabProps> = ({
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span>Exportar CSV</span>
+          </IOSButton>
+
+          <IOSButton
+            variant="secondary"
+            size="sm"
+            onClick={() => onExportCsv('influencers')}
+            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 border-amber-500/20 font-bold"
+            title="Exportar influenciadores com telefone válido para Excel e WhatsApp"
+          >
+            <Crown className="w-3.5 h-3.5 text-amber-600" />
+            <span>Exportar Influenciadoras</span>
           </IOSButton>
         </div>
       </IOSCard>

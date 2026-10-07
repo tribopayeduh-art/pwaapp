@@ -1,170 +1,27 @@
-import React from 'react';
-import {
-  ShieldCheck,
-  Activity,
-  Server,
-  Database,
-  Lock,
-  RefreshCw,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  Terminal
-} from 'lucide-react';
-import {
-  IOSCard,
-  IOSBadge,
-  IOSButton
-} from './IOSComponents';
-
-interface SystemLogItem {
-  id: string;
-  level: 'info' | 'warn' | 'error';
-  category: string;
-  message: string;
-  timestamp: string;
-}
-
-interface AdminSecurityTabProps {
-  onOpenMigrationModal?: () => void;
-}
-
-export const AdminSecurityTab: React.FC<AdminSecurityTabProps> = ({ onOpenMigrationModal }) => {
-  const sampleLogs: SystemLogItem[] = [
-    {
-      id: 'log-1',
-      level: 'info',
-      category: 'PIX Gateway',
-      message: 'Webhook PIX recebido e processado: Liquidação instantânea de R$ 50,00',
-      timestamp: new Date().toLocaleTimeString('pt-BR')
-    },
-    {
-      id: 'log-2',
-      level: 'info',
-      category: 'iGaming Engine',
-      message: 'RTP calibrado para GEN DINO Runner: 88.0% com anti-cheat ativo',
-      timestamp: new Date(Date.now() - 60000).toLocaleTimeString('pt-BR')
-    },
-    {
-      id: 'log-3',
-      level: 'info',
-      category: 'Security',
-      message: 'Sessão de Super Admin validada com token Bearer SHA-256',
-      timestamp: new Date(Date.now() - 180000).toLocaleTimeString('pt-BR')
-    },
-    {
-      id: 'log-4',
-      level: 'info',
-      category: 'Database',
-      message: 'Snapshot de saldos e retenção sincronizados com sucesso',
-      timestamp: new Date(Date.now() - 360000).toLocaleTimeString('pt-BR')
-    }
-  ];
-
-  return (
-    <div className="space-y-5">
-      {/* System Health Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <IOSCard className="p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-[#34C759]/15 text-[#34C759] flex items-center justify-center font-bold">
-            <Server className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-              Servidor Core API
-            </span>
-            <span className="text-base font-bold text-slate-900 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#34C759]" />
-              Online (Latência 18ms)
-            </span>
-          </div>
-        </IOSCard>
-
-        <IOSCard className="p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-[#007AFF]/15 text-[#007AFF] flex items-center justify-center font-bold">
-            <Activity className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-              Gateway PIX
-            </span>
-            <span className="text-base font-bold text-slate-900 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#34C759]" />
-              Conectado & Transacionando
-            </span>
-          </div>
-        </IOSCard>
-
-        <IOSCard className="p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-[#AF52DE]/15 text-[#AF52DE] flex items-center justify-center font-bold">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-              Anti-Cheat Engine
-            </span>
-            <span className="text-base font-bold text-slate-900 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#34C759]" />
-              Proteção Ativa 100%
-            </span>
-          </div>
-        </IOSCard>
-      </div>
-
-      {/* Database Backup & VPS Migration Card */}
-      {onOpenMigrationModal && (
-        <IOSCard className="p-5 border-emerald-200/80 bg-gradient-to-r from-emerald-50 via-white to-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/20">
-              <Database className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm text-slate-900">Migração & Backup Integrator VPS</h3>
-                <IOSBadge variant="green">Online</IOSBadge>
-              </div>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Exporte todo o banco de dados (todas as chaves, usuários, saldos, PIX e configurações) para hospedar diretamente na VPS da Integrator.
-              </p>
-            </div>
-          </div>
-          <IOSButton
-            variant="primary"
-            size="sm"
-            onClick={onOpenMigrationModal}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 shadow-sm"
-          >
-            <Database className="w-3.5 h-3.5" />
-            <span>Exportar para VPS</span>
-          </IOSButton>
-        </IOSCard>
-      )}
-
-      {/* System Logs Stream */}
-      <IOSCard className="p-5 sm:p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-black/[0.04] pb-3">
-          <div className="flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-slate-400" />
-            <h3 className="font-bold text-sm text-slate-900">Logs de Auditoria & Eventos do Sistema</h3>
-          </div>
-          <IOSBadge variant="green">Em Tempo Real</IOSBadge>
-        </div>
-
-        <div className="divide-y divide-black/[0.04] font-mono text-xs">
-          {sampleLogs.map((log) => (
-            <div key={log.id} className="py-2.5 flex items-start justify-between gap-3">
-              <div className="flex items-start gap-2 min-w-0">
-                <span className="text-[10px] text-slate-400 shrink-0 font-sans pt-0.5">{log.timestamp}</span>
-                <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 rounded bg-black/[0.05] text-slate-700 shrink-0 font-sans">
-                  {log.category}
-                </span>
-                <span className="text-slate-800 text-[11px] truncate font-sans">{log.message}</span>
-              </div>
-              <span className="text-[10px] text-[#34C759] font-bold shrink-0 font-sans">OK</span>
-            </div>
-          ))}
-        </div>
-      </IOSCard>
-    </div>
-  );
+import React, { useEffect, useState } from 'react';
+import { Activity, Server, RefreshCw, ShieldCheck, Search, Download, AlertTriangle, Clock3 } from 'lucide-react';
+import { dateTime, downloadAdminCsv } from './adminUiUtils';
+interface Event { id: string; event: string; timestamp: string; actorId?: string; }
+interface Props { token?: string | null; onOpenMigrationModal?: () => void; canExport?: boolean; }
+export const AdminSecurityTab: React.FC<Props> = ({ token, onOpenMigrationModal, canExport }) => {
+  const [events, setEvents] = useState<Event[]>([]); const [loading, setLoading] = useState(false); const [error, setError] = useState('');
+  const [latency, setLatency] = useState<number | null>(null); const [observedAt, setObservedAt] = useState<string | null>(null); const [query, setQuery] = useState('');
+  const load = async () => {
+    setLoading(true); setError('');
+    try { const start = performance.now(); const response = await fetch('/api/admin/security/events', { headers: { Authorization: `Bearer ${token}` } }); const data = await response.json(); if (!response.ok) throw Error(data.error || 'Não foi possível consultar os eventos.'); setLatency(Math.round(performance.now() - start)); setEvents(data.events || []); setObservedAt(data.observedAt); }
+    catch (error: any) { setError(error.message || 'Erro de conexão.'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { if (token) void load(); }, [token]);
+  const filtered = events.filter(item => (item.event + ' ' + item.actorId).toLowerCase().includes(query.toLowerCase()));
+  return <div className="space-y-5"><div className="admin-page-heading"><div><span className="admin-eyebrow">MONITORAMENTO</span><h1>Atividade do sistema<span className="admin-heading-dot">.</span></h1><p>Eventos reais observados nesta instância do servidor.</p></div><button className="admin-btn" disabled={loading} onClick={load}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} />Atualizar</button></div>
+    <div className="admin-kpi-grid admin-kpi-grid-three">{[
+      { label: 'Resposta da API', value: error ? 'Indisponível' : latency == null ? '—' : `${latency} ms`, icon: Server, sub: 'Tempo medido nesta consulta' },
+      { label: 'Eventos disponíveis', value: events.length, icon: Activity, sub: 'Até 300 eventos desta instância' },
+      { label: 'Última consulta', value: observedAt ? new Date(observedAt).toLocaleTimeString('pt-BR') : '—', icon: Clock3, sub: 'Horário da observação' }
+    ].map(item => <div className="admin-kpi" key={item.label}><div className="admin-kpi-top"><span>{item.label}</span><item.icon size={18} /></div><strong>{item.value}</strong><div className="admin-kpi-sub">{item.sub}</div></div>)}</div>
+    {error && <div className="admin-notice warning" role="alert">{error}</div>}
+    <section className="admin-surface"><div className="admin-list-toolbar"><div className="admin-search-input"><Search size={16} /><input aria-label="Pesquisar eventos" placeholder="Buscar evento ou operador…" value={query} onChange={event => setQuery(event.target.value)} /></div>{canExport && <button className="admin-btn" disabled={!filtered.length} onClick={() => downloadAdminCsv('eventos-do-sistema.csv', ['Evento', 'Data', 'Operador'], filtered.map(item => [item.event, item.timestamp, item.actorId || 'Sistema']))}><Download size={15} />Exportar CSV</button>}</div><div className="admin-table-wrap"><table className="admin-data-table"><thead><tr><th>Evento</th><th>Origem</th><th>Data e hora</th></tr></thead><tbody>{filtered.map(item => <tr key={item.id}><td><span className="admin-event-label"><Activity size={14} />{item.event.replace(/_/g, ' ')}</span></td><td>{item.actorId || 'Sistema'}</td><td>{dateTime(item.timestamp)}</td></tr>)}</tbody></table></div>{!filtered.length && <div className="admin-empty"><ShieldCheck size={27} /><p>{loading ? 'Buscando eventos…' : 'Nenhum evento disponível neste filtro.'}</p></div>}<div className="admin-list-footer"><span>Os eventos em memória são reiniciados junto com esta instância.</span></div></section>
+    <div className="admin-notice"><AlertTriangle size={17} /><span>Esta consulta não verifica o saldo do gateway nem certifica o banco de dados. Esses estados devem ser conferidos nas respectivas áreas.</span></div>{onOpenMigrationModal && <button className="admin-btn" onClick={onOpenMigrationModal}><Download size={15} />Abrir exportação de dados</button>}
+  </div>;
 };

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Modal } from '../Modal';
 import { X, Search, ChevronRight } from 'lucide-react';
 
 // iOS Switch / Toggle Control
@@ -23,6 +24,7 @@ export const IOSToggle: React.FC<{
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-label={label || description || "Alternar configuração"}
         disabled={disabled}
         onClick={() => !disabled && onChange(!checked)}
         className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
@@ -72,6 +74,7 @@ export const IOSSegmentedControl = <T extends string>({
           <button
             key={opt.id}
             type="button"
+            aria-pressed={isSelected}
             onClick={() => onChange(opt.id)}
             className={`relative flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
               isSelected
@@ -108,7 +111,10 @@ export const IOSCard: React.FC<{
     <div
       id={id}
       onClick={onClick}
-      className={`bg-white rounded-2xl border border-black/[0.04] shadow-[0_2px_12px_rgba(0,0,0,0.03)] transition-all ${
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={event => { if (onClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onClick(); } }}
+      className={`admin-base-card bg-white rounded-2xl border border-black/[0.04] shadow-[0_2px_12px_rgba(0,0,0,0.03)] transition-all ${
         onClick ? 'cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:scale-[0.99]' : ''
       } ${className}`}
     >
@@ -175,7 +181,7 @@ export const IOSStatCard: React.FC<{
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">{title}</span>
           <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{value}</div>
         </div>
-        <div className={`w-10 h-10 rounded-2xl ${iconBgColor} ${iconColor} flex items-center justify-center shrink-0 shadow-sm`}>
+        <div className={`admin-stat-icon w-10 h-10 rounded-2xl ${iconBgColor} ${iconColor} flex items-center justify-center shrink-0 shadow-sm`}>
           <Icon className="w-5 h-5" />
         </div>
       </div>
@@ -261,7 +267,8 @@ export const IOSSearchBar: React.FC<{
       <Search className="w-4 h-4 absolute left-3 text-slate-400 pointer-events-none" />
       <input
         id={id}
-        type="text"
+        type="search"
+        aria-label={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
@@ -271,6 +278,7 @@ export const IOSSearchBar: React.FC<{
         <button
           type="button"
           onClick={() => onChange('')}
+          aria-label="Limpar busca"
           className="absolute right-2.5 w-4 h-4 rounded-full bg-slate-300 hover:bg-slate-400 text-white flex items-center justify-center text-[10px] cursor-pointer"
         >
           <X className="w-2.5 h-2.5" />
@@ -290,37 +298,7 @@ export const IOSModalSheet: React.FC<{
   maxWidth?: string;
   id?: string;
 }> = ({ isOpen, onClose, title, subtitle, children, maxWidth = 'max-w-lg', id }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div
-      id={id}
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
-    >
-      <div
-        className={`bg-white w-full ${maxWidth} rounded-t-3xl sm:rounded-3xl shadow-2xl border border-black/[0.06] max-h-[92vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200`}
-      >
-        {/* iOS Drag Handle (Mobile) */}
-        <div className="w-10 h-1.5 bg-slate-300 rounded-full mx-auto mt-2.5 sm:hidden" />
-
-        {/* Modal Header */}
-        <div className="px-5 sm:px-6 py-4 flex items-center justify-between border-b border-slate-100">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 tracking-tight">{title}</h3>
-            {subtitle && <p className="text-xs text-slate-400 font-medium">{subtitle}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-[#E5E5EA] hover:bg-[#D1D1D6] text-slate-600 flex items-center justify-center transition-all cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Modal Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto flex-1">{children}</div>
-      </div>
-    </div>
-  );
+  return <Modal isOpen={isOpen} onClose={onClose} title={title} maxWidth={maxWidth}>
+    <div id={id} className="admin-shared-sheet">{subtitle && <p className="text-xs text-slate-500 mb-4">{subtitle}</p>}{children}</div>
+  </Modal>;
 };

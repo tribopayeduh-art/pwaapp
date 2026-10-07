@@ -9,7 +9,7 @@ import {
   CheckCircle2, 
   Zap, 
   Clock, 
-  Sparkles, 
+  Coins, 
   ExternalLink,
   Copy,
   Check,
@@ -332,7 +332,7 @@ export const AffiliateWithdrawModal: React.FC<AffiliateWithdrawModalProps> = ({
                 Saldo Disponível de Afiliado
               </span>
               <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-emerald-600" />
+                <Coins className="w-3 h-3 text-emerald-600" />
                 Comissões Hub
               </span>
             </div>

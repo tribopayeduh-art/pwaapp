@@ -9,7 +9,6 @@ import {
   Award,
   ChevronRight,
   ChevronLeft,
-  Sparkles,
   ShieldCheck,
   Volume2,
   Maximize2,

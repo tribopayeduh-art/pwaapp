@@ -13,7 +13,6 @@ import {
   Gift,
   Coins,
   X,
-  Sparkles,
   Crown,
   Settings,
   DollarSign,
@@ -136,7 +135,7 @@ export const GameReferral: React.FC<GameReferralProps> = ({
         {/* Commission Notice Banner */}
         <div className="bg-[#0A122A] border border-[#00E676]/40 rounded-2xl p-3 flex items-center justify-between text-xs font-mono font-bold text-[#00E676]">
           <span className="flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-amber-400 fill-current" />
+            <Coins className="w-4 h-4 text-amber-400 fill-current" />
             COMISSÃO SOBRE DEPÓSITOS
           </span>
           <span className="bg-[#00E676] text-black font-black px-2.5 py-0.5 rounded-full text-[11px]">
@@ -354,7 +353,7 @@ export const GameReferral: React.FC<GameReferralProps> = ({
                         </h4>
                         {ind.isInfluencer && (
                           <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] px-1.5 py-0.2 rounded-full font-bold font-mono flex items-center gap-0.5">
-                            <Sparkles className="w-2.5 h-2.5 fill-amber-300 text-amber-300" /> Influenciador
+                            <Crown className="w-2.5 h-2.5 fill-amber-300 text-amber-300" /> Influenciador
                           </span>
                         )}
                       </div>

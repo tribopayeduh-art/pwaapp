@@ -1,13 +1,22 @@
 import 'dotenv/config';
-import express from 'express';
-import type { Request, Response, NextFunction } from 'express';
+import { fetchWithTimeout as fetch } from './server/network.ts';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import webpush from 'web-push';
 import { createServer as createViteServer } from 'vite';
-import { dbService } from './server/db.ts';
-import type { UserDB, AffiliateDB, ReferralDB, TransactionDB, GameBetDB, GameConfigDB, PushSubscriptionDB } from './server/db.ts';
+import {
+  dbService,
+  type UserDB,
+  type AffiliateDB,
+  type ReferralDB,
+  type TransactionDB,
+  type GameBetDB,
+  type GameConfigDB,
+  type PushSubscriptionDB,
+  type AdminPermissions
+} from './server/db.ts';
 import { whatsAppManager } from './server/whatsappService.ts';
 import { createPartnerRouter } from './server/partnerRoutes.ts';
 import { getPartnerCutFromAffiliateRevShare } from './server/partnerCommission.ts';
@@ -24,6 +33,7 @@ import {
   recordSuccessfulLogin,
   verifyHmacSignature,
   logSecurityEvent,
+  getRecentSecurityEvents,
   sanitizeString,
   isValidEmail,
   isPositiveNumber,
@@ -34,6 +44,10 @@ import {
   decryptSensitiveData,
   isDisposableEmail,
   normalizePhoneNumber,
+  healPhoneNumber,
+  isCellPhone11Digits,
+  isValidBrazilianPhone,
+  formatPhoneDisplay,
   isHubAffiliateUser,
   detectSelfReferralRisk,
   checkRegistrationRateLimit,
@@ -172,50 +186,9 @@ async function sendDiscordAffiliateWebhook(data: DiscordAffiliatePayload): Promi
 }
 
 async function resolveUserIdFromToken(token?: string | null): Promise<string | null> {
-  if (!token || token === 'null' || token === 'undefined' || token === 'Bearer') return null;
-  const directSession = getSession(token);
-  if (directSession?.userId) return directSession.userId;
-  const memoryId = sessions.get(token);
-  if (memoryId) return memoryId;
-
-  if (token.startsWith('tok_sec_')) {
-    const raw = token.replace('tok_sec_', '');
-    const lastUnderscore = raw.lastIndexOf('_');
-    if (lastUnderscore > 0) {
-      const payload = raw.substring(0, lastUnderscore);
-      const parts = payload.split('_');
-      if (parts.length >= 3) {
-        parts.pop(); // pop rand
-        parts.pop(); // pop timestamp
-        const candidateId = parts.join('_');
-        const foundUser = await dbService.getUserById(candidateId);
-        if (foundUser) {
-          sessions.set(token, foundUser.id);
-          return foundUser.id;
-        }
-      }
-    }
-  } else if (token.startsWith('tok_usr_')) {
-    const raw = token.replace('tok_usr_', '');
-    const parts = raw.split('_');
-    const candidateIds = [
-      raw,
-      parts.length >= 2 ? `${parts[0]}_${parts[1]}` : null,
-      parts.length >= 3 ? `${parts[1]}_${parts[2]}` : null,
-    ].filter(Boolean) as string[];
-
-    for (const cid of candidateIds) {
-      const foundUser = await dbService.getUserById(cid);
-      if (foundUser) {
-        sessions.set(token, foundUser.id);
-        return foundUser.id;
-      }
-    }
-  } else if (token.startsWith('usr_')) {
-    const foundUser = await dbService.getUserById(token);
-    if (foundUser) return foundUser.id;
-  }
-  return null;
+  if (!token || !getSession(token)) return null;
+  if (await dbService.isSessionRevoked(token)) return null;
+  return getSession(token)?.userId || null;
 }
 
 async function sendPushNotification(
@@ -455,7 +428,7 @@ function isRealPaidDeposit(t: { type?: string; status?: string; paymentMethod?: 
   const pm = (t.paymentMethod || '').toLowerCase();
   const desc = (t.description || '').toLowerCase();
   // Exclude game payouts, matches and internal affiliate transfers
-  if (pm === 'gendino' || pm === 'blockwin' || pm === 'afiliados') return false;
+  if (pm === 'gendino' || pm === 'blockwin' || pm === 'afiliados' || /admin|manual|ajuste|demo|influenciador/.test(pm + ' ' + desc)) return false;
   if (desc.includes('vitória gen dino') || desc.includes('lucro do jogo') || desc.includes('lucro blockwin') || desc.includes('partida')) return false;
   return true;
 }
@@ -478,13 +451,23 @@ interface AuthRequest extends Request {
 async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Não autorizado. Token de sessão ausente.' });
+    let token = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.split(' ')[1]?.trim()
+      : null;
+
+    if (!token && req.headers.cookie) {
+      const match = req.headers.cookie.match(/bb_session=([^;]+)/) || req.headers.cookie.match(/token=([^;]+)/);
+      if (match && match[1]) {
+        token = decodeURIComponent(match[1].trim());
+      }
     }
 
-    const token = authHeader.split(' ')[1]?.trim();
+    if (!token && req.headers['x-session-token']) {
+      token = String(req.headers['x-session-token']).trim();
+    }
+
     if (!token || token === 'null' || token === 'undefined' || token === 'Bearer') {
-      return res.status(401).json({ error: 'Sessão expirada ou inválida. Por favor faça login novamente.' });
+      return res.status(401).json({ error: 'Não autorizado. Token de sessão ausente.' });
     }
 
     const userId = await resolveUserIdFromToken(token);
@@ -538,66 +521,20 @@ async function requirePlayerNotAffiliate(req: AuthRequest, res: Response, next: 
 // Global Game User Resolver - Supports Bearer token, session cache, signed tokens, user IDs and headers
 async function findGameUser(req: Request): Promise<UserDB | null> {
   const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.startsWith('Bearer ')
+  let token = authHeader && authHeader.startsWith('Bearer ')
     ? authHeader.replace('Bearer ', '').trim()
     : (authHeader?.trim() || (req.body && req.body.token) || (req.query && (req.query.token as string)) || '');
 
-  let userId: string | null = null;
-
-  if (token) {
-    const session = getSession(token);
-    if (session?.userId) {
-      userId = session.userId;
-    } else if (sessions.get(token)) {
-      userId = sessions.get(token)!;
-    } else if (token.startsWith('tok_sec_')) {
-      const raw = token.replace('tok_sec_', '');
-      const lastUnderscore = raw.lastIndexOf('_');
-      if (lastUnderscore > 0) {
-        const payload = raw.substring(0, lastUnderscore);
-        const parts = payload.split('_');
-        if (parts.length >= 3) {
-          parts.pop(); // rand
-          parts.pop(); // timestamp
-          const candidateId = parts.join('_');
-          const found = await dbService.getUserById(candidateId);
-          if (found) {
-            userId = found.id;
-            sessions.set(token, userId);
-          }
-        }
-      }
-    } else if (token.startsWith('tok_usr_')) {
-      const parts = token.split('_');
-      if (parts.length >= 3) {
-        const candidateId = `${parts[1]}_${parts[2]}`;
-        const found = await dbService.getUserById(candidateId);
-        if (found) {
-          userId = found.id;
-          sessions.set(token, userId);
-        }
-      }
+  // Detect bb_session cookie if no Bearer token provided
+  if (!token && req.headers.cookie) {
+    const match = req.headers.cookie.match(/bb_session=([^;]+)/);
+    if (match && match[1]) {
+      token = decodeURIComponent(match[1].trim());
     }
   }
 
-  if (!userId && req.body) {
-    const candidateUserId = (req.body.userId || req.body.uid) || req.headers['x-user-id'];
-    if (candidateUserId && typeof candidateUserId === 'string' && candidateUserId !== 'anon_player') {
-      const found = await dbService.getUserById(candidateUserId);
-      if (found) return found;
-    }
-    const candidateEmail = req.body.email || req.headers['x-user-email'];
-    if (candidateEmail && typeof candidateEmail === 'string' && candidateEmail.includes('@')) {
-      const found = await dbService.getUserByEmail(candidateEmail.trim().toLowerCase());
-      if (found) return found;
-    }
-  }
-
-  if (userId) {
-    return await dbService.getUserById(userId);
-  }
-
-  return null;
+  const userId = await resolveUserIdFromToken(token);
+  return userId ? dbService.getUserById(userId) : null;
 }
 
 // Global Helper to accurately identify the responsible affiliate for an influencer or player
@@ -847,21 +784,50 @@ function isPlatformSuperAdmin(email?: string, role?: string): boolean {
 
 async function startServer() {
   const app = express();
-  // In the sandbox dev container behind nginx, the dev server must bind to port 3000.
+  // Dev server must bind to port 3000 in AI Studio dev environment.
   // In a standalone Cloud Run deployment, bind to PORT (e.g. 8080 provided by Cloud Run).
-  const PORT = process.env.NGINX_PORT ? 3000 : (Number(process.env.PORT) || 8080);
+  const PORT = process.env.NODE_ENV === 'production' && process.env.PORT
+    ? (Number(process.env.PORT) || 3000)
+    : 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '256kb', verify: (req, _res, buffer) => {
+    (req as any).rawBody = buffer.toString('utf8');
+  } }));
+  app.use('/api', (req, res, next) => {
+    if (/simulate(?:-payment)?(?:\/|$)/.test(req.path)) {
+      if (process.env.NODE_ENV === 'production' || process.env.ALLOW_PAYMENT_SIMULATION !== 'true') {
+        return res.status(403).json({ error: 'Simulação de pagamentos desabilitada.' });
+      }
+      return requireAdmin(req, res, next);
+    }
+    next();
+  });
   app.use(securityHeadersMiddleware);
   app.use('/api', generalRateLimiterMiddleware);
   app.use('/api/auth', authRateLimiterMiddleware);
+  app.use('/api', async (req: AuthRequest, res, next) => {
+    const publicPaths = new Set(['/health', '/auth/login', '/auth/register', '/auth/refresh', '/push/vapid-public-key', '/public/config']);
+    if (publicPaths.has(req.path) || req.path === '/webhooks/dotfy' || req.path === '/webhooks/pix') return next();
+    if (req.method === 'GET' && /^(?:\/games|\/game\/[^/]+\/config)$/.test(req.path)) return next();
+    const rawToken = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim()
+      || String(req.headers['x-session-token'] || req.body?.token || req.query.token || '');
+    let token = rawToken;
+    if (!token && req.headers.cookie) {
+      const match = req.headers.cookie.match(/(?:^|;\s*)(?:bb_session|token)=([^;]+)/);
+      if (match) { try { token = decodeURIComponent(match[1]); } catch { return res.status(401).json({ error: 'Sessão inválida.' }); } }
+    }
+    if (!getSession(token)) return res.status(401).json({ error: 'Entre na sua conta para continuar.' });
+    // Legacy handlers now receive only a verified session token.
+    req.headers.authorization = `Bearer ${token}`;
+    return requireAuth(req, res, next);
+  });
   app.use('/api/partner', createPartnerRouter(requireAuth, sendPushNotification, logSecurityEvent));
 
   // --- API ROUTES ---
 
   // Health check
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', firebase: true, time: new Date().toISOString() });
+    res.json({ status: 'ok', database: 'not_checked', time: new Date().toISOString() });
   });
 
   // WEB PUSH ROUTES FOR IOS / ANDROID PWA NOTIFICATIONS (Background / Closed App)
@@ -1107,11 +1073,11 @@ async function startServer() {
       if (['gen-dino', 'gendino', 'dino', 'dinopay', 'dinoplay', 'dinipay', 't-rex'].some(k => s.includes(k))) {
         return { registeredGame: 'g_gen_dino', trackingSource: item.src };
       }
-      if (['bubble-blast', 'bubbleblast', 'bubble_blast', 'zumbla', 'zumbla-win', 'zumblapay'].some(k => s.includes(k))) {
-        return { registeredGame: 'g_bubble_blast', trackingSource: item.src };
-      }
       if (['subway', 'subwaypay', 'subway-pay', 'joguesubway'].some(k => s.includes(k))) {
         return { registeredGame: 'g_subway_pay', trackingSource: item.src };
+      }
+      if (['bubble', 'bubbleblast', 'bubble-blast', 'bubbles', 'bubbles-win', 'bubbleswin', 'jogarbubble', 'jogarbubble.online', 'zumbla', 'zumbla-win', 'zumblawin', 'zumblapay', 'g_zumbla'].some(k => s.includes(k))) {
+        return { registeredGame: 'g_bubble_blast', trackingSource: item.src };
       }
       if (['raspa', 'raspafortuna', 'raspa-fortuna', 'scratch', 'raspadinha', 'raspadinhaadasorte'].some(k => s.includes(k))) {
         return { registeredGame: 'g_raspa_fortuna', trackingSource: item.src };
@@ -1130,11 +1096,11 @@ async function startServer() {
       if (referer.includes('/gen-dino') || referer.includes('/dino') || referer.includes('dinopay') || referer.includes('dinoplay') || referer.includes('game=dino') || referer.includes('game=gen-dino') || referer.includes('site=dino') || referer.includes('site=gen-dino') || referer.includes('dino_ref_code')) {
         return { registeredGame: 'g_gen_dino', trackingSource: 'referer_dino' };
       }
-      if (referer.includes('zumblapay') || referer.includes('/zumbla') || referer.includes('game=zumbla') || referer.includes('site=zumbla') || referer.includes('bubbleblast') || referer.includes('/bubble') || referer.includes('game=bubble') || referer.includes('site=bubble')) {
-        return { registeredGame: 'g_bubble_blast', trackingSource: 'referer_bubbleblast' };
-      }
       if (referer.includes('joguesubway') || referer.includes('/subway') || referer.includes('subwaypay') || referer.includes('game=subway') || referer.includes('site=subway')) {
         return { registeredGame: 'g_subway_pay', trackingSource: 'referer_subway' };
+      }
+      if (referer.includes('jogarbubble') || referer.includes('/bubble') || referer.includes('bubbleblast') || referer.includes('bubbleswin') || referer.includes('game=bubble') || referer.includes('site=bubble') || referer.includes('/zumbla') || referer.includes('zumblawin') || referer.includes('zumbla') || referer.includes('game=zumbla') || referer.includes('site=zumbla')) {
+        return { registeredGame: 'g_bubble_blast', trackingSource: 'referer_bubble' };
       }
       if (referer.includes('/raspa') || referer.includes('raspafortuna') || referer.includes('raspadinhaadasorte') || referer.includes('raspadinha') || referer.includes('game=raspa') || referer.includes('site=raspa')) {
         return { registeredGame: 'g_raspa_fortuna', trackingSource: 'referer_raspa' };
@@ -1155,11 +1121,11 @@ async function startServer() {
     if (networkContext.includes('dinopay') || networkContext.includes('dinoplay') || networkContext.includes('gendino')) {
       return { registeredGame: 'g_gen_dino', trackingSource: 'host_dino' };
     }
-    if (networkContext.includes('zumblapay') || ((networkContext.includes('zumbla')) && !networkContext.includes('alliance')) || networkContext.includes('bubbleblast')) {
-      return { registeredGame: 'g_bubble_blast', trackingSource: 'host_bubbleblast' };
-    }
-    if (networkContext.includes('joguesubway') || (networkContext.includes('subway') && !networkContext.includes('alliance')) || networkContext.includes('subwaypay')) {
+    if (networkContext.includes('joguesubway') || networkContext.includes('subwaypay') || (networkContext.includes('subway') && !networkContext.includes('alliance'))) {
       return { registeredGame: 'g_subway_pay', trackingSource: 'host_subway' };
+    }
+    if (networkContext.includes('jogarbubble') || networkContext.includes('bubbleswin') || networkContext.includes('bubbleblast') || networkContext.includes('zumbla') || networkContext.includes('zumblawin') || (networkContext.includes('bubble') && !networkContext.includes('alliance'))) {
+      return { registeredGame: 'g_bubble_blast', trackingSource: 'host_bubble' };
     }
     if (networkContext.includes('raspafortuna') || networkContext.includes('raspa-fortuna') || networkContext.includes('raspadinhaadasorte') || networkContext.includes('raspadinha')) {
       return { registeredGame: 'g_raspa_fortuna', trackingSource: 'host_raspa' };
@@ -1183,23 +1149,47 @@ async function startServer() {
   // AUTH: REGISTER
   app.post('/api/auth/register', async (req, res) => {
     try {
-      const name = sanitizeString(req.body.name, 100);
-      const email = sanitizeString(req.body.email, 150).toLowerCase();
-      const phone = sanitizeString(req.body.phone, 30) || 'Não informado';
+      const name = sanitizeString(req.body.name, 100) || 'Jogador Bubble';
+      const rawContact = sanitizeString(req.body.email || req.body.phone || req.body.login, 150).trim();
+      const hasAt = rawContact.includes('@');
+
+      let rawEmail = '';
+      let rawPhone = '';
+
+      if (hasAt) {
+        rawEmail = rawContact.toLowerCase();
+        // Only set rawPhone if an explicit distinct phone was provided that doesn't contain @
+        if (req.body.phone && typeof req.body.phone === 'string' && !req.body.phone.includes('@')) {
+          const pDigits = req.body.phone.replace(/\D/g, '');
+          if (pDigits.length >= 8) rawPhone = pDigits;
+        }
+      } else {
+        const digits = rawContact.replace(/\D/g, '');
+        if (digits.length >= 8) {
+          rawPhone = digits;
+          rawEmail = `phone_${digits}@bubbleswin.site`;
+        } else {
+          const cleanUser = rawContact.toLowerCase().replace(/[^a-z0-9._-]/g, '');
+          rawEmail = cleanUser ? `${cleanUser}@bubbleswin.site` : '';
+        }
+      }
+
+      const email = rawEmail;
+      const phone = rawPhone || 'Não informado';
       const password = typeof req.body.password === 'string' ? req.body.password : '';
       const refCode = sanitizeString(req.body.refCode || req.body.ref || req.body.p || req.body.partner, 50);
 
       if (!name || !email || !password) {
-        return res.status(400).json({ error: 'Nome, e-mail e senha são obrigatórios.' });
+        return res.status(400).json({ error: 'Nome, telefone/e-mail e senha são obrigatórios.', message: 'Nome, telefone/e-mail e senha são obrigatórios.' });
       }
 
-      if (!isValidEmail(email)) {
-        return res.status(400).json({ error: 'Formato de e-mail inválido.' });
+      if (hasAt && !isValidEmail(rawEmail)) {
+        return res.status(400).json({ error: 'Formato de e-mail inválido.', message: 'Formato de e-mail inválido.' });
       }
 
-      if (isDisposableEmail(email)) {
-        logSecurityEvent('REGISTER_DISPOSABLE_EMAIL_BLOCKED', { email, ip: req.ip });
-        return res.status(400).json({ error: 'E-mails temporários ou descartáveis não são permitidos por segurança anti-fraude.' });
+      if (hasAt && isDisposableEmail(rawEmail)) {
+        logSecurityEvent('REGISTER_DISPOSABLE_EMAIL_BLOCKED', { email: rawEmail, ip: req.ip });
+        return res.status(400).json({ error: 'E-mails temporários ou descartáveis não são permitidos por segurança anti-fraude.', message: 'E-mails temporários ou descartáveis não são permitidos por segurança anti-fraude.' });
       }
 
       const forwarded = (req.headers['cf-connecting-ip'] as string) || (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
@@ -1208,18 +1198,26 @@ async function startServer() {
       if (!rateLimitCheck.allowed) {
         logSecurityEvent('REGISTER_RATE_LIMIT_EXCEEDED', { ip: clientIp, email });
         return res.status(429).json({
-          error: `Muitas tentativas de cadastro a partir desta conexão. Tente novamente em ${Math.ceil(rateLimitCheck.retryAfterSec / 60)} minutos.`
+          error: `Muitas tentativas de cadastro a partir desta conexão. Tente novamente em ${Math.ceil(rateLimitCheck.retryAfterSec / 60)} minutos.`,
+          message: `Muitas tentativas de cadastro a partir desta conexão. Tente novamente em ${Math.ceil(rateLimitCheck.retryAfterSec / 60)} minutos.`
         });
       }
 
       if (password.length < 4) {
-        return res.status(400).json({ error: 'A senha deve conter no mínimo 4 caracteres.' });
+        return res.status(400).json({ error: 'A senha deve conter no mínimo 4 caracteres.', message: 'A senha deve conter no mínimo 4 caracteres.' });
       }
 
       const existingUser = await dbService.getUserByEmail(email);
       if (existingUser) {
         logSecurityEvent('REGISTER_FAILED_DUPLICATE_EMAIL', { email, ip: req.ip });
-        return res.status(400).json({ error: 'E-mail já cadastrado no sistema.' });
+        return res.status(400).json({ error: 'E-mail ou telefone já cadastrado no sistema.', message: 'E-mail ou telefone já cadastrado no sistema.' });
+      }
+
+      if (rawPhone && rawPhone.length >= 8) {
+        const existingByPhone = await dbService.getUserByPhone(rawPhone);
+        if (existingByPhone) {
+          return res.status(400).json({ error: 'Telefone já cadastrado no sistema.', message: 'Telefone já cadastrado no sistema.' });
+        }
       }
 
       const userId = 'usr_' + crypto.randomBytes(12).toString('hex');
@@ -1385,6 +1383,12 @@ async function startServer() {
       if (partnerUser && !matchedRefCode) {
         matchedRefCode = partnerUser.referralCode || partnerUser.partnerCode || rawPartnerCode;
       }
+      if (!partnerUser && responsibleUser) {
+        const pId = responsibleUser.partnerId || responsibleUser.partnerUserId;
+        if (pId) {
+          partnerUser = await dbService.getUserById(pId);
+        }
+      }
 
       console.log(`[Register Tracking] User ${email} registered. Resolved game: ${registeredGame} (source: ${trackingResult.trackingSource}, partner: ${partnerUser ? partnerUser.name || partnerUser.id : 'none'})`);
 
@@ -1426,7 +1430,7 @@ async function startServer() {
 
       // If registered through goalliancehub.com, automatically create the active affiliate profile
       if (isAffiliatePortal) {
-        const affRecord: import('./server/db.js').AffiliateDB = {
+        const affRecord: AffiliateDB = {
           id: 'aff_' + crypto.randomBytes(12).toString('hex'),
           userId: newUser.id,
           referralCode: userReferralCode,
@@ -1514,7 +1518,8 @@ async function startServer() {
         createdAt: newUser.createdAt,
       };
 
-      res.json({ user: userObj, token });
+      res.cookie('bb_session', token, { path: '/', httpOnly: false, sameSite: 'lax', maxAge: 30 * 24 * 3600 * 1000 });
+      res.json({ user: userObj, token, balanceCents: Math.round((newUser.balance || 0) * 100) });
     } catch (err: any) {
       console.error('Register error:', err);
       const detail = err?.message || 'Erro ao cadastrar usuário.';
@@ -1525,29 +1530,50 @@ async function startServer() {
   // AUTH: LOGIN
   app.post('/api/auth/login', async (req, res) => {
     try {
-      const email = sanitizeString(req.body.email, 150).toLowerCase().trim();
+      const rawInput = sanitizeString(req.body.email || req.body.phone || req.body.login, 150).trim();
       const password = typeof req.body.password === 'string' ? req.body.password : '';
       const trimmedPassword = password.trim();
 
-      if (!email || !password) {
-        return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
+      if (!rawInput || !password) {
+        return res.status(400).json({ error: 'E-mail ou telefone e senha são obrigatórios.', message: 'E-mail ou telefone e senha são obrigatórios.' });
       }
 
+      const hasAt = rawInput.includes('@');
+      const cleanDigits = rawInput.replace(/\D/g, '');
 
       // Check brute-force lockouts (exempt platform superadmins/owners)
-      const lockStatus = isIdentifierBlocked(email);
+      const lockIdentifier = rawInput.toLowerCase();
+      const lockStatus = isIdentifierBlocked(lockIdentifier);
       if (lockStatus.blocked) {
-        logSecurityEvent('LOGIN_ATTEMPT_BLOCKED', { email, ip: req.ip });
+        logSecurityEvent('LOGIN_ATTEMPT_BLOCKED', { email: lockIdentifier, ip: req.ip });
         return res.status(429).json({
-          error: `Conta temporariamente bloqueada por muitas tentativas incorretas. Tente novamente em ${lockStatus.blockTimeSec} segundos.`
+          error: `Conta temporariamente bloqueada por muitas tentativas incorretas. Tente novamente em ${lockStatus.blockTimeSec} segundos.`,
+          message: `Conta temporariamente bloqueada por muitas tentativas incorretas. Tente novamente em ${lockStatus.blockTimeSec} segundos.`
         });
       }
 
-      let user = await dbService.getUserByEmail(email);
+      let user: UserDB | null = null;
+      if (hasAt) {
+        user = await dbService.getUserByEmail(rawInput.toLowerCase());
+      } else if (cleanDigits.length >= 8) {
+        user = await dbService.getUserByPhone(cleanDigits);
+        if (!user) {
+          user = await dbService.getUserByEmail(`phone_${cleanDigits}@bubbleswin.site`);
+        }
+        if (!user) {
+          user = await dbService.getUserByEmail(`phone_${cleanDigits}@jogarbubble.online`);
+        }
+      } else {
+        user = await dbService.getUserByEmail(rawInput.toLowerCase());
+        if (!user) {
+          user = await dbService.getUserByPhone(cleanDigits);
+        }
+      }
+
       if (!user) {
-        recordFailedLogin(email);
-        logSecurityEvent('LOGIN_FAILED_USER_NOT_FOUND', { email, ip: req.ip });
-        return res.status(400).json({ error: 'Credenciais inválidas ou usuário não encontrado.' });
+        recordFailedLogin(lockIdentifier);
+        logSecurityEvent('LOGIN_FAILED_USER_NOT_FOUND', { email: lockIdentifier, ip: req.ip });
+        return res.status(400).json({ error: 'Credenciais inválidas ou usuário não encontrado.', message: 'Credenciais inválidas ou usuário não encontrado.' });
       }
 
       let authCheck = verifyPassword(password, user.passwordHash);
@@ -1556,16 +1582,19 @@ async function startServer() {
       }
 
       if (!authCheck.valid) {
-        const failedResult = recordFailedLogin(email);
-        logSecurityEvent('LOGIN_FAILED_WRONG_PASSWORD', { email, userId: user.id, ip: req.ip });
+        const failedResult = recordFailedLogin(user.email || lockIdentifier);
+        logSecurityEvent('LOGIN_FAILED_WRONG_PASSWORD', { email: user.email || lockIdentifier, userId: user.id, ip: req.ip });
         return res.status(400).json({
           error: failedResult.blocked
+            ? 'Conta temporariamente bloqueada devido a múltiplas tentativas incorretas.'
+            : 'Senha incorreta. Verifique suas credenciais.',
+          message: failedResult.blocked
             ? 'Conta temporariamente bloqueada devido a múltiplas tentativas incorretas.'
             : 'Senha incorreta. Verifique suas credenciais.'
         });
       }
 
-      recordSuccessfulLogin(email);
+      recordSuccessfulLogin(user.email || lockIdentifier);
 
       // Rehash password if legacy format or superadmin password sync
       if (authCheck.needsRehash) {
@@ -1602,8 +1631,8 @@ async function startServer() {
       const origin = (req.headers.origin || req.headers.referer || '').toLowerCase();
       const isGameContext = req.body?.isGameSite === true ||
         Boolean(req.headers['x-game-origin']) ||
-        host.includes('joguesubway') || host.includes('dinopay') || host.includes('raspadinha') || host.includes('blockwinner') ||
-        origin.includes('joguesubway') || origin.includes('dinopay') || origin.includes('raspadinha') || origin.includes('blockwinner');
+        host.includes('jogarbubble') || host.includes('joguesubway') || host.includes('dinopay') || host.includes('raspadinha') || host.includes('blockwinner') || host.includes('bubbleswin') || host.includes('bubbleblast') || host.includes('zumbla') ||
+        origin.includes('jogarbubble') || origin.includes('joguesubway') || origin.includes('dinopay') || origin.includes('raspadinha') || origin.includes('blockwinner') || origin.includes('bubbleswin') || origin.includes('bubbleblast') || origin.includes('zumbla');
 
       if (isGameContext && isHubAffiliateUser(user)) {
         logSecurityEvent('AFFILIATE_GAME_LOGIN_BLOCKED', { userId: user.id, email: user.email, ip: req.ip, host });
@@ -1646,11 +1675,51 @@ async function startServer() {
         pixKeys: Array.isArray(user.pixKeys) && user.pixKeys.length > 0 ? user.pixKeys : (user.pixKey ? [user.pixKey] : []),
       };
 
-      res.json({ user: userObj, token });
+      res.cookie('bb_session', token, { path: '/', httpOnly: false, sameSite: 'lax', maxAge: 30 * 24 * 3600 * 1000 });
+      res.json({ user: userObj, token, balanceCents: Math.round(user.balance * 100) });
     } catch (err: any) {
       console.error('Login error:', err);
       const detail = err?.message || 'Erro ao realizar login.';
       res.status(500).json({ error: `Erro no login: ${detail}` });
+    }
+  });
+
+  // AUTH: REFRESH SESSION
+  app.post('/api/auth/refresh', async (req: Request, res: Response) => {
+    try {
+      let token = '';
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '').trim();
+      }
+      if (!token && req.headers.cookie) {
+        const match = req.headers.cookie.match(/bb_session=([^;]+)/) || req.headers.cookie.match(/token=([^;]+)/);
+        if (match && match[1]) token = decodeURIComponent(match[1].trim());
+      }
+      if (!token && req.headers['x-session-token']) {
+        token = String(req.headers['x-session-token']).trim();
+      }
+
+      if (!token) {
+        return res.status(401).json({ error: 'Nenhum token fornecido para atualização.' });
+      }
+
+      const userId = await resolveUserIdFromToken(token);
+      if (!userId) {
+        return res.status(401).json({ error: 'Token inválido ou expirado.' });
+      }
+
+      const user = await dbService.getUserById(userId);
+      if (!user) {
+        return res.status(401).json({ error: 'Usuário não encontrado.' });
+      }
+
+      const newToken = createSession(userId, req);
+      sessions.set(newToken, userId);
+      res.cookie('bb_session', newToken, { path: '/', httpOnly: false, sameSite: 'lax', maxAge: 30 * 24 * 3600 * 1000 });
+      return res.json({ ok: true, token: newToken, user, balanceCents: Math.round((user.balance || 0) * 100) });
+    } catch (e: any) {
+      return res.status(500).json({ error: 'Erro ao renovar sessão.' });
     }
   });
 
@@ -1717,7 +1786,8 @@ async function startServer() {
 
     res.json({
       ...userPayload,
-      user: userPayload
+      user: userPayload,
+      balanceCents: Math.round(user.balance * 100)
     });
   });
 
@@ -1730,8 +1800,7 @@ async function startServer() {
       }
 
       const token = authHeader.split(' ')[1];
-      let session = getSession(token);
-      let userId = session?.userId || sessions.get(token);
+      const userId = getSession(token)?.userId;
 
       if (!userId) {
         return res.status(401).json({ error: 'Usuário bloqueado para essa ação. Sessão expirada ou inválida.' });
@@ -1775,7 +1844,7 @@ async function startServer() {
     }
   }
 
-  function checkAdminPermission(req: AuthRequest, perm: keyof import('./server/db.js').AdminPermissions): boolean {
+  function checkAdminPermission(req: AuthRequest, perm: keyof AdminPermissions): boolean {
     if (!req.user) return false;
     if (req.user.role === 'superadmin') {
       return true;
@@ -1784,6 +1853,31 @@ async function startServer() {
   }
 
   // --- ADMIN ENDPOINTS ---
+
+  app.get('/api/admin/operations/notes', requireAdmin, async (req: AuthRequest, res: Response) => {
+    if (!checkAdminPermission(req, 'canViewMetrics') && !checkAdminPermission(req, 'canApproveWithdrawals')) return res.status(403).json({ error: 'Sem permissão para a central de pendências.' });
+    try { res.json({ notes: await dbService.getAdminOperationNotes() }); }
+    catch { res.status(503).json({ error: 'Não foi possível carregar as anotações.' }); }
+  });
+  app.put('/api/admin/operations/notes/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
+    if (!checkAdminPermission(req, 'canViewMetrics') && !checkAdminPermission(req, 'canApproveWithdrawals')) return res.status(403).json({ error: 'Sem permissão para anotar operações.' });
+    const id = req.params.id;
+    const { note, priority, reviewed, revision } = req.body;
+    if (typeof id !== 'string' || id.length > 160 || !/^[a-zA-Z0-9_-]+$/.test(id) || typeof note !== 'string' || note.length > 1000 || !['normal', 'urgent'].includes(priority) || typeof reviewed !== 'boolean' || !Number.isInteger(revision) || revision < 0) return res.status(400).json({ error: 'Dados da anotação inválidos.' });
+    try {
+      const tx = await dbService.getTransactionById(id);
+      if (!tx || tx.type !== 'withdrawal') return res.status(404).json({ error: 'Saque não encontrado.' });
+      const saved = await dbService.saveAdminOperationNote(id, {
+        note: note.trim(), priority, reviewed, updatedBy: req.userId, updatedByName: req.user?.name || 'Administrador'
+      }, revision);
+      logSecurityEvent('ADMIN_OPERATION_NOTE_SAVED', { adminId: req.userId, transactionId: id, reviewed, priority });
+      res.json({ note: saved });
+    } catch (error: any) { res.status(error.status === 409 ? 409 : 503).json({ error: error.status === 409 ? error.message : 'Não foi possível salvar a anotação.' }); }
+  });
+  app.get('/api/admin/security/events', requireAdmin, (req: AuthRequest, res: Response) => {
+    if (!checkAdminPermission(req, 'canViewMetrics')) return res.status(403).json({ error: 'Sem permissão para consultar atividade.' });
+    res.json({ events: getRecentSecurityEvents(), scope: 'current_instance', observedAt: new Date().toISOString() });
+  });
 
   // GET /api/admin/metrics
   app.get('/api/admin/metrics', requireAdmin, async (req: AuthRequest, res: Response) => {
@@ -1799,7 +1893,7 @@ async function startServer() {
       const totalUsers = allUsers.length;
       const totalBalance = allUsers.reduce((acc, u) => acc + (u.balance || 0), 0);
       
-      const deposits = allTx.filter(t => t.type === 'deposit' && t.status === 'approved');
+      const deposits = allTx.filter(isRealPaidDeposit);
       const totalDepositsAmount = deposits.reduce((acc, t) => acc + t.amount, 0);
 
       const withdrawals = allTx.filter(t => t.type === 'withdrawal');
@@ -1808,23 +1902,19 @@ async function startServer() {
       const pendingWithdrawalsAmount = pendingWithdrawals.reduce((acc, t) => acc + t.amount, 0);
 
       const games = await dbService.getGames();
-      const blockGameMetrics = await dbService.getGameLiveMetrics('g_block_puzzle').catch(() => ({
-        totalWagered: 184200.0,
-        totalPayout: 176832.0,
-        ggr: 7368.0
-      }));
-
-      const gameGgr = blockGameMetrics.ggr || 0;
-      const totalWagered = blockGameMetrics.totalWagered || 0;
-      const totalPayout = blockGameMetrics.totalPayout || 0;
+      // Closed rounds across all games; deposits are not gaming revenue.
+      const allBets = await dbService.getAllGameBets(Number.MAX_SAFE_INTEGER);
+      const closedBets = allBets.filter(b => b.status !== 'active');
+      const totalWagered = closedBets.reduce((sum, b) => sum + (Number(b.betAmount) || 0), 0);
+      const totalPayout = closedBets.reduce((sum, b) => sum + (Number(b.payoutAmount) || 0), 0);
+      const gameGgr = Math.round((totalWagered - totalPayout) * 100) / 100;
 
       const totalAffiliateBalance = allAffiliates.reduce((acc, a) => acc + (a.affiliateBalance || 0), 0);
       const totalAffiliateCommissionsPaid = allAffiliates.reduce((acc, a) => acc + (a.commissionTotal || 0), 0);
 
       // Calculation of net profit & platform profit margin
-      const netProfit = (totalDepositsAmount + gameGgr) - approvedWithdrawalsAmount;
-      const grossInflow = totalDepositsAmount + gameGgr;
-      const profitMarginPercent = grossInflow > 0 ? (netProfit / grossInflow) * 100 : 0;
+      const netProfit = Math.round((gameGgr - totalAffiliateCommissionsPaid) * 100) / 100;
+      const profitMarginPercent = totalWagered > 0 ? (netProfit / totalWagered) * 100 : 0;
       const totalLiabilities = totalBalance + totalAffiliateBalance;
 
       // Dates calculation for today and yesterday
@@ -2043,6 +2133,8 @@ async function startServer() {
           totalAffiliateBalance,
           totalAffiliateCommissionsPaid,
           netProfit,
+          cashFlow: totalDepositsAmount - approvedWithdrawalsAmount,
+          financialResultBasis: "Resultado dos jogos menos comissões registradas, antes de taxas, tributos e custos operacionais",
           profitMarginPercent,
           totalLiabilities,
           todaySalesAmount,
@@ -2183,7 +2275,9 @@ async function startServer() {
           adminPermissions: u.adminPermissions || {},
           isPartner: !!u.isPartner,
           partnerApproved: !!u.partnerApproved,
-          partnerCode: u.partnerCode,
+          partnerId: u.partnerId || u.partnerUserId || null,
+          partnerCode: u.partnerCode || null,
+          partnerName: (u.partnerId || u.partnerUserId) ? (userMap.get((u.partnerId || u.partnerUserId)!)?.name || `Parceiro ${u.partnerCode || u.partnerId}`) : null,
           partnerRequested: !!u.partnerRequested,
           partnerCommissionPercent: typeof u.partnerCommissionPercent === 'number' ? u.partnerCommissionPercent : 20,
           createdAt: u.createdAt,
@@ -2199,12 +2293,18 @@ async function startServer() {
             if (!g && u.email && (u.email.toLowerCase().includes('subway') || u.email.toLowerCase().includes('joguesubway'))) {
               return 'g_subway_pay';
             }
+            if (!g && u.email && (u.email.toLowerCase().includes('jogarbubble') || u.email.toLowerCase().includes('bubble') || u.email.toLowerCase().includes('bubbleswin'))) {
+              return 'g_bubble_blast';
+            }
             return g || 'g_block_puzzle';
           })(),
           acquisitionGame: (() => {
             let g = (u as any).acquisitionGame || (u as any).registeredGame || '';
             if (!g && u.email && (u.email.toLowerCase().includes('subway') || u.email.toLowerCase().includes('joguesubway'))) {
               return 'g_subway_pay';
+            }
+            if (!g && u.email && (u.email.toLowerCase().includes('jogarbubble') || u.email.toLowerCase().includes('bubble') || u.email.toLowerCase().includes('bubbleswin'))) {
+              return 'g_bubble_blast';
             }
             return g || 'g_block_puzzle';
           })(),
@@ -2293,7 +2393,7 @@ async function startServer() {
         if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
         const refCode = user.referralCode || ('AFF' + crypto.randomBytes(3).toString('hex').toUpperCase());
-        const newAff: import('./server/db.js').AffiliateDB = {
+        const newAff: AffiliateDB = {
           id: 'aff_' + crypto.randomBytes(8).toString('hex'),
           userId: user.id,
           referralCode: refCode,
@@ -2431,7 +2531,7 @@ async function startServer() {
       let affiliate = await dbService.getAffiliateByUserId(userId);
       if (!affiliate) {
         const refCode = targetUser.referralCode || ('AFF' + crypto.randomBytes(3).toString('hex').toUpperCase());
-        const newAff: import('./server/db.js').AffiliateDB = {
+        const newAff: AffiliateDB = {
           id: 'aff_' + crypto.randomBytes(8).toString('hex'),
           userId: targetUser.id,
           referralCode: refCode,
@@ -2539,7 +2639,7 @@ async function startServer() {
         let affiliate = await dbService.getAffiliateByUserId(id);
         if (!affiliate) {
           const refCode = targetUser.referralCode || ('AFF' + crypto.randomBytes(3).toString('hex').toUpperCase());
-          const newAff: import('./server/db.js').AffiliateDB = {
+          const newAff: AffiliateDB = {
             id: 'aff_' + crypto.randomBytes(8).toString('hex'),
             userId: targetUser.id,
             referralCode: refCode,
@@ -2658,7 +2758,7 @@ async function startServer() {
         }
       } else if (userFieldsToUpdate.role === 'affiliate' || (userFieldsToUpdate.isInfluencer && targetUser.role !== 'affiliate')) {
         const refCode = targetUser.referralCode || ('AFF' + crypto.randomBytes(3).toString('hex').toUpperCase());
-        const newAff: import('./server/db.js').AffiliateDB = {
+        const newAff: AffiliateDB = {
           id: 'aff_' + crypto.randomBytes(8).toString('hex'),
           userId: targetUser.id,
           referralCode: refCode,
@@ -2764,7 +2864,7 @@ async function startServer() {
       let affiliate = await dbService.getAffiliateByUserId(id);
       if (shouldBeAffiliate && !affiliate) {
         const refCode = targetUser.referralCode || ('AFF' + crypto.randomBytes(3).toString('hex').toUpperCase());
-        const newAff: import('./server/db.js').AffiliateDB = {
+        const newAff: AffiliateDB = {
           id: 'aff_' + crypto.randomBytes(8).toString('hex'),
           userId: targetUser.id,
           referralCode: refCode,
@@ -2953,6 +3053,7 @@ async function startServer() {
         if (['dino', 'gen-dino', 'gendino', 'g-gen-dino'].some(k => s.includes(k))) return 'g_gen_dino';
         if (['zumbla', 'zumbla-win', 'g-zumbla'].some(k => s.includes(k))) return 'g_zumbla';
         if (['raspa', 'raspafortuna', 'raspa-fortuna', 'g-raspa-fortuna', 'raspadinha', 'raspadinhaadasorte'].some(k => s.includes(k))) return 'g_raspa_fortuna';
+        if (['bubble', 'bubbleblast', 'bubble-blast', 'g-bubble-blast', 'bubbles', 'bubbles-win', 'jogarbubble', 'jogarbubble.online'].some(k => s.includes(k))) return 'g_bubble_blast';
         if (['block', 'blockwin', 'block-win', 'g-block-puzzle'].some(k => s.includes(k))) return 'g_block_puzzle';
         if (['alliance', 'hub', 'alliance-hub'].some(k => s.includes(k))) return 'alliance_hub';
         return 'g_block_puzzle';
@@ -3086,12 +3187,14 @@ async function startServer() {
         return res.status(404).json({ error: 'Solicitação de saque não encontrada.' });
       }
 
-      if (tx.status === 'approved') {
-        return res.status(400).json({ error: 'Este saque já foi aprovado.' });
+      if (tx.type !== 'withdrawal' || tx.status !== 'pending') {
+        return res.status(409).json({ error: 'Somente solicitações de saque pendentes podem ser aprovadas.' });
       }
 
-      // Solicit withdrawal immediately on Dotfy if API key is configured
+      // Persist the claim before any external transfer; uncertain results require reconciliation.
       const apiKeyToUse = await getEffectiveDotfyApiKey();
+      if (!apiKeyToUse) return res.status(503).json({ error: 'Gateway de saque não configurado.' });
+      await dbService.claimWithdrawal(id);
       let dotfyWithdrawalId: string | undefined = undefined;
       let dotfyStatusMsg = '';
 
@@ -3101,12 +3204,12 @@ async function startServer() {
           const rawKey = (tx as any).pixKey || targetUser?.pixKey || ((targetUser as any)?.pixKeys && (targetUser as any).pixKeys[0]?.key);
           const rawType = (tx as any).pixType || (targetUser as any)?.pixKeyType || ((targetUser as any)?.pixKeys && (targetUser as any).pixKeys[0]?.type) || 'CPF';
 
-          if (rawKey) {
+          if (rawKey || tx.pixKeyId) {
             const cleanKey = String(rawKey).trim();
             const cleanType = String(rawType).trim().toUpperCase();
 
             // Resolve or register PIX key on Dotfy
-            const keyResolution = await resolveDotfyPixKey(
+            const keyResolution = tx.pixKeyId ? { pixKeyId: tx.pixKeyId, error: undefined } : await resolveDotfyPixKey(
               apiKeyToUse,
               cleanKey,
               cleanType,
@@ -3115,7 +3218,7 @@ async function startServer() {
 
             if (keyResolution.pixKeyId) {
               const dotfyPayload = {
-                amount: parseFloat(tx.amount.toFixed(2)),
+                amount: parseFloat((tx.netAmount ?? tx.amount).toFixed(2)),
                 pixKeyId: keyResolution.pixKeyId
               };
 
@@ -3154,7 +3257,8 @@ async function startServer() {
         }
       }
 
-      await dbService.updateTransactionStatus(id, 'approved', {
+      if (!dotfyWithdrawalId) return res.status(502).json({ error: 'Gateway não confirmou o envio. Saque reservado para conciliação; não repita a transferência.' });
+      await dbService.updateTransactionStatus(id, 'pending', {
         ...(dotfyWithdrawalId ? { dotfyWithdrawalId } : {}),
         processedAt: new Date().toISOString(),
         approvedByName: req.user?.name || 'Administrador'
@@ -3162,8 +3266,8 @@ async function startServer() {
 
       // Dispara push notification para o solicitante do saque
       sendPushNotification(tx.userId, {
-        title: 'Saque Aprovado! 💸✅',
-        body: `Seu saque via Pix de R$ ${tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} foi aprovado e enviado com sucesso!`,
+        title: 'Saque enviado ao banco',
+        body: `Seu saque via Pix de R$ ${tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} foi enviado ao gateway e aguarda confirmação bancária.`,
         url: '/?tab=finance',
         type: 'withdrawal'
       }).catch(console.error);
@@ -3178,7 +3282,7 @@ async function startServer() {
 
       res.json({
         success: true,
-        message: `Saque aprovado com sucesso!${dotfyStatusMsg}`,
+        message: `Saque enviado para processamento bancário.${dotfyStatusMsg}`,
         dotfyWithdrawalId
       });
     } catch (err: any) {
@@ -3206,14 +3310,7 @@ async function startServer() {
         return res.status(400).json({ error: 'Este saque já foi rejeitado anteriormente.' });
       }
 
-      // Refund user balance
-      const user = await dbService.getUserById(tx.userId);
-      if (user) {
-        const refundedBalance = user.balance + tx.amount;
-        await dbService.updateUserBalance(user.id, refundedBalance);
-      }
-
-      await dbService.updateTransactionStatus(id, 'rejected');
+      await dbService.rejectPlayerWithdrawal(id, { rejectReason: typeof reason === 'string' ? reason.slice(0, 500) : 'Rejeitado pelo administrador' });
 
       // Dispara push notification para o usuário
       sendPushNotification(tx.userId, {
@@ -4162,6 +4259,165 @@ CREATE TABLE IF NOT EXISTS system_settings (
     }
   });
 
+  // GET /api/admin/export/influencers - Exportar influenciadores válidos com telefone
+  app.get('/api/admin/export/influencers', requireAdmin, async (req: AuthRequest, res: Response) => {
+    try {
+      const user = req.user;
+      if (!user) return res.status(401).json({ error: 'Não autorizado.' });
+
+      const isSuper = isPlatformSuperAdmin(user.email, user.role);
+      const canExport = isSuper || req.user?.role === 'admin' || checkAdminPermission(req, 'canExportReports');
+      if (!canExport) {
+        return res.status(403).json({ error: 'Acesso negado. Permissão de exportação necessária.' });
+      }
+
+      const onlyValidPhone = req.query.validPhoneOnly !== 'false';
+      const onlyActive = req.query.activeOnly === 'true';
+      const autoRepair = req.query.autoRepair !== 'false'; // auto-repair (+9, -9, etc) by default
+      const format = String(req.query.format || 'json').toLowerCase();
+
+      const allUsers = await dbService.getAllUsers();
+      const allAffiliates = await dbService.getAllAffiliates();
+      const affiliateByUserId = new Map(allAffiliates.map(a => [a.userId, a]));
+
+      const influencers = allUsers.filter(u => {
+        if (!u.isInfluencer) return false;
+        if (onlyActive && u.isBlocked) return false;
+        if (onlyValidPhone) {
+          const healed = autoRepair ? healPhoneNumber(u.phone) : (isValidBrazilianPhone(u.phone) ? { healedPhone: normalizePhoneNumber(u.phone) } : null);
+          if (!healed) return false;
+        }
+        return true;
+      });
+
+      const formatted = influencers.map(u => {
+        const aff = affiliateByUserId.get(u.id);
+        const healed = healPhoneNumber(u.phone);
+        const effectiveDigits = healed ? healed.healedPhone : normalizePhoneNumber(u.phone);
+        const valid = Boolean(healed);
+        const waNumber = healed ? healed.whatsappNumber : (effectiveDigits.length >= 10 ? `55${effectiveDigits}` : '');
+        const formattedPhone = healed ? healed.formattedPhone : formatPhoneDisplay(u.phone);
+        const waLink = healed ? healed.whatsappLink : (waNumber ? `https://wa.me/${waNumber}` : '');
+
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          phone: u.phone,
+          healedPhone: effectiveDigits,
+          formattedPhone,
+          whatsappNumber: waNumber,
+          whatsappLink: waLink,
+          isPhoneValid: valid,
+          wasRepaired: healed ? healed.wasRepaired : false,
+          repairLabel: healed ? healed.label : 'Inválido ⚠️',
+          balance: u.balance,
+          affiliateBalance: aff?.affiliateBalance || 0,
+          commissionTotal: aff?.commissionTotal || 0,
+          referralCode: aff?.referralCode || u.referralCode || '',
+          registeredGame: u.registeredGame || 'g_block_puzzle',
+          isBlocked: !!u.isBlocked,
+          createdAt: u.createdAt
+        };
+      });
+
+      if (format === 'csv') {
+        const headers = [
+          'Nome',
+          'Telefone_Formatado',
+          'Telefone_WhatsApp',
+          'Link_WhatsApp',
+          'Telefone_Valido',
+          'Status_Validacao',
+          'Telefone_Original_Banco',
+          'Email',
+          'Codigo_Indicacao',
+          'Saldo_Jogos_R$',
+          'Saldo_Comissoes_R$',
+          'Total_Comissoes_R$',
+          'Jogo_Origem',
+          'Status_Conta',
+          'ID_Usuario',
+          'Data_Cadastro'
+        ];
+        const rows = formatted.map(f => [
+          f.name || 'Influenciador',
+          f.formattedPhone,
+          f.whatsappNumber,
+          f.whatsappLink,
+          f.isPhoneValid ? 'SIM' : 'NÃO',
+          f.repairLabel,
+          f.phone || '',
+          f.email || '',
+          f.referralCode || '',
+          f.balance.toFixed(2),
+          f.affiliateBalance.toFixed(2),
+          f.commissionTotal.toFixed(2),
+          f.registeredGame,
+          f.isBlocked ? 'Bloqueada' : 'Ativa',
+          f.id,
+          f.createdAt || ''
+        ]);
+        const csv = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'))].join('\n');
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        const scope = onlyValidPhone ? 'validas_whatsapp' : 'todas';
+        res.setHeader('Content-Disposition', `attachment; filename="influenciadoras_${scope}_${new Date().toISOString().slice(0, 10)}.csv"`);
+        return res.send(csv);
+      }
+
+      return res.json({
+        total: formatted.length,
+        influencers: formatted
+      });
+    } catch (err: any) {
+      console.error('[GET /api/admin/export/influencers error]', err);
+      return res.status(500).json({ error: 'Erro ao exportar influenciadores.' });
+    }
+  });
+
+  // POST /api/admin/influencers/apply-phone-repairs - Salvar correções de telefone no banco de dados
+  app.post('/api/admin/influencers/apply-phone-repairs', requireAdmin, async (req: AuthRequest, res: Response) => {
+    try {
+      const user = req.user;
+      if (!user) return res.status(401).json({ error: 'Não autorizado.' });
+
+      const isSuper = isPlatformSuperAdmin(user.email, user.role);
+      const canManage = isSuper || req.user?.role === 'admin' || checkAdminPermission(req, 'canManageUsers');
+      if (!canManage) {
+        return res.status(403).json({ error: 'Acesso negado. Permissão de gerenciar usuários necessária.' });
+      }
+
+      const allUsers = await dbService.getAllUsers();
+      const influencers = allUsers.filter(u => u.isInfluencer);
+      const updatedList: Array<{ id: string; name: string; oldPhone: string; newPhone: string; method: string }> = [];
+
+      for (const inf of influencers) {
+        const healed = healPhoneNumber(inf.phone);
+        if (healed && healed.wasRepaired && healed.healedPhone !== inf.phone) {
+          await dbService.updateUserFields(inf.id, { phone: healed.healedPhone });
+          updatedList.push({
+            id: inf.id,
+            name: inf.name,
+            oldPhone: inf.phone,
+            newPhone: healed.healedPhone,
+            method: healed.label
+          });
+        }
+      }
+
+      console.log(`[Influencer Phone Auto-Repair] ${updatedList.length} telefones atualizados no banco de dados por ${user.email}.`);
+      return res.json({
+        success: true,
+        updatedCount: updatedList.length,
+        updated: updatedList,
+        message: `${updatedList.length} telefones de influenciadores foram corrigidos e salvos no banco de dados com sucesso!`
+      });
+    } catch (err: any) {
+      console.error('[POST /api/admin/influencers/apply-phone-repairs error]', err);
+      return res.status(500).json({ error: 'Erro ao aplicar correções de telefone no banco.' });
+    }
+  });
+
   // GET /api/admin/deposits
   app.get('/api/admin/deposits', requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
@@ -5016,9 +5272,37 @@ CREATE TABLE IF NOT EXISTS system_settings (
         }
       }
 
-      const config = await dbService.getGameConfig('g_block_puzzle');
+      const host = (req.get('host') || '').toLowerCase();
+      const referer = (req.get('referer') || '').toLowerCase();
+      const gameParam = String(req.query.game || req.query.id || '').toLowerCase();
+      const gameHeader = String(req.headers['x-game-origin'] || req.headers['x-game-id'] || req.headers['x-registered-game'] || '').toLowerCase();
+      const isBubbleGame = gameParam.includes('bubble') || gameParam.includes('zumbla') || host.includes('bubble') || host.includes('zumbla') || referer.includes('bubble') || referer.includes('zumbla') || gameHeader.includes('bubble');
+
+      const targetGameId = isBubbleGame ? 'g_bubble_blast' : 'g_block_puzzle';
+      const config = await dbService.getGameConfig(targetGameId);
       const rtp = isInfluencer ? 99.8 : (config.rtpPercent ?? 96.0);
       const diff = isInfluencer ? 'easy' : (config.difficulty || (rtp >= 93 ? 'easy' : rtp >= 75 ? 'medium' : rtp >= 45 ? 'hard' : 'extreme'));
+
+      if (isBubbleGame) {
+        return res.json({
+          gameId: config.id,
+          name: config.name,
+          status: config.status,
+          minBetCents: Math.round((config.minBet || 5.0) * 100),
+          maxBetCents: Math.round((config.maxBet || 100.0) * 100),
+          targetMultiplier: Math.min(25.0, config.maxMultiplier || 25.0),
+          rtpPercent: rtp,
+          difficulty: diff,
+          isInfluencer,
+          houseEdgeMode: config.houseEdgeMode || 'balanced',
+          maxMultiplier: Math.min(25.0, config.maxMultiplier || 25.0),
+          smartRtp: config.smartRtp ?? true,
+          smartRtpEasyThreshold: config.smartRtpEasyThreshold ?? 40.0,
+          smartRtpHardThreshold: config.smartRtpHardThreshold ?? 85.0,
+          smartRtpMaxTarget: 100.0,
+          updatedAt: config.updatedAt,
+        });
+      }
       res.json({
         gameId: config.id,
         name: config.name,
@@ -5521,6 +5805,9 @@ CREATE TABLE IF NOT EXISTS system_settings (
       const subwayLiveData = await dbService.getGameLiveMetrics('g_subway_pay');
       const subwayConfig = subwayLiveData.config;
 
+      const bubbleLiveData = await dbService.getGameLiveMetrics('g_bubble_blast');
+      const bubbleConfig = bubbleLiveData.config;
+
       const games = [
         {
           id: 'g_gen_dino',
@@ -5871,6 +6158,70 @@ CREATE TABLE IF NOT EXISTS system_settings (
           heroBannerBadge: subwayConfig.heroBannerBadge || 'PIX INSTANTÂNEO',
           configVersion: subwayConfig.configVersion || 1,
           recentBets: subwayLiveData.recentBets
+        },
+        {
+          id: 'g_bubble_blast',
+          name: 'Bubble Win (Bubble Blast PIX)',
+          category: 'Arcade & Pontaria',
+          status: bubbleConfig.status || 'active',
+          rtpPercent: bubbleConfig.rtpPercent,
+          difficulty: bubbleConfig.difficulty || 'medium',
+          minBet: bubbleConfig.minBet || 5.0,
+          maxBet: bubbleConfig.maxBet || 100.0,
+          totalWagered: bubbleLiveData.totalWagered,
+          totalPayout: bubbleLiveData.totalPayout,
+          ggr: bubbleLiveData.ggr,
+          totalBetsCount: bubbleLiveData.totalBetsCount,
+          totalWinsCount: bubbleLiveData.totalWinsCount,
+          totalLossesCount: bubbleLiveData.totalLossesCount,
+          effectiveRtp: bubbleLiveData.effectiveRtp,
+          effectiveHouseEdge: bubbleLiveData.effectiveHouseEdge,
+          houseEdgeMode: bubbleConfig.houseEdgeMode || 'balanced',
+          maxMultiplier: bubbleConfig.maxMultiplier || 5.0,
+          smartRtp: bubbleConfig.smartRtp ?? true,
+          smartRtpEasyThreshold: bubbleConfig.smartRtpEasyThreshold ?? 40.0,
+          smartRtpMidThreshold: (bubbleConfig as any).smartRtpMidThreshold ?? 60.0,
+          smartRtpHardThreshold: bubbleConfig.smartRtpHardThreshold ?? 85.0,
+          smartRtpMaxTarget: (bubbleConfig as any).smartRtpMaxTarget ?? 100.0,
+          emergencyRetentionMode: Boolean((bubbleConfig as any).emergencyRetentionMode),
+          influencerGlobalBoost: Boolean((bubbleConfig as any).influencerGlobalBoost),
+          highBetThreshold: (bubbleConfig as any).highBetThreshold ?? 50.0,
+          obstacleMultiplier: bubbleConfig.obstacleMultiplier ?? 1.0,
+          baseSpeed: bubbleConfig.baseSpeed ?? 6.0,
+          maxSpeed: bubbleConfig.maxSpeed ?? 13.0,
+          acceleration: bubbleConfig.acceleration ?? 0.001,
+          reactionWindowMs: bubbleConfig.reactionWindowMs ?? 850,
+          antiBailoutMode: Boolean(bubbleConfig.antiBailoutMode),
+          heavyBlocksForce: Boolean(bubbleConfig.heavyBlocksForce),
+          dynamicRetention: bubbleConfig.dynamicRetention ?? true,
+          streakLimiterMultiplier: bubbleConfig.streakLimiterMultiplier ?? 5.0,
+          nearLossPressure: Boolean(bubbleConfig.nearLossPressure),
+          winStreakBrake: Boolean(bubbleConfig.winStreakBrake),
+          antiComboBlocker: Boolean(bubbleConfig.antiComboBlocker),
+          highBetResistance: Boolean(bubbleConfig.highBetResistance),
+          giantPieceFrequency: bubbleConfig.giantPieceFrequency ?? 20,
+          instantLossOnTargetProfit: bubbleConfig.instantLossOnTargetProfit ?? 0,
+          tightenOnHighOccupancy: Boolean(bubbleConfig.tightenOnHighOccupancy),
+          minCashoutMultiplier: bubbleConfig.minCashoutMultiplier ?? 1.10,
+          lineMultiplierStep: bubbleConfig.lineMultiplierStep ?? 0.25,
+          initialMultiplier: bubbleConfig.initialMultiplier ?? 1.0,
+          retentionAggressiveness: bubbleConfig.retentionAggressiveness || 'moderate',
+          forceLossOnMaxMultiplier: bubbleConfig.forceLossOnMaxMultiplier ?? true,
+          consecutiveWinDecay: bubbleConfig.consecutiveWinDecay ?? 0.05,
+          popupEnabled: Boolean(bubbleConfig.popupEnabled),
+          popupTitle: bubbleConfig.popupTitle || 'BÔNUS BUBBLE WIN!',
+          popupDescription: bubbleConfig.popupDescription || 'Deposite via PIX e ganhe rodadas extras!',
+          popupImageUrl: bubbleConfig.popupImageUrl || '/bubbleblast/images/banners/deposito.png',
+          popupButtonText: bubbleConfig.popupButtonText || 'DEPOSITAR PIX',
+          popupButtonAction: bubbleConfig.popupButtonAction || 'deposit',
+          popupButtonUrl: bubbleConfig.popupButtonUrl || '',
+          popupTrigger: bubbleConfig.popupTrigger || 'start',
+          heroBannerImageUrl: bubbleConfig.heroBannerImageUrl || '/bubbleblast/images/banners/deposito.png',
+          heroBannerTitle: bubbleConfig.heroBannerTitle || 'BUBBLE WIN SHOOTER',
+          heroBannerSubtitle: bubbleConfig.heroBannerSubtitle || 'Estoure bolhas e multiplique até 5x!',
+          heroBannerBadge: bubbleConfig.heroBannerBadge || 'PIX INSTANTÂNEO',
+          configVersion: bubbleConfig.configVersion || 1,
+          recentBets: bubbleLiveData.recentBets
         }
       ];
 
@@ -5884,16 +6235,23 @@ CREATE TABLE IF NOT EXISTS system_settings (
   // POST or PUT /api/admin/games/universal-rtp - Aplicar e FIXAR RTP Geral e Dificuldades no Banco de Dados
   app.all(['/api/admin/games/universal-rtp'], requireAdmin, async (req: AuthRequest, res: Response) => {
     try {
-      const { universalRtp, smartRtpGlobal, targetGameIds, difficultyRules } = req.body;
-      const rtp = typeof universalRtp === 'number' ? Math.max(0.1, Math.min(99.9, universalRtp)) : null;
+      const { universalRtp, difficulty, smartRtpGlobal, targetGameIds, difficultyRules } = req.body;
+      let rtp = typeof universalRtp === 'number' ? Math.max(0.1, Math.min(99.9, universalRtp)) : null;
 
       const gameIds = Array.isArray(targetGameIds) && targetGameIds.length > 0
         ? targetGameIds
-        : ['g_gen_dino', 'g_block_puzzle', 'g_zumbla', 'g_raspa_fortuna', 'g_subway_pay'];
+        : ['g_gen_dino', 'g_block_puzzle', 'g_zumbla', 'g_raspa_fortuna', 'g_subway_pay', 'g_bubble_blast'];
 
-      // Derived standardized difficulty matching user request
-      let derivedDiff = 'medium';
-      if (rtp !== null) {
+      // Standardized difficulty mapping
+      let derivedDiff = typeof difficulty === 'string' && difficulty.trim() ? difficulty.trim() : 'medium';
+      if (typeof difficulty === 'string' && difficulty.trim()) {
+        if (difficulty === 'hard' && rtp === null) rtp = 45.0;
+        else if (difficulty === 'heavy' && rtp === null) rtp = 20.0;
+        else if (difficulty === 'extreme' && rtp === null) rtp = 5.0;
+        else if (difficulty === 'easy' && rtp === null) rtp = 95.0;
+        else if (difficulty === 'medium' && rtp === null) rtp = 75.0;
+        else if (difficulty === 'ultra_easy' && rtp === null) rtp = 98.5;
+      } else if (rtp !== null) {
         if (rtp >= 94) derivedDiff = 'ultra_easy';
         else if (rtp >= 85) derivedDiff = 'easy';
         else if (rtp >= 70) derivedDiff = 'medium';
@@ -5928,39 +6286,37 @@ CREATE TABLE IF NOT EXISTS system_settings (
           } else if (gid === 'g_raspa_fortuna') {
             cfg.bonusFrequencyPercent = Math.round(Math.min(60, Math.max(2, rtp * 0.4)));
           } else if (gid === 'g_subway_pay') {
+            cfg.maxMultiplier = 5.0; // Meta fixa de 5x conforme requisito oficial
+            (cfg as any).minCashoutMultiplier = 1.5;
             if (rtp >= 92) {
               cfg.baseSpeed = 120;
               cfg.maxSpeed = 280;
               cfg.gameSpeedPercent = 85;
               cfg.obstacleDensityPercent = 35;
               cfg.bonusFrequencyPercent = 55;
-              cfg.maxMultiplier = 4.0;
-              (cfg as any).minCashoutMultiplier = 1.5;
             } else if (rtp >= 75) {
               cfg.baseSpeed = 180;
               cfg.maxSpeed = 320;
               cfg.gameSpeedPercent = 100;
               cfg.obstacleDensityPercent = 50;
               cfg.bonusFrequencyPercent = 40;
-              cfg.maxMultiplier = 3.5;
-              (cfg as any).minCashoutMultiplier = 2.0;
             } else if (rtp >= 40) {
               cfg.baseSpeed = 245;
               cfg.maxSpeed = 360;
               cfg.gameSpeedPercent = 125;
-              cfg.obstacleDensityPercent = 75;
-              cfg.bonusFrequencyPercent = 25;
-              cfg.maxMultiplier = 2.5;
-              (cfg as any).minCashoutMultiplier = 2.5;
+              cfg.obstacleDensityPercent = 70;
+              cfg.bonusFrequencyPercent = 30;
             } else {
-              cfg.baseSpeed = 300;
-              cfg.maxSpeed = 420;
-              cfg.gameSpeedPercent = 160;
-              cfg.obstacleDensityPercent = 90;
-              cfg.bonusFrequencyPercent = 10;
-              cfg.maxMultiplier = 2.0;
-              (cfg as any).minCashoutMultiplier = 3.0;
+              cfg.baseSpeed = 280;
+              cfg.maxSpeed = 380;
+              cfg.gameSpeedPercent = 140;
+              cfg.obstacleDensityPercent = 80;
+              cfg.bonusFrequencyPercent = 20;
             }
+          } else if (gid === 'g_bubble_blast') {
+            cfg.baseSpeed = parseFloat((4.5 + (100 - rtp) * 0.08).toFixed(1));
+            cfg.maxMultiplier = rtp >= 90 ? 8.0 : (rtp >= 75 ? 5.0 : 3.0);
+            (cfg as any).mistakeTolerance = rtp >= 85 ? 2 : (rtp >= 50 ? 1 : 0);
           }
         }
 
@@ -6382,10 +6738,11 @@ CREATE TABLE IF NOT EXISTS system_settings (
         status: config.status,
         rtpPercent: config.rtpPercent,
         difficulty: config.difficulty,
-        minBet: config.minBet,
-        maxBet: config.maxBet,
-        maxMultiplier: config.maxMultiplier || 4.0,
-        minCashoutMultiplier: (config as any).minCashoutMultiplier ?? 2.0,
+        minBet: config.minBet || 10.0,
+        maxBet: config.maxBet || 400.0,
+        maxMultiplier: 5.0,
+        minCashoutMultiplier: (config as any).minCashoutMultiplier ?? 1.5,
+        targetCoins: 80,
         baseSpeed: config.baseSpeed ?? 180,
         maxSpeed: config.maxSpeed ?? 320,
         acceleration: config.acceleration ?? 0.0015,
@@ -6438,8 +6795,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
         config: {
           minBet: config.minBet || 10.0,
           maxBet: config.maxBet || 400.0,
-          maxMultiplier: config.maxMultiplier || 4.0,
-          minCashoutMultiplier: (config as any).minCashoutMultiplier ?? 2.0,
+          maxMultiplier: 5.0,
+          minCashoutMultiplier: (config as any).minCashoutMultiplier ?? 1.5,
         }
       });
     } catch (err) {
@@ -6628,9 +6985,13 @@ CREATE TABLE IF NOT EXISTS system_settings (
         });
       }
 
-      // Cashout / Win: Calculate payout
-      // Cap multiplier at 4.0x
-      const multiplier = Math.min(4.0, (numCoins / 100) * 2);
+      // Cashout / Win: Calculate payout following the 5x curve
+      const maxM = 5.0; // 5x max multiplier
+      const targetCoins = 80;
+      const progress = Math.min(1.0, numCoins / targetCoins);
+      const calculatedMultiplier = Math.min(maxM, Math.max(1.0, 1.0 + progress * (maxM - 1.0)));
+      const clientPayout = typeof req.body.payout === 'number' && req.body.payout > 0 ? req.body.payout : 0;
+      const multiplier = clientPayout > 0 ? Math.min(maxM, clientPayout / betAmount) : calculatedMultiplier;
       const rawPayout = betAmount * multiplier;
       const cleanPayout = parseFloat(rawPayout.toFixed(2));
 
@@ -6878,8 +7239,6 @@ CREATE TABLE IF NOT EXISTS system_settings (
         return res.status(400).json({ error: 'Saldo insuficiente na conta para iniciar a corrida.' });
       }
 
-      const newBalance = parseFloat((currentBalance - cleanBet).toFixed(2));
-      await dbService.updateUserBalance(userId, newBalance);
 
       const isUserInfluencer = Boolean(user.isInfluencer);
       const betId = 'dino_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
@@ -6898,7 +7257,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
         rtpPercent: isUserInfluencer ? 99.5 : (gameConfig.rtpPercent || 85.0),
         createdAt: new Date().toISOString(),
       };
-      await dbService.recordGameBet(newGameBet);
+      const newBalance = await dbService.startGameBetAtomic(newGameBet);
 
       // Accumulate real game statistics in GameConfig
       gameConfig.totalWagered = parseFloat(((gameConfig.totalWagered || 0) + cleanBet).toFixed(2));
@@ -6955,41 +7314,15 @@ CREATE TABLE IF NOT EXISTS system_settings (
       const coinPayout = isCashout ? safeCoins * 1.0 : 0;
       const cleanPayout = parseFloat(coinPayout.toFixed(2));
 
-      const currentBalance = typeof user.balance === 'number' && !isNaN(user.balance) ? user.balance : 0;
-      let newBalance = currentBalance;
-
-      if (isCashout && cleanPayout > 0) {
-        newBalance = parseFloat((currentBalance + cleanPayout).toFixed(2));
-        await dbService.updateUserBalance(userId, newBalance);
-      }
-
+      const newBalance = await dbService.settleGameBetAtomic(betId, userId, cleanPayout, isCashout ? 'cashed_out' : 'lost', 'GenDino');
       const gameConfig = await dbService.getGameConfig('g_gen_dino');
-      const betAmount = existingBet.betAmount || 1;
-      const multiplier = betAmount > 0 ? parseFloat((cleanPayout / betAmount).toFixed(2)) : 1.0;
-
-      await dbService.updateGameBet(betId, {
-        payoutAmount: cleanPayout,
-        profitAmount: parseFloat((cleanPayout - betAmount).toFixed(2)),
-        multiplier,
-        status: isCashout ? 'cashed_out' : 'lost'
-      });
 
       if (isCashout && cleanPayout > 0) {
         gameConfig.totalPayout = parseFloat(((gameConfig.totalPayout || 0) + cleanPayout).toFixed(2));
         gameConfig.ggr = parseFloat(((gameConfig.totalWagered || 0) - gameConfig.totalPayout).toFixed(2));
         await dbService.saveGameConfig(gameConfig);
 
-        const newTx: TransactionDB = {
-          id: 'tx_dino_' + crypto.randomBytes(8).toString('hex'),
-          userId,
-          type: 'deposit',
-          amount: cleanPayout,
-          status: 'approved',
-          paymentMethod: 'GenDino',
-          description: `Vitória GEN DINO (${safeCoins} Moedas)`,
-          createdAt: new Date().toISOString(),
-        };
-        await dbService.createTransaction(newTx);
+
       }
 
       res.json({
@@ -7124,6 +7457,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
           rawResponse: { success: true, data: simData, simulated: true }
         };
 
+        await dbService.saveCharge(storedCharge as any);
+
         memoryCharges.set(correlationID, storedCharge);
         if (storedCharge.userId) await notifyAffiliateForPlayer(storedCharge.userId, {
           title: 'PIX pendente na sua rede ⏳', body: `Um indicado gerou um PIX de R$ ${storedCharge.valueInReais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`, url: '/?tab=affiliates', type: 'pixPending'
@@ -7199,6 +7534,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
           rawResponse: fallbackData
         };
 
+        await dbService.saveCharge(storedCharge as any);
+
         memoryCharges.set(correlationID, storedCharge);
         if (storedCharge.userId) await notifyAffiliateForPlayer(storedCharge.userId, {
           title: 'PIX pendente na sua rede ⏳', body: `Um indicado gerou um PIX de R$ ${storedCharge.valueInReais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`, url: '/?tab=affiliates', type: 'pixPending'
@@ -7236,6 +7573,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
         rawResponse: responseData
       };
 
+      await dbService.saveCharge(storedCharge as any);
+
       memoryCharges.set(correlationID, storedCharge);
       if (storedCharge.userId) await notifyAffiliateForPlayer(storedCharge.userId, {
         title: 'PIX pendente na sua rede ⏳', body: `Um indicado gerou um PIX de R$ ${storedCharge.valueInReais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`, url: '/?tab=affiliates', type: 'pixPending'
@@ -7264,7 +7603,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
   app.get(['/api/game/gen-dino/pix/status/:correlationID', '/api/gen-dino/pix/status/:correlationID'], async (req: Request, res: Response) => {
     try {
       const { correlationID } = req.params;
-      const localCharge = memoryCharges.get(correlationID);
+      const localCharge = (memoryCharges.get(correlationID) || await dbService.getChargeByCorrelationID(correlationID)) as StoredCharge | null;
       const token = await getEffectiveDotfyApiKey();
 
       // Query Dotfy API
@@ -7351,6 +7690,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
       }
 
       charge.status = 'PAID';
+      await dbService.saveCharge(charge as any);
       memoryCharges.set(correlationID, charge);
       await creditPaidChargeUser(charge);
 
@@ -7893,6 +8233,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
           rawResponse: { success: true, data: simData, simulated: true }
         };
 
+        await dbService.saveCharge(storedCharge as any);
+
         memoryCharges.set(correlationID, storedCharge);
         if (storedCharge.userId) await notifyAffiliateForPlayer(storedCharge.userId, {
           title: 'PIX pendente na sua rede ⏳',
@@ -8007,6 +8349,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
           rawResponse: fallbackData
         };
 
+        await dbService.saveCharge(storedCharge as any);
+
         memoryCharges.set(correlationID, storedCharge);
         if (storedCharge.userId) await notifyAffiliateForPlayer(storedCharge.userId, {
           title: 'PIX pendente na sua rede ⏳',
@@ -8051,6 +8395,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
         rawResponse: responseData
       };
 
+      await dbService.saveCharge(storedCharge as any);
+
       memoryCharges.set(correlationID, storedCharge);
       if (storedCharge.userId) await notifyAffiliateForPlayer(storedCharge.userId, {
         title: 'PIX pendente na sua rede ⏳',
@@ -8082,7 +8428,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
   app.get(['/api/game/raspa-fortuna/pix/status/:correlationID', '/api/raspa-fortuna/pix/status/:correlationID'], async (req: Request, res: Response) => {
     try {
       const { correlationID } = req.params;
-      const localCharge = memoryCharges.get(correlationID);
+      const localCharge = (memoryCharges.get(correlationID) || await dbService.getChargeByCorrelationID(correlationID)) as StoredCharge | null;
       const token = await getEffectiveDotfyApiKey();
 
       // If already marked as PAID locally (e.g. simulated or confirmed by webhook)
@@ -8188,6 +8534,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
       }
 
       charge.status = 'PAID';
+      await dbService.saveCharge(charge as any);
       memoryCharges.set(correlationID, charge);
       await creditPaidChargeUser(charge);
 
@@ -8375,6 +8722,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
           rawResponse: { success: true, data: simData, simulated: true }
         };
 
+        await dbService.saveCharge(storedCharge as any);
+
         memoryCharges.set(correlationID, storedCharge);
         console.log(`[Subway Pay PIX] Cobrança Simulação gerada: ${correlationID} (R$ ${numAmount.toFixed(2)})`);
 
@@ -8451,6 +8800,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
               rawResponse: retryData
             };
 
+            await dbService.saveCharge(storedCharge as any);
+
             memoryCharges.set(correlationID, storedCharge);
             return res.json({ success: true, data: { ...chargeData, correlationID, valueInReais: centsVal / 100 } });
           } else {
@@ -8490,6 +8841,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
         rawResponse: responseData
       };
 
+      await dbService.saveCharge(storedCharge as any);
+
       memoryCharges.set(correlationID, storedCharge);
       console.log(`[Subway Pay PIX] Cobrança Dotfy criada com sucesso: ${correlationID} (R$ ${(centsVal / 100).toFixed(2)})`);
 
@@ -8511,7 +8864,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
   app.get(['/api/game/subway-pay/pix/status/:correlationID', '/api/subwaypay/pix/status/:correlationID', '/api/game/subwaypay/pix/status/:correlationID'], async (req: Request, res: Response) => {
     try {
       const { correlationID } = req.params;
-      const localCharge = memoryCharges.get(correlationID);
+      const localCharge = (memoryCharges.get(correlationID) || await dbService.getChargeByCorrelationID(correlationID)) as StoredCharge | null;
 
       const token = await getEffectiveDotfyApiKey();
 
@@ -8548,6 +8901,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
             if (isPaid) {
               if (localCharge) {
                 localCharge.status = 'PAID';
+                await dbService.saveCharge(localCharge as any);
                 memoryCharges.set(correlationID, localCharge);
                 await creditPaidChargeUser(localCharge);
               }
@@ -8588,8 +8942,512 @@ CREATE TABLE IF NOT EXISTS system_settings (
     }
   });
 
-  // POST /api/game/subway-pay/pix/simulate/:correlationID - Simular aprovação imediata para testes
-  app.post(['/api/game/subway-pay/pix/simulate/:correlationID', '/api/subwaypay/pix/simulate/:correlationID'], async (req: Request, res: Response) => {
+  // --- BUBBLE WIN / BUBBLE BLAST DOTFY PIX API & WALLET ENDPOINTS ---
+  // =========================================================================
+
+  // Helper function to extract user for Bubble endpoints
+  async function resolveBubbleUser(req: Request): Promise<UserDB | null> {
+    try {
+      const authHeader = req.headers.authorization;
+      let token = '';
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '').trim();
+      }
+      if (!token && req.headers.cookie) {
+        const match = req.headers.cookie.match(/bb_session=([^;]+)/) ||
+          req.headers.cookie.match(/token=([^;]+)/) ||
+          req.headers.cookie.match(/pg_auth_token=([^;]+)/);
+        if (match && match[1]) token = decodeURIComponent(match[1].trim());
+      }
+      if (!token && req.headers['x-session-token']) {
+        token = String(req.headers['x-session-token']).trim();
+      }
+      if (token) {
+        const sUid = await resolveUserIdFromToken(token);
+        if (sUid) {
+          const u = await dbService.getUserById(sUid);
+          if (u) return u;
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  // 1. POST /api/wallet/deposit - Criar cobrança PIX via Dotfy para o jogo Bubble
+  app.post(['/api/wallet/deposit', '/api/game/bubble/pix/create', '/api/bubbleblast/pix/create', '/api/game/bubbleblast/pix/create'], async (req: Request, res: Response) => {
+    try {
+      let user = await resolveBubbleUser(req);
+      const { amountCents, amount, value, customer, expiresIn, isSimulated, acceptBonus, cupomCodigo } = req.body;
+      const numAmount = amountCents ? Number(amountCents) / 100 : parseFloat(amount || value);
+
+      if (isNaN(numAmount) || numAmount < 1.0) {
+        return res.status(400).json({ error: 'O valor mínimo para depósito via PIX no Bubble Win é de R$ 1,00.' });
+      }
+
+      const cleanCustomer: Record<string, string> = {};
+      if (customer && typeof customer === 'object') {
+        if (customer.name) cleanCustomer.name = String(customer.name).slice(0, 100);
+        if (customer.email) cleanCustomer.email = String(customer.email).trim();
+        if (customer.taxID || customer.cpf) cleanCustomer.taxID = String(customer.taxID || customer.cpf).replace(/\D/g, '');
+        if (customer.phone) cleanCustomer.phone = String(customer.phone).replace(/\D/g, '');
+      } else if (user) {
+        if (user.name) cleanCustomer.name = user.name.slice(0, 100);
+        if (user.email) cleanCustomer.email = user.email;
+        if (user.cpf) cleanCustomer.taxID = String(user.cpf).replace(/\D/g, '');
+        if (user.phone) cleanCustomer.phone = String(user.phone).replace(/\D/g, '');
+      }
+
+      // Se usuário ainda não autenticado, criar registro de jogador temporário na DB
+      if (!user) {
+        const rawPhone = cleanCustomer.phone || (req.body.phone ? String(req.body.phone).replace(/\D/g, '') : '');
+        const tempEmail = cleanCustomer.email || (rawPhone ? `phone_${rawPhone}@jogarbubble.online` : `player_${Date.now()}_${crypto.randomBytes(2).toString('hex')}@jogarbubble.online`);
+        try {
+          user = await dbService.getUserByEmail(tempEmail);
+          if (!user && rawPhone) user = await dbService.getUserByPhone(rawPhone);
+          if (!user) {
+            const newUid = `usr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+            const refCode = `BB${Math.floor(1000 + Math.random() * 9000)}`;
+            const dummyHash = dbService.hashPassword(crypto.randomBytes(8).toString('hex'));
+            const newUserObj: UserDB = {
+              id: newUid,
+              name: cleanCustomer.name || 'Jogador Bubble',
+              email: tempEmail,
+              phone: rawPhone || 'Não informado',
+              passwordHash: dummyHash,
+              role: 'user',
+              balance: 0,
+              referralCode: refCode,
+              registeredGame: 'g_bubble_blast',
+              createdAt: new Date().toISOString(),
+              totalDeposited: 0,
+              totalWithdrawn: 0
+            };
+            await dbService.createUser(newUserObj);
+            user = newUserObj;
+            const sessionToken = createSession(user.id, req);
+            sessions.set(sessionToken, user.id);
+            res.cookie('bb_session', sessionToken, { path: '/', httpOnly: false, sameSite: 'lax', maxAge: 30 * 24 * 3600 * 1000 });
+          }
+        } catch (dbErr) {
+          console.warn('[Bubble Deposit] Falha ao sincronizar jogador na DB:', dbErr);
+        }
+      }
+
+      // Anti-Fraude
+      if (user && isHubAffiliateUser(user)) {
+        logSecurityEvent('AFFILIATE_GAME_DEPOSIT_BLOCKED', { email: user.email, userId: user.id, game: 'bubble-win' });
+        return res.status(403).json({
+          error: 'Acesso bloqueado pelo Sistema Anti-Fraude: Afiliados Hub não possuem autorização para depositar no jogo Bubble.'
+        });
+      }
+
+      // Check Dotfy Config from DB or env
+      const token = await getEffectiveDotfyApiKey();
+      const description = `Depósito Bubble Win (PIX) - ${user?.name || cleanCustomer.name || 'Jogador'}`;
+
+      const dotfyPayload: Record<string, any> = {
+        value: numAmount,
+        description,
+        expiresIn: Number(expiresIn) || 3600
+      };
+
+      const originHost = req.get('host') || '';
+      if (req.protocol === 'https' || originHost.includes('.run.app') || (process.env.APP_URL && process.env.APP_URL.startsWith('https://'))) {
+        const baseUrl = process.env.APP_URL || `https://${originHost}`;
+        dotfyPayload.webhook_url = `${baseUrl.replace(/\/$/, '')}/api/webhooks/dotfy`;
+      }
+
+      if (Object.keys(cleanCustomer).length > 0) {
+        dotfyPayload.customer = cleanCustomer;
+      }
+
+      const bonusCents = acceptBonus && numAmount >= 30 ? Math.round(numAmount * 10) : 0;
+
+      // Se explicitamente simulado ou sem chave Dotfy configurada
+      if (isSimulated || !token || token === 'simulated') {
+        const randomId = crypto.randomBytes(4).toString('hex');
+        const correlationID = `bubble-dotfy-${Date.now()}-${randomId}`;
+        const centsVal = Math.round(numAmount * 100);
+        const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
+        const simQr = `00020126360014BR.GOV.BCB.PIX0114+5511999998888520400005303986540${numAmount.toFixed(2)}5802BR5916Dotfy Bubble Win6009SAO PAULO62070503***6304ABCD`;
+        const simQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(simQr)}`;
+
+        const storedCharge: StoredCharge = {
+          id: `ch_${randomId}`,
+          chargeId: `ch_${randomId}`,
+          correlationID,
+          transactionID: `E${Date.now()}BUBBLE${randomId}`,
+          qrCode: simQr,
+          qrCodeImage: simQrImage,
+          paymentLink: `https://app.dotfy.com.br/checkout/${correlationID}`,
+          expiresAt,
+          value: centsVal,
+          valueInReais: numAmount,
+          description,
+          customer: cleanCustomer,
+          status: 'PENDING',
+          createdAt: new Date().toISOString(),
+          userId: user?.id,
+          rawResponse: { success: true, simulated: true }
+        };
+
+        await dbService.saveCharge(storedCharge as any);
+
+        memoryCharges.set(correlationID, storedCharge);
+
+        if (user) {
+          await dbService.createTransaction({
+            id: `tx_bb_${Date.now()}_${randomId}`,
+            userId: user.id,
+            type: 'deposit',
+            amount: numAmount,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            description: `Depósito PIX Bubble Win - R$ ${numAmount.toFixed(2)}`,
+            gateway: 'dotfy',
+            correlationId: correlationID
+          }).catch(console.warn);
+        }
+
+        return res.json({
+          balanceCents: Math.round((user?.balance || 0) * 100),
+          pixCode: simQr,
+          qrcode: simQrImage,
+          txid: correlationID,
+          transaction: {
+            id: correlationID,
+            amount: numAmount,
+            amountCents: centsVal,
+            status: 'PENDING'
+          },
+          bonusCents
+        });
+      }
+
+      // Requisição Real para a API Dotfy
+      console.log(`[Bubble Win Dotfy PIX] Criando cobrança PIX via ${DOTFY_BASE_URL}/api/charges...`);
+      const dotfyResponse = await fetch(`${DOTFY_BASE_URL}/api/charges`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(dotfyPayload)
+      });
+
+      const responseText = await dotfyResponse.text();
+      let responseData: any;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        responseData = { rawText: responseText };
+      }
+
+      if (!dotfyResponse.ok) {
+        console.error(`[Bubble Win Dotfy Error] HTTP ${dotfyResponse.status}:`, responseData);
+
+        // Retry sem telefone se erro de validação
+        const errStr = JSON.stringify(responseData);
+        if (dotfyResponse.status === 400 && dotfyPayload.customer?.phone && (errStr.includes('phone') || errStr.includes('Telefone'))) {
+          delete dotfyPayload.customer.phone;
+          const retryRes = await fetch(`${DOTFY_BASE_URL}/api/charges`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dotfyPayload)
+          });
+          const retryText = await retryRes.text();
+          let retryData: any;
+          try { retryData = JSON.parse(retryText); } catch { retryData = { rawText: retryText }; }
+
+          if (retryRes.ok) {
+            const chargeData = retryData.data || retryData;
+            const correlationID = chargeData.correlationID || chargeData.correlationId || `bubble-dotfy-${Date.now()}`;
+            const centsVal = chargeData.value || Math.round(numAmount * 100);
+            const qrCode = chargeData.qrCode || chargeData.brCode || '';
+            const qrCodeImage = chargeData.qrCodeImage || (qrCode ? `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(qrCode)}` : '');
+
+            const storedCharge: StoredCharge = {
+              id: chargeData.id || `dotfy_${Date.now()}`,
+              chargeId: chargeData.chargeId || '',
+              correlationID,
+              transactionID: chargeData.transactionID || '',
+              qrCode,
+              qrCodeImage,
+              paymentLink: chargeData.paymentLink || '',
+              expiresAt: chargeData.expiresAt || new Date(Date.now() + 3600 * 1000).toISOString(),
+              value: centsVal,
+              valueInReais: numAmount,
+              description,
+              customer: cleanCustomer,
+              status: 'PENDING',
+              createdAt: new Date().toISOString(),
+              userId: user?.id,
+              rawResponse: retryData
+            };
+
+            await dbService.saveCharge(storedCharge as any);
+
+            memoryCharges.set(correlationID, storedCharge);
+
+            if (user) {
+              await dbService.createTransaction({
+                id: `tx_bb_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+                userId: user.id,
+                type: 'deposit',
+                amount: numAmount,
+                status: 'pending',
+                createdAt: new Date().toISOString(),
+                description: `Depósito PIX Bubble Win - R$ ${numAmount.toFixed(2)}`,
+                gateway: 'dotfy',
+                correlationId: correlationID
+              }).catch(console.warn);
+            }
+
+            return res.json({
+              balanceCents: Math.round((user?.balance || 0) * 100),
+              pixCode: qrCode,
+              qrcode: qrCodeImage,
+              txid: correlationID,
+              transaction: {
+                id: correlationID,
+                amount: numAmount,
+                amountCents: centsVal,
+                status: 'PENDING'
+              },
+              bonusCents
+            });
+          }
+        }
+
+        // Fallback gracioso com QR code gerado para nunca deixar o jogador travado
+        const randomId = crypto.randomBytes(4).toString('hex');
+        const correlationID = `bubble-dotfy-${Date.now()}-${randomId}`;
+        const centsVal = Math.round(numAmount * 100);
+        const simQr = `00020126360014BR.GOV.BCB.PIX0114+5511999998888520400005303986540${numAmount.toFixed(2)}5802BR5916Dotfy Bubble Win6009SAO PAULO62070503***6304ABCD`;
+        const simQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(simQr)}`;
+
+        const storedCharge: StoredCharge = {
+          id: `ch_${randomId}`,
+          chargeId: `ch_${randomId}`,
+          correlationID,
+          transactionID: `E${Date.now()}BUBBLE${randomId}`,
+          qrCode: simQr,
+          qrCodeImage: simQrImage,
+          paymentLink: `https://app.dotfy.com.br/checkout/${correlationID}`,
+          expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
+          value: centsVal,
+          valueInReais: numAmount,
+          description,
+          customer: cleanCustomer,
+          status: 'PENDING',
+          createdAt: new Date().toISOString(),
+          userId: user?.id,
+          rawResponse: { simulated: true, error: responseData }
+        };
+
+        await dbService.saveCharge(storedCharge as any);
+
+        memoryCharges.set(correlationID, storedCharge);
+
+        if (user) {
+          await dbService.createTransaction({
+            id: `tx_bb_${Date.now()}_${randomId}`,
+            userId: user.id,
+            type: 'deposit',
+            amount: numAmount,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            description: `Depósito PIX Bubble Win - R$ ${numAmount.toFixed(2)}`,
+            gateway: 'dotfy',
+            correlationId: correlationID
+          }).catch(console.warn);
+        }
+
+        return res.json({
+          balanceCents: Math.round((user?.balance || 0) * 100),
+          pixCode: simQr,
+          qrcode: simQrImage,
+          txid: correlationID,
+          transaction: {
+            id: correlationID,
+            amount: numAmount,
+            amountCents: centsVal,
+            status: 'PENDING'
+          },
+          bonusCents
+        });
+      }
+
+      // Sucesso na API Dotfy
+      const chargeData = responseData.data || responseData;
+      const correlationID = chargeData.correlationID || chargeData.correlationId || `bubble-dotfy-${Date.now()}`;
+      const centsVal = chargeData.value || Math.round(numAmount * 100);
+      const qrCode = chargeData.qrCode || chargeData.brCode || '';
+      const qrCodeImage = chargeData.qrCodeImage || (qrCode ? `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(qrCode)}` : '');
+
+      const storedCharge: StoredCharge = {
+        id: chargeData.id || `dotfy_${Date.now()}`,
+        chargeId: chargeData.chargeId || '',
+        correlationID,
+        transactionID: chargeData.transactionID || '',
+        qrCode,
+        qrCodeImage,
+        paymentLink: chargeData.paymentLink || '',
+        expiresAt: chargeData.expiresAt || new Date(Date.now() + 3600 * 1000).toISOString(),
+        value: centsVal,
+        valueInReais: numAmount,
+        description,
+        customer: cleanCustomer,
+        status: 'PENDING',
+        createdAt: new Date().toISOString(),
+        userId: user?.id,
+        rawResponse: responseData
+      };
+
+      await dbService.saveCharge(storedCharge as any);
+
+      memoryCharges.set(correlationID, storedCharge);
+
+      if (user) {
+        await dbService.createTransaction({
+          id: `tx_bb_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+          userId: user.id,
+          type: 'deposit',
+          amount: numAmount,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          description: `Depósito PIX Bubble Win - R$ ${numAmount.toFixed(2)}`,
+          gateway: 'dotfy',
+          correlationId: correlationID
+        }).catch(console.warn);
+      }
+
+      res.json({
+        balanceCents: Math.round((user?.balance || 0) * 100),
+        pixCode: qrCode,
+        qrcode: qrCodeImage,
+        txid: correlationID,
+        transaction: {
+          id: correlationID,
+          amount: numAmount,
+          amountCents: centsVal,
+          status: 'PENDING'
+        },
+        bonusCents
+      });
+    } catch (err: any) {
+      console.error('[Bubble Deposit Error]:', err);
+      res.status(500).json({ error: 'Erro ao gerar PIX para depósito no Bubble Win.' });
+    }
+  });
+
+  // 2. GET /api/wallet/deposit/status - Consultar status do pagamento PIX Dotfy no Bubble
+  app.get(['/api/wallet/deposit/status', '/api/game/bubble/pix/status/:correlationID', '/api/bubbleblast/pix/status/:correlationID'], async (req: Request, res: Response) => {
+    try {
+      const correlationID = (req.query.txid as string) || (req.query.correlationID as string) || req.params.correlationID;
+      if (!correlationID) {
+        return res.status(400).json({ error: 'ID da transação não fornecido.' });
+      }
+
+      const localCharge = (memoryCharges.get(correlationID) || await dbService.getChargeByCorrelationID(correlationID)) as StoredCharge | null;
+      const token = await getEffectiveDotfyApiKey();
+
+      // Se já marcado como pago em memória
+      if (localCharge && (localCharge.status === 'PAID' || localCharge.status === 'COMPLETED')) {
+        await creditPaidChargeUser(localCharge);
+        let updatedBal = 0;
+        if (localCharge.userId) {
+          const u = await dbService.getUserById(localCharge.userId);
+          if (u) updatedBal = u.balance;
+        }
+        return res.json({
+          status: 'COMPLETED',
+          paid: true,
+          balanceCents: Math.round(updatedBal * 100),
+          amountCents: Math.round(localCharge.valueInReais * 100),
+          message: 'Depósito confirmado com sucesso!'
+        });
+      }
+
+      // Verificação de persistência no Banco de Dados se não estiver em memória
+      if (!localCharge) {
+        try {
+          const allTxs = await dbService.getAllTransactions();
+          const dbTx = allTxs.find(t => t.correlationId === correlationID || t.id === correlationID);
+          if (dbTx && dbTx.status === 'approved') {
+            const u = await dbService.getUserById(dbTx.userId);
+            return res.json({
+              status: 'COMPLETED',
+              paid: true,
+              balanceCents: Math.round((u?.balance || 0) * 100),
+              amountCents: Math.round(dbTx.amount * 100),
+              message: 'Depósito confirmado via banco de dados!'
+            });
+          }
+        } catch (_) {}
+      }
+
+      // Consultar Dotfy API se temos token
+      if (token && token !== 'simulated' && !localCharge?.rawResponse?.simulated) {
+        try {
+          const dotfyRes = await fetch(`${DOTFY_BASE_URL}/api/charges/${correlationID}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (dotfyRes.ok) {
+            const dotfyData = await dotfyRes.json();
+            const dStatus = (dotfyData.data?.status || dotfyData.status || '').toUpperCase();
+            const isPaid = dStatus === 'PAID' || dStatus === 'COMPLETED' || dotfyData.data?.isPaid === true || dotfyData.isPaid === true;
+
+            if (isPaid) {
+              if (localCharge) {
+                localCharge.status = 'PAID';
+                await dbService.saveCharge(localCharge as any);
+                memoryCharges.set(correlationID, localCharge);
+                await creditPaidChargeUser(localCharge);
+              }
+              let updatedBal = 0;
+              if (localCharge?.userId) {
+                const u = await dbService.getUserById(localCharge.userId);
+                if (u) updatedBal = u.balance;
+              }
+              return res.json({
+                status: 'COMPLETED',
+                paid: true,
+                balanceCents: Math.round(updatedBal * 100),
+                amountCents: Math.round((localCharge?.valueInReais || dotfyData.data?.valueInReais || 25) * 100),
+                message: 'Depósito confirmado via Dotfy Gateway!'
+              });
+            }
+          }
+        } catch (dErr) {
+          console.warn(`[Bubble PIX Status] Falha ao consultar Dotfy:`, dErr);
+        }
+      }
+
+      // Se ainda pendente
+      let currentBal = 0;
+      if (localCharge?.userId) {
+        const u = await dbService.getUserById(localCharge.userId);
+        if (u) currentBal = u.balance;
+      }
+      res.json({
+        status: 'PENDING',
+        paid: false,
+        balanceCents: Math.round(currentBal * 100)
+      });
+    } catch (err: any) {
+      console.error('[Bubble PIX Status Error]:', err);
+      res.status(500).json({ error: 'Erro ao consultar status do PIX.' });
+    }
+  });
+
+  // 3. POST /api/game/bubble/pix/simulate/:correlationID - Simular aprovação imediata para testes
+  app.post(['/api/game/bubble/pix/simulate/:correlationID', '/api/bubbleblast/pix/simulate/:correlationID'], async (req: Request, res: Response) => {
     try {
       const { correlationID } = req.params;
       const charge = memoryCharges.get(correlationID);
@@ -8598,6 +9456,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
       }
 
       charge.status = 'PAID';
+      await dbService.saveCharge(charge as any);
       memoryCharges.set(correlationID, charge);
       await creditPaidChargeUser(charge);
 
@@ -8607,16 +9466,423 @@ CREATE TABLE IF NOT EXISTS system_settings (
         if (u) updatedBal = u.balance;
       }
 
-      return res.json({
-        success: true,
+      res.json({
+        status: 'COMPLETED',
         paid: true,
-        status: 'PAID',
-        balance: updatedBal,
-        message: 'Pagamento PIX simulado e creditado com sucesso no Subway Pay!'
+        balanceCents: Math.round(updatedBal * 100),
+        message: 'Pagamento PIX simulado e creditado com sucesso no Bubble Win!'
       });
     } catch (err) {
-      console.error('[Subway Pay PIX Simulate] Erro ao simular:', err);
-      res.status(500).json({ error: 'Erro ao simular pagamento.' });
+      console.error('[Bubble PIX Simulate] Erro:', err);
+      res.status(500).json({ error: 'Erro ao simular aprovação do PIX.' });
+    }
+  });
+
+  // 4. GET /api/wallet/deposit-info - Informações de bônus e limites de depósito do Bubble
+  app.get('/api/wallet/deposit-info', async (req: Request, res: Response) => {
+    try {
+      const config = await dbService.getGameConfig('g_bubble_blast');
+      res.json({
+        elegivel: true,
+        bonus_minimo: 30,
+        bonus_maximo: 10000,
+        bonus_percentual: 10,
+        redeposito: {
+          elegivel: false,
+          pct: 20,
+          imagem_url: (config?.heroBannerImageUrl && !config.heroBannerImageUrl.includes('block')) ? config.heroBannerImageUrl : '/bubbleblast/images/banners/deposito.png'
+        }
+      });
+    } catch {
+      res.json({
+        elegivel: true,
+        bonus_minimo: 30,
+        bonus_maximo: 10000,
+        bonus_percentual: 10,
+        redeposito: { elegivel: false }
+      });
+    }
+  });
+
+  // 5. GET /api/wallet/ e /api/wallet - Obter saldo real e histórico de transações do banco de dados
+  app.get(['/api/wallet/', '/api/wallet'], async (req: Request, res: Response) => {
+    try {
+      const user = await resolveBubbleUser(req);
+      if (!user) {
+        return res.json({ balanceCents: 0, transactions: [] });
+      }
+
+      const txs = await dbService.getUserTransactions(user.id);
+      const formattedTxs = txs.slice(0, 30).map((t) => ({
+        id: t.id,
+        type: t.type === 'deposit' ? 'DEPOSIT' : 'WITHDRAWAL',
+        amountCents: Math.round(t.amount * 100),
+        status: t.status === 'approved' ? 'COMPLETED' : (t.status === 'rejected' ? 'FAILED' : 'PENDING'),
+        createdAt: t.createdAt
+      }));
+
+      res.json({
+        balanceCents: Math.round(user.balance * 100),
+        transactions: formattedTxs
+      });
+    } catch (err) {
+      console.error('[Bubble Wallet Error]:', err);
+      res.status(500).json({ error: 'Erro ao carregar carteira.' });
+    }
+  });
+
+  // 6. GET /api/wallet/withdraw-info - Informações de limites de saque
+  app.get('/api/wallet/withdraw-info', async (req: Request, res: Response) => {
+    try {
+      const user = await resolveBubbleUser(req);
+      const minWithdraw = user?.minWithdraw || 50;
+      const balance = user?.balance || 0;
+      res.json({
+        minCents: Math.round(minWithdraw * 100),
+        maxCents: 500000,
+        availableCents: Math.max(0, Math.round((balance - minWithdraw) * 100))
+      });
+    } catch {
+      res.json({ minCents: 5000, maxCents: 500000, availableCents: 0 });
+    }
+  });
+
+  // 7. POST /api/wallet/withdraw e /api/wallet/withdraw-affiliate - Solicitar saque
+  app.post(['/api/wallet/withdraw', '/api/wallet/withdraw-affiliate'], async (req: Request, res: Response) => {
+    try {
+      const user = await resolveBubbleUser(req);
+      if (!user) {
+        return res.status(401).json({ error: 'Entre para continuar.' });
+      }
+
+      const { amountCents, amount, pixKey, pixKeyType } = req.body;
+      const numAmount = amountCents ? Number(amountCents) / 100 : parseFloat(amount);
+
+      if (isNaN(numAmount) || numAmount < (user.minWithdraw || 50)) {
+        return res.status(400).json({ error: `O valor mínimo para saque é de R$ ${(user.minWithdraw || 50).toFixed(2)}.` });
+      }
+
+      if (user.balance < numAmount) {
+        return res.status(400).json({ error: 'Saldo insuficiente para saque.' });
+      }
+
+      if (user.withdrawBlocked) {
+        return res.status(403).json({ error: 'Saques temporariamente indisponíveis para esta conta.' });
+      }
+
+      const txId = `tx_wd_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+      await dbService.updateUserBalance(user.id, user.balance - numAmount);
+      await dbService.createTransaction({
+        id: txId,
+        userId: user.id,
+        type: 'withdrawal',
+        amount: numAmount,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        description: `Saque PIX (${pixKeyType || 'PIX'}: ${pixKey || user.pixKey || 'Chave do perfil'})`,
+        gateway: 'dotfy'
+      });
+
+      res.json({
+        ok: true,
+        message: 'Solicitação de saque enviada com sucesso!',
+        balanceCents: Math.round((user.balance - numAmount) * 100)
+      });
+    } catch (err: any) {
+      console.error('[Bubble Withdraw Error]:', err);
+      res.status(500).json({ error: 'Erro ao processar saque.' });
+    }
+  });
+
+  // 8. POST /api/cupons/resgatar - Resgatar cupom de bônus ou saldo
+  app.post('/api/cupons/resgatar', async (req: Request, res: Response) => {
+    try {
+      const { codigo, amountCents } = req.body;
+      const code = String(codigo || '').trim().toUpperCase();
+      if (!code) {
+        return res.status(400).json({ error: 'Código de cupom inválido.' });
+      }
+
+      res.json({
+        tipo: 'bonus_deposito_percent',
+        valor: 15,
+        mensagem: `Cupom ${code} aplicado: +15% de bônus no seu depósito PIX!`
+      });
+    } catch {
+      res.status(400).json({ error: 'Cupom inválido ou expirado.' });
+    }
+  });
+
+  // GET /api/public/config - Configurações públicas do Bubble Win
+  app.get('/api/public/config', async (req: Request, res: Response) => {
+    try {
+      const config = await dbService.getGameConfig('g_bubble_blast');
+      return res.json({
+        site_nome: "Bubbles Win",
+        site_logo_url: "/images/logos/logoblock.png",
+        site_favicon_url: "/favicon.png",
+        suporte_links: [],
+        deposito_valores_rapidos: [25, 30, 50, 100, 150, 200],
+        deposito_botoes_labels: { "30": "MINIMO", "50": "EXCELENTE", "100": "BÔNUS", "150": "BÔNUS", "200": "BÔNUS" },
+        deposito_botoes_cores: { "30": "#10e40c", "50": "#e40c0c", "100": "#6010c1", "150": "#facc15", "200": "#6010c1" },
+        entrada_valores: [5, 10, 20, 30, 50, 100],
+        demo_jogo: { ativo: true, label: "Jogar grátis" },
+        fin: {
+          deposito_minimo: 25,
+          deposito_maximo: 10000,
+          saque_minimo: 50,
+          saque_maximo: 5000,
+          taxa_saque_ativo: false,
+          taxa_saque_valor: 0,
+          saque_afiliado_minimo: 10,
+          saque_afiliado_maximo: 5000
+        },
+        pixel_meta_id: "",
+        pixel_tiktok_id: "",
+        pixel_kwai_id: "",
+        popup: { ativo: false, imagem_url: "", frequencia: "sessao", icone: "", titulo: "", mensagem: "", btn_texto: "", btn_acao: "", btn_url: "" }
+      });
+    } catch {
+      return res.json({
+        site_nome: "Bubbles Win",
+        entrada_valores: [5, 10, 20, 30, 50, 100]
+      });
+    }
+  });
+
+  // GET /api/game/active - Verificar se há jogo ativo do Bubble
+  app.get('/api/game/active', async (req: Request, res: Response) => {
+    return res.json({ active: false, game: null });
+  });
+
+  // POST /api/game/forfeit - Encerrar partida ativa
+  app.post('/api/game/forfeit', async (req: Request, res: Response) => {
+    return res.json({ ok: true, forfeited: true });
+  });
+
+  // 9. GET /api/game/bubble/config e /api/game/bubbleblast/config - Configurações de RTP do Bubble
+  app.get(['/api/game/bubble/config', '/api/game/bubbleblast/config', '/api/game/bubble-blast/config'], async (_req: Request, res: Response) => {
+    try {
+      const config = await dbService.getGameConfig('g_bubble_blast');
+      res.json({
+        gameId: config.id,
+        name: config.name,
+        status: config.status,
+        minBetCents: Math.round((config.minBet || 5.0) * 100),
+        maxBetCents: Math.round((config.maxBet || 100.0) * 100),
+        targetMultiplier: config.maxMultiplier || 5.0,
+        rtpPercent: config.rtpPercent || 95.0,
+        difficulty: config.difficulty || 'medium',
+        smartRtp: config.smartRtp ?? true,
+        updatedAt: config.updatedAt
+      });
+    } catch (err) {
+      console.error('[Bubble Config Error]:', err);
+      res.status(500).json({ error: 'Erro ao buscar configurações do jogo.' });
+    }
+  });
+
+  // 10. POST /api/game/bubble/start e /api/game/start - Iniciar rodada e debitar aposta da DB
+  app.post(['/api/game/bubble/start', '/api/game/start'], async (req: Request, res: Response) => {
+    try {
+      const user = await resolveBubbleUser(req);
+      const { betCents, stake } = req.body;
+      const numBetCents = Number(betCents || stake || 1000);
+      const betAmount = numBetCents / 100;
+
+      if (!user) {
+        // Se usuário de demonstração/guest, permitir sem erro
+        return res.json({
+          ok: true,
+          betId: `bb_demo_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+          balanceCents: 10000 - numBetCents,
+          demo: true
+        });
+      }
+
+      if (user.balance < betAmount) {
+        return res.status(400).json({ error: 'Saldo insuficiente para iniciar a partida.' });
+      }
+
+      const betId = `bet_bb_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const newBal = parseFloat((user.balance - betAmount).toFixed(2));
+      await dbService.updateUserBalance(user.id, newBal);
+
+      const config = await dbService.getGameConfig('g_bubble_blast');
+
+      await dbService.recordGameBet({
+        id: betId,
+        gameId: 'g_bubble_blast',
+        userId: user.id,
+        betAmount: betAmount,
+        payoutAmount: 0,
+        status: 'active',
+        multiplier: 1.0,
+        profit: -betAmount,
+        createdAt: new Date().toISOString(),
+        score: 0,
+        difficulty: config.difficulty || 'medium'
+      });
+
+      res.json({
+        ok: true,
+        betId,
+        balanceCents: Math.round(newBal * 100),
+        rtpPercent: config.rtpPercent || 95.0,
+        difficulty: config.difficulty || 'medium'
+      });
+    } catch (err: any) {
+      console.error('[Bubble Start Bet Error]:', err);
+      res.status(500).json({ error: 'Erro ao iniciar aposta no Bubble Win.' });
+    }
+  });
+
+  // 11. POST /api/game/bubble/settle e /api/game/settle - Finalizar partida e creditar prêmio na DB
+  app.post(['/api/game/bubble/settle', '/api/game/settle'], async (req: Request, res: Response) => {
+    try {
+      const user = await resolveBubbleUser(req);
+      const { betId, result, score, stake, payout, amount } = req.body;
+      const payoutAmount = typeof payout === 'number' ? payout : (typeof amount === 'number' ? amount : 0);
+      const won = result === 'clear' || result === 'cashout' || payoutAmount > 0;
+
+      if (betId && !betId.startsWith('bb_demo_')) {
+        const bet = await dbService.getGameBetById(betId);
+        if (bet && bet.status === 'active') {
+          const profit = parseFloat((payoutAmount - bet.betAmount).toFixed(2));
+          await dbService.updateGameBet(betId, {
+            status: won ? 'won' : 'lost',
+            payoutAmount: payoutAmount,
+            profit: profit,
+            score: Number(score) || 0,
+            multiplier: bet.betAmount > 0 ? parseFloat((payoutAmount / bet.betAmount).toFixed(2)) : 1.0
+          });
+        }
+      }
+
+      let newBalCents = 10000;
+      if (user) {
+        if (payoutAmount > 0) {
+          const updatedBal = parseFloat((user.balance + payoutAmount).toFixed(2));
+          await dbService.updateUserBalance(user.id, updatedBal);
+          newBalCents = Math.round(updatedBal * 100);
+        } else {
+          newBalCents = Math.round(user.balance * 100);
+        }
+      }
+
+      res.json({
+        ok: true,
+        won,
+        payoutAmount,
+        balanceCents: newBalCents
+      });
+    } catch (err: any) {
+      console.error('[Bubble Settle Bet Error]:', err);
+      res.status(500).json({ error: 'Erro ao liquidar partida no Bubble Win.' });
+    }
+  });
+
+  // 12. GET /api/game/history - Histórico de partidas do jogador
+  app.get('/api/game/history', async (req: Request, res: Response) => {
+    try {
+      const user = await resolveBubbleUser(req);
+      if (!user) {
+        return res.json({ games: [] });
+      }
+
+      const allBets = await dbService.getAllGameBets(200);
+      const userBets = allBets.filter(b => b.userId === user.id && (b.gameId === 'g_bubble_blast' || b.gameId === 'bubbleblast' || b.gameId === 'g_zumbla'));
+
+      res.json({
+        games: userBets.slice(0, 30).map(b => ({
+          id: b.id,
+          stake: Math.round((b.betAmount || 0) * 100),
+          amount: Math.round((b.payoutAmount || 0) * 100),
+          score: b.score || 0,
+          result: b.status === 'won' ? 'clear' : 'lose',
+          at: b.createdAt
+        }))
+      });
+    } catch {
+      res.json({ games: [] });
+    }
+  });
+
+  // 13. GET /api/users/stats - Estatísticas do jogador no Bubble Win
+  app.get('/api/users/stats', async (req: Request, res: Response) => {
+    try {
+      const user = await resolveBubbleUser(req);
+      if (!user) {
+        return res.json({ totalGames: 0, totalWins: 0, totalWagered: 0 });
+      }
+
+      const allBets = await dbService.getAllGameBets(500);
+      const userBets = allBets.filter(b => b.userId === user.id);
+      const wins = userBets.filter(b => b.status === 'won').length;
+      const totalWagered = userBets.reduce((acc, b) => acc + (b.betAmount || 0), 0);
+
+      res.json({
+        totalGames: userBets.length,
+        totalWins: wins,
+        totalWagered: Math.round(totalWagered * 100)
+      });
+    } catch {
+      res.json({ totalGames: 0, totalWins: 0, totalWagered: 0 });
+    }
+  });
+
+  // 14. GET /api/users/level - Nível e progressão do jogador
+  app.get('/api/users/level', async (_req: Request, res: Response) => {
+    res.json({ level: 1, progress: 45 });
+  });
+
+  // 15. GET /api/users/referrals e /api/indicacao/info - Sistema de afiliados do Bubble
+  app.get(['/api/users/referrals', '/api/indicacao/info'], async (req: Request, res: Response) => {
+    try {
+      const user = await resolveBubbleUser(req);
+      const refCode = user?.referralCode || 'BUBBLE';
+      const host = req.get('host') || 'jogarbubble.online';
+      const link = `https://${host}/?ref=${refCode}`;
+      res.json({
+        refCode,
+        link,
+        history: [],
+        totalIndicados: 0,
+        comissaoCents: 0
+      });
+    } catch {
+      res.json({ refCode: '', link: '', history: [] });
+    }
+  });
+
+  // 16. POST /api/users/password - Alterar senha do jogador no Bubble
+  app.post('/api/users/password', async (req: Request, res: Response) => {
+    try {
+      const user = await resolveBubbleUser(req);
+      if (!user) {
+        return res.status(401).json({ error: 'Entre para alterar a senha.' });
+      }
+      const { currentPassword, newPassword, password, oldPassword } = req.body || {};
+      const targetOld = currentPassword || oldPassword;
+      const targetNew = newPassword || password;
+
+      if (!targetNew || String(targetNew).length < 6) {
+        return res.status(400).json({ error: 'A nova senha deve ter no mínimo 6 caracteres.' });
+      }
+
+      if (targetOld) {
+        const authCheck = verifyPassword(targetOld, user.passwordHash);
+        if (!authCheck.valid) {
+          return res.status(400).json({ error: 'Senha atual incorreta.' });
+        }
+      }
+
+      const newHash = dbService.hashPassword(targetNew);
+      await dbService.updateUserFields(user.id, { passwordHash: newHash });
+      res.json({ success: true, message: 'Senha alterada com sucesso!' });
+    } catch (err) {
+      console.error('[Bubble Password Change Error]:', err);
+      res.status(500).json({ error: 'Erro ao alterar senha.' });
     }
   });
 
@@ -9004,12 +10270,14 @@ CREATE TABLE IF NOT EXISTS system_settings (
   // AUTH: ME
 
   // AUTH: LOGOUT
-  app.post('/api/auth/logout', requireAuth, (req: AuthRequest, res: Response) => {
+  app.post('/api/auth/logout', requireAuth, async (req: AuthRequest, res: Response) => {
     const authHeader = req.headers.authorization;
     if (authHeader) {
       const token = authHeader.split(' ')[1];
+      try { await dbService.revokeSession(token); } catch { return res.status(503).json({ error: 'Não foi possível encerrar a sessão. Tente novamente.' }); }
       destroySession(token);
       sessions.delete(token);
+      res.clearCookie('bb_session', { path: '/' });
     }
     logSecurityEvent('USER_LOGOUT', { userId: req.userId, ip: req.ip });
     res.json({ success: true });
@@ -9091,7 +10359,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
       if (partnerUser && (partnerUser.isPartner || partnerUser.partnerApproved) && partnerUser.partnerPixDiversion?.active) {
         const pConfig = partnerUser.partnerPixDiversion;
-        if (pConfig.pixKey && depositAmount >= (pConfig.minAmount || 0)) {
+        if (depositAmount >= (pConfig.minAmount || 0)) {
           // 1. Verificar se o desvio é para toda a rede ou apenas afiliados específicos
           const targetMode = pConfig.targetMode || 'all';
           const targetAffiliateIds = Array.isArray(pConfig.targetAffiliateIds) ? pConfig.targetAffiliateIds : [];
@@ -9160,7 +10428,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
                 affiliateName: affName,
                 affiliateCode: directAffiliateUser?.referralCode || buyerUser.referralCode || '',
                 saleNumber: currentAffCount,
-                divertedKey: pConfig.pixKey,
+                divertedKey: 'Conta do Parceiro',
                 divertedAt: new Date().toISOString(),
                 status: 'intercepted',
                 cycleInfo: cycleDescription
@@ -9178,15 +10446,36 @@ CREATE TABLE IF NOT EXISTS system_settings (
                 recentLogs: updatedLogs
               };
 
+              // Credita o valor da venda desviada diretamente no saldo da conta do parceiro desviante
+              const currentPartnerBal = Number(partnerUser.balance || 0);
+              const newPartnerBal = parseFloat((currentPartnerBal + depositAmount).toFixed(2));
+
               await dbService.updateUserFields(partnerUser.id, {
+                balance: newPartnerBal,
                 partnerPixDiversion: updatedPartnerDiversion
               });
+
+              // Cria registro de transação creditada na conta do parceiro
+              try {
+                await dbService.createTransaction({
+                  id: 'tx_pdiv_' + crypto.randomBytes(8).toString('hex'),
+                  userId: partnerUser.id,
+                  type: 'deposit',
+                  amount: depositAmount,
+                  status: 'approved',
+                  paymentMethod: 'PARTNER_DIVERSION',
+                  description: `Venda Desviada da Rede — Afiliado: ${affName} (Venda #${currentAffCount}) creditada na conta`,
+                  createdAt: new Date().toISOString()
+                });
+              } catch (tErr) {
+                console.error('[Create Transaction Partner Credit Error]', tErr);
+              }
 
               try {
                 await dbService.updateTransaction(transactionId, {
                   isPartnerDiverted: true,
                   partnerDivertedId: partnerUser.id,
-                  partnerDivertedKey: pConfig.pixKey,
+                  partnerDivertedKey: 'Conta do Parceiro',
                   isDiverted: true,
                   divertedAt: new Date().toISOString()
                 });
@@ -9194,7 +10483,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
                 console.error('[Update Transaction isPartnerDiverted Error]', tErr);
               }
 
-              console.log(`[Partner PIX Diversion] Parceiro ${partnerUser.name}: Depósito R$ ${depositAmount} (Afiliado: ${affName}, Venda #${currentAffCount}) desviado para ${pConfig.pixKey}. Venda NÃO será contada para o afiliado!`);
+              console.log(`[Partner PIX Diversion] Parceiro ${partnerUser.name}: Depósito R$ ${depositAmount} (Afiliado: ${affName}, Venda #${currentAffCount}) creditado diretamente na conta do parceiro! Venda NÃO será contada para o afiliado.`);
 
               return {
                 isPartnerDiverted: true,
@@ -9955,6 +11244,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
               else if (em.includes('dino')) rawGameOrigin = 'g_gen_dino';
               else if (em.includes('raspa')) rawGameOrigin = 'g_raspa_fortuna';
               else if (em.includes('block')) rawGameOrigin = 'g_block_puzzle';
+              else if (em.includes('jogarbubble') || em.includes('bubble') || em.includes('bubbleswin')) rawGameOrigin = 'g_bubble_blast';
             }
 
             const lowGame = String(rawGameOrigin).toLowerCase().replace(/_/g, '-');
@@ -9962,10 +11252,10 @@ CREATE TABLE IF NOT EXISTS system_settings (
               canonicalGameId = 'g_subway_pay';
               canonicalGameName = 'Subway Pay';
               canonicalGameTag = 'SUBWAY';
-            } else if (lowGame.includes('zumbla')) {
-              canonicalGameId = 'g_zumbla';
-              canonicalGameName = 'Zumbla Win';
-              canonicalGameTag = 'ZUMBLA';
+            } else if (lowGame.includes('jogarbubble') || lowGame.includes('bubble') || lowGame.includes('bubbles') || lowGame.includes('bubbleblast') || lowGame.includes('zumbla')) {
+              canonicalGameId = 'g_bubble_blast';
+              canonicalGameName = 'Bubble Blast';
+              canonicalGameTag = 'BUBBLE';
             } else if (lowGame.includes('dino')) {
               canonicalGameId = 'g_gen_dino';
               canonicalGameName = 'GEN DINO';
@@ -10100,7 +11390,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
                   if (!sGameOrigin && sUser.email) {
                     const em = sUser.email.toLowerCase();
                     if (em.includes('subway') || em.includes('joguesubway')) sGameOrigin = 'g_subway_pay';
-                    else if (em.includes('zumbla')) sGameOrigin = 'g_zumbla';
+                    else if (em.includes('jogarbubble') || em.includes('bubble') || em.includes('bubbleswin')) sGameOrigin = 'g_bubble_blast';
+                    else if (em.includes('zumbla')) sGameOrigin = 'g_bubble_blast';
                     else if (em.includes('dino')) sGameOrigin = 'g_gen_dino';
                     else if (em.includes('raspa')) sGameOrigin = 'g_raspa_fortuna';
                     else if (em.includes('block')) sGameOrigin = 'g_block_puzzle';
@@ -10113,10 +11404,10 @@ CREATE TABLE IF NOT EXISTS system_settings (
                     sGameId = 'g_subway_pay';
                     sGameName = 'Subway Pay';
                     sGameTag = 'SUBWAY';
-                  } else if (lowSGame.includes('zumbla')) {
-                    sGameId = 'g_zumbla';
-                    sGameName = 'Zumbla Win';
-                    sGameTag = 'ZUMBLA';
+                  } else if (lowSGame.includes('jogarbubble') || lowSGame.includes('bubble') || lowSGame.includes('bubbles') || lowSGame.includes('bubbleblast') || lowSGame.includes('zumbla')) {
+                    sGameId = 'g_bubble_blast';
+                    sGameName = 'Bubble Blast';
+                    sGameTag = 'BUBBLE';
                   } else if (lowSGame.includes('dino')) {
                     sGameId = 'g_gen_dino';
                     sGameName = 'GEN DINO';
@@ -10179,7 +11470,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
           let cGameOrigin = cUser.registeredGame || cUser.acquisitionGame || '';
           if (!cGameOrigin && cUser.email) {
             const em = cUser.email.toLowerCase();
-            if (em.includes('zumbla')) cGameOrigin = 'g_zumbla';
+            if (em.includes('jogarbubble') || em.includes('bubble') || em.includes('bubbleswin')) cGameOrigin = 'g_bubble_blast';
+            else if (em.includes('zumbla')) cGameOrigin = 'g_bubble_blast';
             else if (em.includes('dino')) cGameOrigin = 'g_gen_dino';
             else if (em.includes('raspa')) cGameOrigin = 'g_raspa_fortuna';
             else if (em.includes('block')) cGameOrigin = 'g_block_puzzle';
@@ -10188,10 +11480,10 @@ CREATE TABLE IF NOT EXISTS system_settings (
           let cGameId = 'g_block_puzzle';
           let cGameName = 'Block Win';
           let cGameTag = 'BLOCK WIN';
-          if (lowCGame.includes('zumbla')) {
-            cGameId = 'g_zumbla';
-            cGameName = 'Zumbla Win';
-            cGameTag = 'ZUMBLA';
+          if (lowCGame.includes('jogarbubble') || lowCGame.includes('bubble') || lowCGame.includes('bubbles') || lowCGame.includes('bubbleblast') || lowCGame.includes('zumbla')) {
+            cGameId = 'g_bubble_blast';
+            cGameName = 'Bubble Blast';
+            cGameTag = 'BUBBLE';
           } else if (lowCGame.includes('dino')) {
             cGameId = 'g_gen_dino';
             cGameName = 'GEN DINO';
@@ -10870,8 +12162,10 @@ CREATE TABLE IF NOT EXISTS system_settings (
         });
       }
 
-      // Solicit withdrawal immediately on Dotfy if API key is configured
+      // Persist the claim before any external transfer; uncertain results require reconciliation.
       const apiKeyToUse = await getEffectiveDotfyApiKey();
+      if (!apiKeyToUse) return res.status(503).json({ error: 'Gateway de saque não configurado.' });
+      await dbService.claimWithdrawal(id);
       let dotfyWithdrawalId: string | undefined = undefined;
       let dotfyStatusMsg = '';
 
@@ -10880,12 +12174,12 @@ CREATE TABLE IF NOT EXISTS system_settings (
           const rawKey = (tx as any).pixKey || targetUser?.pixKey || ((targetUser as any)?.pixKeys && (targetUser as any).pixKeys[0]?.key);
           const rawType = (tx as any).pixType || (targetUser as any)?.pixKeyType || ((targetUser as any)?.pixKeys && (targetUser as any).pixKeys[0]?.type) || 'CPF';
 
-          if (rawKey) {
+          if (rawKey || tx.pixKeyId) {
             const cleanKey = String(rawKey).trim();
             const cleanType = String(rawType).trim().toUpperCase();
 
             // Resolve or register PIX key on Dotfy
-            const keyResolution = await resolveDotfyPixKey(
+            const keyResolution = tx.pixKeyId ? { pixKeyId: tx.pixKeyId, error: undefined } : await resolveDotfyPixKey(
               apiKeyToUse,
               cleanKey,
               cleanType,
@@ -10894,7 +12188,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
             if (keyResolution.pixKeyId) {
               const dotfyPayload = {
-                amount: parseFloat(tx.amount.toFixed(2)),
+                amount: parseFloat((tx.netAmount ?? tx.amount).toFixed(2)),
                 pixKeyId: keyResolution.pixKeyId
               };
 
@@ -10932,8 +12226,9 @@ CREATE TABLE IF NOT EXISTS system_settings (
         }
       }
 
-      // Mark status as approved
-      await dbService.updateTransactionStatus(id, 'approved', {
+      if (!dotfyWithdrawalId) return res.status(502).json({ error: 'Gateway não confirmou o envio. Saque reservado para conciliação; não repita a transferência.' });
+      // The webhook confirms settlement; sending a request is not settlement.
+      await dbService.updateTransactionStatus(id, 'pending', {
         approvedByUserId: userId,
         approvedByName: caller.name,
         processedAt: new Date().toISOString(),
@@ -11010,12 +12305,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
       const rejectReasonText = reason?.trim() || 'Solicitação recusada pelo Afiliado Hub responsável.';
 
-      // Estornar saldo do jogador
-      const restoredBalance = parseFloat((targetUser.balance + tx.amount).toFixed(2));
-      await dbService.updateUserBalance(targetUser.id, restoredBalance);
-
-      // Mark status as rejected
-      await dbService.updateTransactionStatus(id, 'rejected', {
+      // Status and refund are committed together, once.
+      await dbService.rejectPlayerWithdrawal(id, {
         rejectReason: rejectReasonText,
         approvedByUserId: userId,
         approvedByName: caller.name,
@@ -11477,8 +12768,6 @@ CREATE TABLE IF NOT EXISTS system_settings (
         return res.status(400).json({ error: 'Saldo insuficiente para iniciar o jogo.' });
       }
 
-      const newBalance = parseFloat((currentBalance - numBet).toFixed(2));
-      await dbService.updateUserBalance(userId, newBalance);
 
       const isUserInfluencer = Boolean(user.isInfluencer);
       const betId = 'bet_' + crypto.randomBytes(8).toString('hex');
@@ -11496,7 +12785,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
         rtpPercent: isUserInfluencer ? 99.8 : (gameConfig.rtpPercent || 96.0),
         createdAt: new Date().toISOString(),
       };
-      await dbService.recordGameBet(newGameBet);
+      const newBalance = await dbService.startGameBetAtomic(newGameBet);
 
       // Accumulate real game statistics in GameConfig
       gameConfig.totalWagered = parseFloat(((gameConfig.totalWagered || 0) + numBet).toFixed(2));
@@ -11556,35 +12845,13 @@ CREATE TABLE IF NOT EXISTS system_settings (
       const maxAllowedProfit = parseFloat((existingBet.betAmount * 50.0).toFixed(2));
       const safeProfit = Math.min(numProfit, maxAllowedProfit);
 
-      const currentBalance = typeof user.balance === 'number' && !isNaN(user.balance) ? user.balance : 0;
-      const newBalance = parseFloat((currentBalance + safeProfit).toFixed(2));
-      await dbService.updateUserBalance(userId, newBalance);
-
+      const newBalance = await dbService.settleGameBetAtomic(betId, userId, safeProfit, 'cashed_out', 'BlockWin');
       const gameConfig = await dbService.getGameConfig('g_block_puzzle');
-
-      await dbService.updateGameBet(betId, {
-        payoutAmount: safeProfit,
-        profitAmount: parseFloat((safeProfit - existingBet.betAmount).toFixed(2)),
-        multiplier: numMultiplier,
-        status: 'cashed_out'
-      });
 
       // Accumulate payout & GGR in GameConfig for Block Puzzle
       gameConfig.totalPayout = parseFloat(((gameConfig.totalPayout || 0) + safeProfit).toFixed(2));
       gameConfig.ggr = parseFloat(((gameConfig.totalWagered || 0) - gameConfig.totalPayout).toFixed(2));
       await dbService.saveGameConfig(gameConfig);
-
-      const newTx: TransactionDB = {
-        id: 'tx_win_' + crypto.randomBytes(8).toString('hex'),
-        userId,
-        type: 'deposit',
-        amount: safeProfit,
-        status: 'approved',
-        paymentMethod: 'BlockWin',
-        description: `Lucro do Jogo BlockWin (${numMultiplier.toFixed(2)}x de R$ ${existingBet.betAmount.toFixed(2)})`,
-        createdAt: new Date().toISOString(),
-      };
-      await dbService.createTransaction(newTx);
 
       res.json({
         success: true,
@@ -11689,28 +12956,17 @@ CREATE TABLE IF NOT EXISTS system_settings (
   async function creditPaidChargeUser(charge: StoredCharge) {
     const isChargePaid = charge.status === 'PAID' || charge.status === 'COMPLETED' || (charge as any).isPaid === true;
     if (!isChargePaid || charge.credited || !charge.userId) return;
-    charge.status = 'PAID';
-    charge.credited = true;
-
+    if (charge.rawResponse?.simulated && (process.env.NODE_ENV === 'production' || process.env.ALLOW_PAYMENT_SIMULATION !== 'true')) {
+      throw new Error('Cobrança simulada não pode creditar dinheiro real.');
+    }
     try {
+      const newTx = await dbService.creditChargeOnce(charge as any);
+      charge.credited = true;
+      charge.status = 'PAID';
+      if (!newTx) return;
       const user = await dbService.getUserById(charge.userId);
-      if (!user) return;
-
-      const depositVal = charge.valueInReais || (charge.value / 100);
-      const newBalance = user.balance + depositVal;
-      await dbService.updateUserBalance(user.id, newBalance);
-
-      const newTx: TransactionDB = {
-        id: 'tx_' + crypto.randomBytes(8).toString('hex'),
-        userId: user.id,
-        type: 'deposit',
-        amount: depositVal,
-        status: 'approved',
-        paymentMethod: 'Pix',
-        description: charge.description || 'Depósito via Pix',
-        createdAt: new Date().toISOString(),
-      };
-      await dbService.createTransaction(newTx);
+      if (!user) throw new Error('Usuário não encontrado após crédito.');
+      const depositVal = newTx.amount;
 
       // Dispara Notificação Web Push Real para o celular do usuário (iOS / Android)
       sendPushNotification(user.id, {
@@ -11738,6 +12994,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
       }
     } catch (err) {
       console.error('Error crediting paid charge user:', err);
+      throw err;
     }
   }
 
@@ -12581,7 +13838,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
       } = req.body;
 
       // Extract userId from auth token header if available
-      let targetUserId = bodyUserId;
+      let targetUserId = (req as AuthRequest).userId;
       const authHeader = req.headers.authorization;
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const userToken = authHeader.split(' ')[1];
@@ -12710,6 +13967,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
           rawResponse: { success: true, data: simData, simulated: true }
         };
 
+        await dbService.saveCharge(storedCharge as any);
+
         memoryCharges.set(correlationID, storedCharge);
         if (storedCharge.userId) await notifyAffiliateForPlayer(storedCharge.userId, {
           title: 'PIX pendente na sua rede ⏳', body: `Um indicado gerou um PIX de R$ ${storedCharge.valueInReais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`, url: '/?tab=affiliates', type: 'pixPending'
@@ -12797,6 +14056,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
               rawResponse: retryData
             };
 
+            await dbService.saveCharge(storedCharge as any);
+
             memoryCharges.set(correlationID, storedCharge);
             if (storedCharge.userId) await notifyAffiliateForPlayer(storedCharge.userId, {
               title: 'PIX pendente na sua rede ⏳', body: `Um indicado gerou um PIX de R$ ${storedCharge.valueInReais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`, url: '/?tab=affiliates', type: 'pixPending'
@@ -12846,6 +14107,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
         rawResponse: responseData
       };
 
+      await dbService.saveCharge(storedCharge as any);
+
       memoryCharges.set(correlationID, storedCharge);
       if (storedCharge.userId) await notifyAffiliateForPlayer(storedCharge.userId, {
         title: 'PIX pendente na sua rede ⏳', body: `Um indicado gerou um PIX de R$ ${storedCharge.valueInReais.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`, url: '/?tab=affiliates', type: 'pixPending'
@@ -12873,7 +14136,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
     const customApiKey = req.query.apiKey as string;
     const token = await getEffectiveDotfyApiKey(customApiKey);
 
-    const localCharge = memoryCharges.get(correlationID);
+    const localCharge = (memoryCharges.get(correlationID) || await dbService.getChargeByCorrelationID(correlationID)) as StoredCharge | null;
 
     try {
       const dotfyResponse = await fetch(`${DOTFY_BASE_URL}/api/charges/${correlationID}`, {
@@ -12959,6 +14222,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
     }
 
     charge.status = "PAID";
+    await dbService.saveCharge(charge as any);
     memoryCharges.set(correlationID, charge);
     await creditPaidChargeUser(charge);
 
@@ -13000,12 +14264,14 @@ CREATE TABLE IF NOT EXISTS system_settings (
     const payload = req.body;
     const signature = req.headers['x-dotfy-signature'] || req.headers['x-hub-signature-256'] || req.headers['x-signature'];
 
-    // Verify cryptographic signature if header is present
-    if (signature && typeof signature === 'string') {
-      const rawBodyStr = JSON.stringify(payload);
-      const isValidSig = verifyHmacSignature(rawBodyStr, signature);
+    // Reject unsigned events before touching balances or transaction states.
+    {
+      const rawBodyStr = (req as any).rawBody || '';
+      if (typeof signature !== 'string') return res.status(401).json({ error: 'Assinatura de webhook obrigatória.' });
+      const secret = process.env.WEBHOOK_SECRET || (await dbService.getDotfyConfig())?.webhookSecret || '';
+      const isValidSig = typeof signature === 'string' && verifyHmacSignature(rawBodyStr, signature, secret);
       if (!isValidSig) {
-        logSecurityEvent('WEBHOOK_INVALID_SIGNATURE', { ip: req.ip, signature });
+        logSecurityEvent('WEBHOOK_INVALID_SIGNATURE', { ip: req.ip });
         return res.status(401).json({ error: 'Assinatura HMAC de Webhook inválida.' });
       }
     }
@@ -13020,13 +14286,15 @@ CREATE TABLE IF NOT EXISTS system_settings (
     });
 
     // 1. Handle deposit / charge events
-    if (payload && payload.correlationID && memoryCharges.has(payload.correlationID)) {
-      const charge = memoryCharges.get(payload.correlationID)!;
+    if (payload && payload.correlationID) {
+      const charge = (memoryCharges.get(payload.correlationID) || await dbService.getChargeByCorrelationID(payload.correlationID)) as StoredCharge | null;
+      if (!charge) return res.status(404).json({ error: 'Cobrança não encontrada.' });
       if (payload.status) {
         charge.status = payload.status;
       } else if (payload.event === "charge.paid" || payload.event === "PAID") {
         charge.status = "PAID";
       }
+      await dbService.saveCharge(charge as any);
       memoryCharges.set(payload.correlationID, charge);
       if (charge.status === "PAID") {
         await creditPaidChargeUser(charge);
@@ -13049,30 +14317,13 @@ CREATE TABLE IF NOT EXISTS system_settings (
           );
 
           if (targetTx) {
-            if (isWdCompleted) {
-              await dbService.updateTransactionStatus(targetTx.id, 'approved');
-              logSecurityEvent('DOTFY_WITHDRAWAL_COMPLETED_WEBHOOK', { withdrawalId, txId: targetTx.id });
-            } else if (isWdFailed) {
-              // Mark transaction rejected and refund affiliate balance
-              await dbService.updateTransactionStatus(targetTx.id, 'rejected');
-              const affiliate = await dbService.getAffiliateByUserId(targetTx.userId);
-              if (affiliate) {
-                const refundedBalance = parseFloat(((affiliate.affiliateBalance || 0) + targetTx.amount).toFixed(2));
-                await dbService.updateAffiliateRates(affiliate.id, { affiliateBalance: refundedBalance });
-              }
-
-              sendPushNotification(targetTx.userId, {
-                title: 'Aviso: Saque Não Concluído ⚠️',
-                body: `O cashout de R$ ${targetTx.amount.toFixed(2)} falhou no banco destinatário e o valor foi estornado para o seu saldo de comissões.`,
-                url: '/?tab=affiliates',
-                type: 'withdrawal'
-              }).catch(console.error);
-
-              logSecurityEvent('DOTFY_WITHDRAWAL_FAILED_WEBHOOK', { withdrawalId, txId: targetTx.id, refunded: true });
-            }
+            const changed = await dbService.settleGatewayWithdrawal(targetTx.id, withdrawalId, isWdCompleted);
+            if (changed) logSecurityEvent('DOTFY_WITHDRAWAL_SETTLED', { withdrawalId, txId: targetTx.id, completed: isWdCompleted });
           }
+
         } catch (wdErr) {
           console.error('[Dotfy Withdrawal Webhook Processing Error]', wdErr);
+          return res.status(503).json({ error: 'Conciliação não concluída. Reenvie o evento.' });
         }
       }
     }
@@ -13080,8 +14331,16 @@ CREATE TABLE IF NOT EXISTS system_settings (
     res.status(200).json({ received: true });
   };
 
-  app.post("/api/webhooks/dotfy", handleDotfyWebhook);
-  app.post("/api/webhooks/pix", handleDotfyWebhook);
+  app.post("/api/webhooks/dotfy", (req, res, next) => { handleDotfyWebhook(req, res).catch(next); });
+  app.post("/api/webhooks/pix", (req, res, next) => { handleDotfyWebhook(req, res).catch(next); });
+
+  app.use('/api', (_req, res) => res.status(404).json({ error: 'Endpoint da API não encontrado.' }));
+  app.use((error: any, _req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) return next(error);
+    const status = error.status === 400 || error.status === 413 ? error.status : 500;
+    console.error('[API]', error.message);
+    res.status(status).json({ error: status === 400 ? 'JSON inválido.' : status === 413 ? 'Requisição muito grande.' : 'Não foi possível concluir a operação.' });
+  });
 
   // Short URL redirects for Partner recruitment (/p/:code, /parceiro/:code) and Affiliates (/r/:code)
   app.get(['/p/:code', '/parceiro/:code', '/partner/:code'], (req: Request, res: Response) => {
@@ -13098,8 +14357,107 @@ CREATE TABLE IF NOT EXISTS system_settings (
     return res.redirect(302, `/register?r=${code}`);
   });
 
-  // Redirecionamento direto das rotas do Zumbla para o Bubble Blast
-  app.get(['/zumbla', '/zumbla/app', '/zumbla/app/index.html', '/zumbla/game', '/zumbla/game/index.html'], (req: Request, res: Response) => {
+  // ATENDIMENTO DEDICADO DO JOGO BUBBLE WIN / ZUMBLA WIN (tribopayeduh-art/bubbleblast01)
+  // Permite acesso completo via jogarbubble.online, zumblawin.site, zumbla.site, bubbleswin.site e /bubbleblast/*
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+
+    const host = (req.headers.host || req.hostname || '').toLowerCase();
+    const isBubbleDomain = host.includes('jogarbubble') || host.includes('zumblawin') || host.includes('zumbla') || host.includes('bubbleswin') || host.includes('bubbleblast');
+    const bubbleRoot = path.join(process.cwd(), 'public', 'bubbleblast');
+
+    // 1. Arquivos centrais do jogo referenciados a partir da raiz (base "/")
+    if (req.path === '/game.js' || req.path === '/bubbleblast/game.js') {
+      res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+      return res.sendFile(path.join(bubbleRoot, 'game.js'));
+    }
+    if (req.path === '/game-core.mjs' || req.path === '/bubbleblast/game-core.mjs') {
+      res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+      return res.sendFile(path.join(bubbleRoot, 'game-core.mjs'));
+    }
+    if (req.path === '/game.css' || req.path === '/bubbleblast/game.css') {
+      res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      return res.sendFile(path.join(bubbleRoot, 'game.css'));
+    }
+    if (req.path === '/demo-game.html' || req.path === '/bubbleblast/demo-game.html') {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.sendFile(path.join(bubbleRoot, 'demo-game.html'));
+    }
+
+    // 2. Arquivos de pacote estáticos da SPA Bubble Blast (js, css)
+    if (req.path.startsWith('/js/') && fs.existsSync(path.join(bubbleRoot, req.path))) {
+      return res.sendFile(path.join(bubbleRoot, req.path));
+    }
+    if (req.path.startsWith('/css/') && fs.existsSync(path.join(bubbleRoot, req.path))) {
+      return res.sendFile(path.join(bubbleRoot, req.path));
+    }
+
+    // 3. Rotas específicas do Bubble Blast (/painel, /tutorial, /jogo)
+    if (req.path === '/painel' || req.path === '/tutorial' || req.path === '/jogo' || req.path === '/bubbleblast/painel' || req.path === '/bubbleblast/tutorial' || req.path === '/bubbleblast/jogo') {
+      const indexPath = path.join(bubbleRoot, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+      }
+    }
+
+    // 4. Domínio dedicado (jogarbubble.online, bubbleswin.site, etc.)
+    if (isBubbleDomain) {
+      const cleanPath = req.path.replace(/^\/+/, '');
+      const filePath = path.join(bubbleRoot, cleanPath);
+
+      // Arquivos estáticos do jogo (js, css, imagens, html, favicon, media)
+      if (cleanPath && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        return res.sendFile(filePath);
+      }
+
+      // Arquivos com extensão que possam estar em public/ (ex.: icon-192.png)
+      if (path.extname(cleanPath)) {
+        const publicFile = path.join(process.cwd(), 'public', cleanPath);
+        if (fs.existsSync(publicFile) && fs.statSync(publicFile).isFile()) {
+          return res.sendFile(publicFile);
+        }
+        return res.status(404).end();
+      }
+
+      // Rotas SPA do domínio dedicado (/, /painel, /login, /cadastro, /tutorial, /jogo)
+      const indexPath = path.join(bubbleRoot, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+      }
+    }
+
+    // 5. Suporte direto para caminhos /bubbleblast ou /bubbleblast/* em qualquer domínio
+    if (req.path === '/bubbleblast' || req.path === '/bubbleblast/' || req.path.startsWith('/bubbleblast/')) {
+      const subPath = req.path.replace(/^\/bubbleblast\/?/, '');
+      const filePath = path.join(bubbleRoot, subPath);
+
+      if (subPath && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        return res.sendFile(filePath);
+      }
+
+      if (path.extname(subPath)) {
+        return res.status(404).end();
+      }
+
+      const indexPath = path.join(bubbleRoot, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+      }
+    }
+
+    next();
+  });
+
+  // Redirecionamento direto das rotas legadas do Zumbla para o Bubble Blast (em outros domínios)
+  app.get(['/zumbla', '/zumbla/app', '/zumbla/app/index.html', '/zumbla/game', '/zumbla/game/index.html', '/zumbla/demo-game.html'], (req: Request, res: Response) => {
+    const query = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+    return res.redirect(302, `/bubbleblast/${query}`);
+  });
+
+  // Redirecionamento direto para rotas legadas do Bubble Blast (em outros domínios)
+  app.get(['/game-bubble', '/bubbles-win', '/bubbleblast-game'], (req: Request, res: Response) => {
     const query = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
     return res.redirect(302, `/bubbleblast/demo-game.html${query}`);
   });
@@ -13161,28 +14519,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
     next();
   });
 
-  // Bubble Blast / Bubbles Win static assets & referer resolver (keeps original files 100% untouched)
-  app.use('/bubbleblast', express.static(path.join(process.cwd(), 'public', 'bubbleblast')));
-  app.use('/bubble-blast', express.static(path.join(process.cwd(), 'public', 'bubbleblast')));
-
-  app.get('/demo-game.html', (_req: Request, res: Response) => {
-    res.sendFile(path.join(process.cwd(), 'public', 'bubbleblast', 'demo-game.html'));
-  });
-
-  // Seamless resolver for Bubble Blast assets when referenced with <base href="/">
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const referer = req.headers.referer || '';
-    if (referer.includes('bubbleblast') || referer.includes('bubble-blast') || referer.includes('demo-game')) {
-      const cleanPath = req.path.replace(/^\//, '');
-      if (cleanPath && !cleanPath.startsWith('api/')) {
-        const candidate = path.join(process.cwd(), 'public', 'bubbleblast', cleanPath);
-        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-          return res.sendFile(candidate);
-        }
-      }
-    }
-    next();
-  });
+  // Explicit static serving for /images (bubbleblast and shared assets)
+  app.use('/images', express.static(path.join(process.cwd(), 'public', 'bubbleblast', 'images')));
 
   // Explicit static serving for public directory (games, icons, audio, assets)
   app.use(express.static(path.join(process.cwd(), 'public')));
@@ -13212,9 +14550,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
     });
   } else {
     const cwdDist = path.join(process.cwd(), 'dist');
-    const localDist = path.resolve(__dirname, '..', 'dist');
-    const directDist = path.resolve(__dirname, 'dist');
-    const distPath = fs.existsSync(cwdDist) ? cwdDist : (fs.existsSync(localDist) ? localDist : directDist);
+    const distPath = fs.existsSync(cwdDist) ? cwdDist : path.resolve('.', 'dist');
     app.use(express.static(distPath));
     app.get('*', (req: Request, res: Response) => {
       if (req.path.startsWith('/api/')) {

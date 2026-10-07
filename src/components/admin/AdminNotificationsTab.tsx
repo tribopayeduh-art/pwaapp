@@ -6,7 +6,6 @@ import {
   Radio,
   ShieldCheck,
   CheckCircle2,
-  Sparkles,
   Volume2,
   ExternalLink,
   Loader2,
@@ -169,7 +168,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
       target: 'active_affiliates' as const
     },
     {
-      title: '⭐ Material VIP Liberado para Disparo',
+      title: 'Material VIP Liberado para Disparo',
       message: 'Novos criativos em alta definição e roteiros prontos de alta conversão disponíveis no seu painel.',
       target: 'influencers' as const
     }
@@ -505,7 +504,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                     }}
                     className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 text-slate-700 hover:text-amber-900 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <Award className="w-3.5 h-3.5 text-amber-500" />
                     <span>{item.title}</span>
                   </button>
                 ))}
@@ -767,7 +766,7 @@ export const AdminNotificationsTab: React.FC<AdminNotificationsTabProps> = ({
                 : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
             }`}
           >
-            <span>⭐ Influenciadores VIP</span>
+            <span>Influenciadores VIP</span>
             <span className="opacity-80 font-bold">
               ({affiliates.filter((a) => a.isInfluencer).length})
             </span>

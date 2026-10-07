@@ -15931,10 +15931,11 @@ var globalDifficulty="B1C2";
 				this.build(), this.model && (this.movable.reset(), this.attractable.reset(), this.body.velocity.reset(), this.body.movable = !1, this.active = !0)
 			}
 			onCollect() {
-				this.model && (this.game.stats.coins += 1, this.game.missions.addStat(1, "mission-pickup-coins"), this.game.sfx.play("pickup-coin", {
-					volume: .5,
-					rate: 1 + .05 * this.arc
-				}), this.game.hero.pop.play())
+				if (!this.model) return;
+				this.game.stats.coins += 1;
+				try { this.game.missions?.addStat?.(1, "mission-pickup-coins"); } catch (_) {}
+				try { this.game.sfx?.play?.("pickup-coin", { volume: .5, rate: 1 + .05 * this.arc }); } catch (_) {}
+				try { this.game.hero?.pop?.play?.(); } catch (_) {}
 			}
 			static hasNecessaryResources() {
 				return n.a.library.hasGeometry("currency_coin") && n.a.library.hasMap("halo")
@@ -32024,13 +32025,27 @@ var globalDifficulty="B1C2";
 			}
 			update() {
  if (this.game.state !== o.a.RUNNING || !this._built) return;
- if (this.multiplier.update(), this.updateCount += 1, 480 === this.updateCount && this.removeAllItemBoost(!0), this.updateCount % 4 > 0) return;
- const t=this.game.stats;
- this.distance.getText() <= t.score && this.distance.setText(t.score,6);
- const cashValue=window.SubwayBridge?.value(t.coins);
- this.coins.setText(Number.isFinite(cashValue)?cashValue.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):t.coins);
- this.multiplier.text="x"+Math.min(4,1+t.coins/100).toFixed(2).replace(/\.?0+$/,'');
- this.ranking && this.ranking.update();
+ if (!window.SubwayGame) window.SubwayGame = this.game;
+ if (!window.SubwayBridgeAttached && window.SubwayBridge?.attach) {
+   window.SubwayBridge.attach(this.game, () => this.game?.stats?.coins || 0);
+   window.SubwayBridgeAttached = true;
+ }
+ try { this.multiplier?.update?.(); } catch (_) {}
+ this.updateCount += 1;
+ if (480 === this.updateCount) { try { this.removeAllItemBoost(!0); } catch (_) {} }
+ if (this.updateCount % 4 > 0) return;
+ const t = this.game.stats;
+ try {
+   if (this.distance && typeof this.distance.setText === 'function') {
+     this.distance.getText() <= t.score && this.distance.setText(t.score, 6);
+   }
+ } catch (_) {}
+ try {
+   if (this.coins && typeof this.coins.setText === 'function') {
+     this.coins.setText(t.coins || 0);
+   }
+ } catch (_) {}
+ try { this.ranking && this.ranking.update(); } catch (_) {}
 }
 
 			reset() {
@@ -32040,6 +32055,9 @@ var globalDifficulty="B1C2";
 				this.paused && this.paused.close(), this.close(), this.message && (this.message.text = ""), this.updateCount = 1, this.removeAllItemBoost()
 			}
 			async run() {
+				window.SubwayGame = this.game;
+				window.SubwayBridge?.attach?.(this.game, () => this.game?.stats?.coins || 0);
+				window.SubwayBridgeAttached = true;
 				await Object(b.a)(.2), this.build(), this.boostGauge && this.boostGauge.lowlightAll(), this.ranking && this.ranking.clear(), this.updateCount = 1, this.distance.setText(this.game.stats.score, 6), this.open(), s.a.ui.mainLayer.addChild(this.view), s.a.ui.mainLayer.addChild(this.paused), this.message && (this.message.text = ""), this.paused.close(), s.a.user.boosts.consumables.headstart > 0 && this.addItemBoost(p.b.HEADSTART, !0), s.a.user.boosts.consumables.scoreBooster > 0 && this.addItemBoost(p.b.MULTIPLIER, !0), this.organizeBoosts(!1)
 			}
 			pause() {
@@ -32521,19 +32539,23 @@ gameover(){this.close();this.paused.close();window.SubwayBridge?.lose();}
 				})
 			}
 			progressMission(t) {
-				const e = t.params.amount,
-					i = t.id,
-					n = Math.min(this.data[i], e);
-				t.progress !== n && (t.progress = n, t.completed = t.progress === e, t.completed && (this.completedMissions++, this.showNotification(t.id, t.params.amount), this.onCompleteMission.dispatch(t.id), this.completedMissions === this.missionsToTrack.length && this.initMissionTracking()), o.a.user.progressMission(i, n, t.set))
+				try {
+					const e = t.params.amount,
+						i = t.id,
+						n = Math.min(this.data[i], e);
+					t.progress !== n && (t.progress = n, t.completed = t.progress === e, t.completed && (this.completedMissions++, this.showNotification(t.id, t.params.amount), this.onCompleteMission.dispatch(t.id), this.completedMissions === this.missionsToTrack.length && this.initMissionTracking()), o.a.user.progressMission(i, n, t.set))
+				} catch (_) {}
 			}
 			showNotification(t, e) {
-				o.a.notification.append({
-					text: n.b.translate("mission-complete") + "\n" + n.b.translate(t, {
-						amount: e
-					}),
-					icon: "mission-completed-checkmark.png",
-					height: 130
-				})
+				try {
+					o.a?.notification?.append?.({
+						text: (n.b?.translate?.("mission-complete") || "Missão concluída!") + "\n" + (n.b?.translate?.(t, {
+							amount: e
+						}) || ""),
+						icon: "mission-completed-checkmark.png",
+						height: 130
+					})
+				} catch (_) {}
 			}
 			processCoinsPickup() {
 				const t = this.game.hero;

@@ -205,10 +205,15 @@ export const ManageIndicatedModal: React.FC<ManageIndicatedModalProps> = ({
           let gIcon = '🧩';
           let gBadge = 'bg-cyan-50 border-cyan-200 text-cyan-900';
 
-          if (gid === 'g_zumbla') {
-            gName = 'Zumbla Win';
-            gTag = 'ZUMBLA';
-            gIcon = '🐸';
+          if (gid === 'g_bubble_blast' || gid === 'bubbleblast') {
+            gName = 'Bubble Blast';
+            gTag = 'BUBBLE';
+            gIcon = '🫧';
+            gBadge = 'bg-purple-50 border-purple-200 text-purple-900';
+          } else if (gid === 'g_subway_pay' || gid === 'subwaypay') {
+            gName = 'Subway Pay';
+            gTag = 'SUBWAY';
+            gIcon = '🏃';
             gBadge = 'bg-amber-50 border-amber-200 text-amber-900';
           } else if (gid === 'g_gen_dino') {
             gName = 'GEN DINO';

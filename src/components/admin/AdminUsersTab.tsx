@@ -24,7 +24,10 @@ import {
   Clock,
   ShieldAlert,
   ArrowUpRight,
-  CheckCircle2
+  CheckCircle2,
+  Download,
+  Phone,
+  FileSpreadsheet
 } from 'lucide-react';
 import { AdminUserItem } from './adminTypes';
 import {
@@ -35,6 +38,8 @@ import {
   IOSButton
 } from './IOSComponents';
 import { Pagination } from '../Pagination';
+import { AdminExportInfluencersModal } from './AdminExportInfluencersModal';
+import { isValidBrazilianPhone, healPhoneNumber } from '../../lib/phoneValidation';
 
 interface AdminUsersTabProps {
   users: AdminUserItem[];
@@ -59,17 +64,18 @@ interface AdminUsersTabProps {
   copiedText: string | null;
   onChangeUserGame?: (user: AdminUserItem, newGameId: string) => Promise<void>;
   onTogglePartner?: (user: AdminUserItem, approve: boolean) => Promise<void>;
+  onShowToast?: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 // Helper to determine game badge, name and style
 export const getGameInfo = (gameId?: string) => {
   const normalized = (gameId || '').toLowerCase().trim();
-  if (normalized.includes('zumbla')) {
+  if (normalized.includes('bubble')) {
     return {
-      name: 'Zumbla Win',
-      short: 'Zumbla',
-      emoji: '🐸',
-      badgeClass: 'bg-emerald-500/12 text-emerald-800 border-emerald-500/20'
+      name: 'Bubble Blast',
+      short: 'Bubble',
+      emoji: '🫧',
+      badgeClass: 'bg-purple-500/12 text-purple-800 border-purple-500/20'
     };
   }
   if (normalized.includes('dino') || normalized.includes('t-rex')) {
@@ -127,9 +133,31 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   copiedText,
   onChangeUserGame,
   onTogglePartner,
+  onShowToast,
 }) => {
   const [activeAdjustingId, setActiveAdjustingId] = useState<string | null>(null);
-  const [gameFilter, setGameFilter] = useState<'all' | 'zumbla' | 'block' | 'dino' | 'raspa' | 'subway'>('all');
+  const [gameFilter, setGameFilter] = useState<'all' | 'bubble' | 'block' | 'dino' | 'raspa' | 'subway'>('all');
+  const [exportModalOpen, setExportModalOpen] = useState<boolean>(false);
+  const [exportModalMode, setExportModalMode] = useState<'all' | 'valid'>('valid');
+
+  // Contagem de todos os influenciadores e de influenciadores com WhatsApp válido
+  const totalInfluencersCount = useMemo(() => {
+    return users.filter((u) => Boolean(u.isInfluencer)).length;
+  }, [users]);
+
+  const validInfluencersCount = useMemo(() => {
+    return users.filter((u) => Boolean(u.isInfluencer) && Boolean(healPhoneNumber(u.phone))).length;
+  }, [users]);
+
+  const handleExportAllInfluencers = () => {
+    setExportModalMode('all');
+    setExportModalOpen(true);
+  };
+
+  const handleExportValidInfluencers = () => {
+    setExportModalMode('valid');
+    setExportModalOpen(true);
+  };
 
   const handleQuickBalance = async (userItem: AdminUserItem, delta: number, isSetZero = false) => {
     setActiveAdjustingId(userItem.id);
@@ -223,10 +251,10 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       if (gameFilter !== 'all') {
         const gameId = (u.registeredGame || u.acquisitionGame || '').toLowerCase();
         if (gameFilter === 'subway' && !gameId.includes('subway') && !gameId.includes('runner')) return false;
-        if (gameFilter === 'zumbla' && !gameId.includes('zumbla')) return false;
+        if (gameFilter === 'bubble' && !gameId.includes('bubble')) return false;
         if (gameFilter === 'dino' && !gameId.includes('dino') && !gameId.includes('t-rex')) return false;
         if (gameFilter === 'raspa' && !gameId.includes('scratch') && !gameId.includes('raspa')) return false;
-        if (gameFilter === 'block' && (gameId.includes('subway') || gameId.includes('zumbla') || gameId.includes('dino') || gameId.includes('scratch') || gameId.includes('raspa'))) return false;
+        if (gameFilter === 'block' && (gameId.includes('subway') || gameId.includes('bubble') || gameId.includes('dino') || gameId.includes('scratch') || gameId.includes('raspa'))) return false;
       }
 
       // Query search
@@ -302,16 +330,38 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-black/[0.05] shadow-xs">
+        <div className="bg-white p-4 rounded-2xl border border-black/[0.05] shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-            <span>Parceiros Ativos</span>
+            <span>Parceiros & VIPs</span>
             <Crown className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-xl sm:text-2xl font-black text-amber-600 mt-1">
             {metrics.affiliatesCount}
           </div>
-          <div className="text-[11px] text-slate-500 font-medium mt-0.5">
-            {metrics.influencersCount} influenciadores VIP
+          <div className="flex items-center justify-between gap-1.5 mt-1">
+            <span className="text-[11px] text-slate-500 font-medium">
+              {validInfluencersCount} válidos c/ WhatsApp
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleExportAllInfluencers}
+                className="text-[10px] font-bold text-slate-600 hover:text-slate-900 hover:underline flex items-center gap-0.5 cursor-pointer"
+                title="Exportar todas as influenciadoras"
+              >
+                <span>Todas</span>
+              </button>
+              <span className="text-slate-300">•</span>
+              <button
+                type="button"
+                onClick={handleExportValidInfluencers}
+                className="text-[10px] font-bold text-amber-600 hover:text-amber-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                title="Exportar apenas influenciadoras com WhatsApp válido"
+              >
+                <Download className="w-2.5 h-2.5" />
+                <span>Válidas</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -348,12 +398,48 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
             />
           </div>
 
-          <div className="w-full lg:w-72">
-            <IOSSearchBar
-              value={searchQuery}
-              onChange={onSearchChange}
-              placeholder="Buscar por nome, email ou PIX..."
-            />
+          <div className="flex items-center gap-2 w-full lg:w-auto">
+            <div className="flex-1 lg:w-72">
+              <IOSSearchBar
+                value={searchQuery}
+                onChange={onSearchChange}
+                placeholder="Buscar por nome, email ou PIX..."
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap">
+              {/* Opção 1: Exportar TODAS as Influenciadoras */}
+              <IOSButton
+                variant="secondary"
+                size="sm"
+                onClick={handleExportAllInfluencers}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300 font-bold shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
+                title="Exportar todas as influenciadoras cadastradas"
+              >
+                <Users className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                <span className="hidden xl:inline">Exportar Todas</span>
+                <span className="xl:hidden">Todas</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-800 text-[10px] font-black">
+                  {totalInfluencersCount}
+                </span>
+              </IOSButton>
+
+              {/* Opção 2: Exportar Apenas Influenciadoras VÁLIDAS com WhatsApp */}
+              <IOSButton
+                variant="primary"
+                size="sm"
+                onClick={handleExportValidInfluencers}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
+                title="Exportar apenas influenciadoras com telefone válido ou auto-corrigido para WhatsApp"
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-200 shrink-0" />
+                <span className="hidden sm:inline">Exportar Válidas</span>
+                <span className="sm:hidden">Válidas</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500/30 text-white text-[10px] font-black border border-white/20">
+                  {validInfluencersCount}
+                </span>
+              </IOSButton>
+            </div>
           </div>
         </div>
 
@@ -375,14 +461,14 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setGameFilter('zumbla')}
+            onClick={() => setGameFilter('bubble')}
             className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
-              gameFilter === 'zumbla'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+              gameFilter === 'bubble'
+                ? 'bg-purple-600 text-white'
+                : 'bg-purple-50 text-purple-800 hover:bg-purple-100'
             }`}
           >
-            <span>🐸 Zumbla Win</span>
+            <span>🫧 Bubble Blast</span>
           </button>
           <button
             type="button"
@@ -491,8 +577,8 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                         >
                           <option value="g_subway_pay">🏃 Subway Pay</option>
                           <option value="g_block_puzzle">🧩 Block Win</option>
+                          <option value="g_bubble_blast">🫧 Bubble Blast</option>
                           <option value="g_gen_dino">🦖 Gen Dino</option>
-                          <option value="g_zumbla">🐸 Zumbla</option>
                           <option value="g_raspa_fortuna">🍀 Raspa</option>
                           <option value="alliance_hub">🏛️ Hub</option>
                         </select>
@@ -547,28 +633,41 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                       {user.isBlocked && <IOSBadge variant="red">Bloqueado</IOSBadge>}
                     </div>
 
-                    {/* Origin / Sponsor info */}
-                    <div className="text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 flex items-center justify-between">
-                      <span className="text-slate-400 font-medium">Patrocinador / Origem:</span>
-                      {user.referredBy ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onSelectSponsorFilter(
-                              user.referredBy?.referralCode || user.referredBy?.affiliateId || ''
-                            )
-                          }
-                          className="font-bold text-[#007AFF] hover:underline flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>{user.referredBy.sponsorName}</span>
-                          <span className="font-mono text-[10px] text-slate-400">
-                            ({user.referredBy.referralCode})
+                    {/* Origin / Sponsor / Partner info */}
+                    <div className="text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 font-medium">Patrocinador / Origem:</span>
+                        {user.referredBy ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onSelectSponsorFilter(
+                                user.referredBy?.referralCode || user.referredBy?.affiliateId || ''
+                              )
+                            }
+                            className="font-bold text-[#007AFF] hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>{user.referredBy.sponsorName}</span>
+                            <span className="font-mono text-[10px] text-slate-400">
+                              ({user.referredBy.referralCode})
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="font-medium text-emerald-700 flex items-center gap-1">
+                            <Globe className="w-3.5 h-3.5 text-emerald-600" /> Orgânico
                           </span>
-                        </button>
-                      ) : (
-                        <span className="font-medium text-emerald-700 flex items-center gap-1">
-                          <Globe className="w-3.5 h-3.5 text-emerald-600" /> Orgânico
-                        </span>
+                        )}
+                      </div>
+                      {(user.partnerName || user.partnerCode) && (
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 text-[11px]">
+                          <span className="text-slate-400 font-medium">Parceiro Responsável:</span>
+                          <span className="font-bold text-indigo-700 flex items-center gap-1">
+                            <span>🤝 {user.partnerName || `Código ${user.partnerCode}`}</span>
+                            {user.partnerCode && user.partnerName && (
+                              <span className="font-mono text-[10px] text-indigo-400">({user.partnerCode})</span>
+                            )}
+                          </span>
+                        </div>
                       )}
                     </div>
 
@@ -978,8 +1077,8 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                               >
                                 <option value="g_subway_pay">🏃 Subway Pay</option>
                                 <option value="g_block_puzzle">🧩 Block Win</option>
+                                <option value="g_bubble_blast">🫧 Bubble Blast</option>
                                 <option value="g_gen_dino">🦖 Gen Dino</option>
-                                <option value="g_zumbla">🐸 Zumbla Win</option>
                                 <option value="g_raspa_fortuna">🍀 Raspa Fortuna</option>
                                 <option value="alliance_hub">🏛️ Alliance Hub</option>
                               </select>
@@ -1019,6 +1118,13 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                               <div className="flex items-center gap-1 text-slate-400 text-[11px]">
                                 <Globe className="w-3.5 h-3.5 text-emerald-500" />
                                 <span className="font-medium text-emerald-700">Orgânico</span>
+                              </div>
+                            )}
+
+                            {(user.partnerName || user.partnerCode) && (
+                              <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/50 px-1.5 py-0.5 rounded truncate max-w-[130px]" title={`Parceiro: ${user.partnerName || user.partnerCode}`}>
+                                <span>🤝</span>
+                                <span className="truncate">{user.partnerName || user.partnerCode}</span>
                               </div>
                             )}
                           </div>
@@ -1390,6 +1496,21 @@ export const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
           </div>
         )}
       </IOSCard>
+
+      {/* Modal de Exportação de Influenciadoras e Influenciadores Válidos */}
+      <AdminExportInfluencersModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        users={users}
+        initialMode={exportModalMode}
+        onShowToast={(msg, type) => {
+          if (onShowToast) {
+            onShowToast(msg, type);
+          } else if (onCopyText && type === 'success') {
+            onCopyText(msg);
+          }
+        }}
+      />
     </div>
   );
 };

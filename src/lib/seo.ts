@@ -54,36 +54,6 @@ export const GAMES_SEO_DATA: Record<string, GameSEOMetadata> = {
     operatingSystem: 'Android, iOS, Web, Windows, macOS',
     applicationCategory: 'GameApplication',
   },
-  zumbla: {
-    id: 'zumbla',
-    name: 'Zumbla Win — Marble Shooter & Aventura na Selva',
-    shortName: 'Zumbla Win',
-    title: 'Zumbla Win | Jogo da Bolinha Mágica com Multiplicador x5.00',
-    description: 'Mire e dispare as esferas místicas na selva com Zumbla Win! Combine 3 ou mais bolinhas da mesma cor, faça combos épicos e multiplique em até 5x via PIX.',
-    keywords: [
-      'zumbla win',
-      'zumbla pay',
-      'jogo da bolinha',
-      'zuma online',
-      'marble shooter brasil',
-      'jogo da ra selva',
-      'jogar zumbla win',
-      'zumbla win pix',
-      'jogos de tiro de bolinha',
-      'arcade mobile'
-    ],
-    canonicalDomain: 'https://zumblapay.site',
-    canonicalPath: '/zumbla',
-    image: '/zumbla/banner-zumbla-win.webp',
-    favicon: '/zumbla/favicon.svg',
-    category: 'Arcade / Ação',
-    genre: ['ArcadeGame', 'ActionGame'],
-    multiplier: 'x5.00',
-    ratingValue: '4.8',
-    reviewCount: '2910',
-    operatingSystem: 'Android, iOS, Web, Windows, macOS',
-    applicationCategory: 'GameApplication',
-  },
   'gen-dino': {
     id: 'gen-dino',
     name: 'GEN DINO — Arcade Mobile Runner com Moedas Virtuais',
@@ -170,30 +140,35 @@ export const GAMES_SEO_DATA: Record<string, GameSEOMetadata> = {
     operatingSystem: 'Android, iOS, Web, Windows, macOS',
     applicationCategory: 'GameApplication',
   },
-  'bubble-blast': {
-    id: 'bubble-blast',
-    name: 'Bubble Blast — Jogo de Estourar Bolhas',
+  'bubbleblast': {
+    id: 'bubbleblast',
+    name: 'Bubble Blast — Estoure Bolhas e Ganhe PIX na Hora',
     shortName: 'Bubble Blast',
-    title: 'Bubble Blast | Jogo de Bolhas Online — Em Breve',
-    description: 'Novo jogo Bubble Blast! Mire, atire e combine as bolhas coloridas para estourar sequências épicas. Lançamento em breve com prêmios e PIX instantâneo.',
+    title: 'Bubble Blast | Jogo de Bolhas com Prêmios e PIX Instantâneo',
+    description: 'Mire, estoure bolhas da mesma cor e ganhe até 5x a sua entrada no Bubble Blast! Partidas rápidas com saque via PIX instantâneo.',
     keywords: [
+      'jogarbubble',
+      'jogarbubble.online',
       'bubble blast',
-      'bubble shooter',
-      'jogo das bolhas',
-      'estourar bolhas',
-      'bubble blast pix',
-      'jogar bubble blast online',
-      'jogos de bolha celular'
+      'bubble win',
+      'zumbla win',
+      'zumblawin',
+      'bubbles win',
+      'bubble shooter pix',
+      'jogo de bolhas apostas',
+      'bubble cash',
+      'estoure e ganhe',
+      'bubble blast oficial'
     ],
-    canonicalDomain: 'https://zumblapay.site',
+    canonicalDomain: 'https://jogarbubble.online',
     canonicalPath: '/bubbleblast',
-    image: '/Bubbleblast.png',
-    favicon: '/Bubbleblast.png',
-    category: 'Casual / Bubble Shooter',
-    genre: ['ArcadeGame', 'PuzzleGame'],
-    multiplier: 'Em Breve',
-    ratingValue: '5.0',
-    reviewCount: '120',
+    image: '/bubbleblast.png',
+    favicon: '/bubbleblast.png',
+    category: 'Casual / Arcade / Puzzle',
+    genre: ['ArcadeGame', 'CasualGame', 'PuzzleGame'],
+    multiplier: 'x5.00',
+    ratingValue: '4.9',
+    reviewCount: '1940',
     operatingSystem: 'Android, iOS, Web, Windows, macOS',
     applicationCategory: 'GameApplication',
   },
@@ -263,10 +238,11 @@ export function resolveGameSEOKey(rawKey: string | null | undefined): string {
   if (!rawKey) return 'alliance-hub';
   const clean = rawKey.trim().toLowerCase().replace(/_/g, '-');
   if (['partner', 'parceiro', 'p', 'portal-parceiro', 'painel-parceiro'].includes(clean)) return 'partner';
-  if (['bubble-blast', 'bubbleblast', 'bubble_blast', 'g-bubble-blast', 'g_bubble_blast', 'bubble', 'zumbla', 'zumbla-win', 'zumblapay', 'g-zumbla'].includes(clean)) return 'bubble-blast';
+  if (['blockwin', 'block-win', 'block-puzzle', 'g-block', 'g-block-puzzle', 'block'].includes(clean)) return 'blockwin';
   if (['gen-dino', 'gendino', 'dino', 'dinopay', 'dinoplay', 'dinipay', 'g-gen-dino'].includes(clean)) return 'gen-dino';
   if (['raspa-fortuna', 'raspafortuna', 'raspa', 'raspadinha', 'raspadinhaadasorte', 'g-raspa-fortuna'].includes(clean)) return 'raspa-fortuna';
   if (['subwaypay', 'subway-pay', 'subway_pay', 'subway', 'g-subway-pay', 'g_subway_pay', 'joguesubway', 'joguesubway.surf'].includes(clean)) return 'subwaypay';
+  if (['bubbleblast', 'bubble-blast', 'bubble_blast', 'bubbles', 'bubbles-win', 'bubble', 'jogarbubble', 'jogarbubble.online', 'g-bubble-blast', 'g_bubble_blast'].includes(clean)) return 'bubbleblast';
   return 'alliance-hub';
 }
 
@@ -356,6 +332,12 @@ export function generateGameSchema(data: GameSEOMetadata, origin: string): objec
               position: 4,
               name: 'Raspa Fortuna',
               url: 'https://raspadinhaadasorte.site/raspa-fortuna',
+            },
+            {
+              '@type': 'ListItem',
+              position: 5,
+              name: 'Bubble Blast',
+              url: 'https://jogarbubble.online',
             },
           ],
         },

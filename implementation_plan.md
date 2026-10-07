@@ -43,7 +43,7 @@ Fortalecimento abrangente da segurança do sistema: criptografia de dados sensí
 
 ### 2. Remoção de Chaves Hardcoded & Ocultação
 - Substituir a constante estática `DEFAULT_API_KEY` por resolução segura: variável de ambiente `DOTFY_API_KEY` -> cofre criptografado -> banco cifrado.
-- Remover a chave live `vk_live_0iTBP0DSt_865LGgyvH5kPmJ0CbtO4CPsy0xJvqm8tE` do arquivo `server.ts` e de `AdminVpsMigrationModal.tsx`.
+- Remover a chave live `[CHAVE REMOVIDA — CONFIGURAR VIA AMBIENTE]` do arquivo `server.ts` e de `AdminVpsMigrationModal.tsx`.
 - Gerar/proteger `VAPID_PRIVATE_KEY` sem chave estática hardcoded no repositório.
 
 ### 3. Criptografia em Repouso no Banco (`server/db.ts`)

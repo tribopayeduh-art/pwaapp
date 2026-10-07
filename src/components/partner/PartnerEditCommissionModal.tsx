@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Percent, TrendingUp, DollarSign, ShieldAlert, Sparkles, CheckCircle2, ArrowRight, Check } from 'lucide-react';
+import { X, Percent, TrendingUp, DollarSign, ShieldAlert, Info, CheckCircle2, ArrowRight, Check } from 'lucide-react';
 import { PartnerAffiliateStats } from '../../types';
 import {
   getPartnerCutFromAffiliateRevShare,
@@ -257,7 +257,7 @@ export const PartnerEditCommissionModal: React.FC<PartnerEditCommissionModalProp
         {/* Dynamic Rules Explanatory Box */}
         <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-amber-900 text-xs mb-5">
           <div className="flex items-start gap-2">
-            <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-1">
               <strong className="block font-bold">Dinâmica Oficial de Comissões:</strong>
               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] opacity-90">

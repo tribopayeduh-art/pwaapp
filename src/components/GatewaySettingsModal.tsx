@@ -16,7 +16,6 @@ import {
   Save,
   CheckCircle2,
   Layers,
-  Sparkles,
   RefreshCw,
   Sliders,
   DollarSign
@@ -668,7 +667,7 @@ export const GatewaySettingsModal: React.FC<GatewaySettingsModalProps> = ({
               <div className="p-3.5 bg-zinc-900 rounded-2xl border border-zinc-800 text-white space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <Zap className="w-3 h-3 text-amber-400" />
                     Prévia do Alerta ({notificationMode === 'simple' ? 'Modo Simples' : 'Modo Detalhado'})
                   </span>
                   <span className="text-[10px] text-zinc-400 font-mono">Agora</span>

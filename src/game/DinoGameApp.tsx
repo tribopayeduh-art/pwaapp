@@ -47,7 +47,7 @@ export const DinoGameApp: React.FC<DinoGameAppProps> = ({ onReturnToPortal }) =>
         sessionStorage.setItem('alliance_ref_code', cleanRef);
         localStorage.setItem('alliance_ref_code', cleanRef);
       } catch (e) {}
-      showToast(`✨ Bônus de Indicação ativado para o código: ${cleanRef}`, 'success');
+      showToast(`Bônus de Indicação ativado para o código: ${cleanRef}`, 'success');
     } else {
       try {
         const stored =

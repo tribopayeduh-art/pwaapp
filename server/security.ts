@@ -8,6 +8,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 function resolveJwtSecret(): string {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') throw new Error('JWT_SECRET é obrigatório em produção.');
 
   const secretFile = path.join(process.cwd(), '.jwt-secret.local');
   try {
@@ -54,8 +55,7 @@ export function encryptSensitiveData(plaintext: string): string {
     const tag = cipher.getAuthTag();
     return `enc:v1:${iv.toString('hex')}:${tag.toString('hex')}:${encrypted.toString('hex')}`;
   } catch (err) {
-    console.error('[security] Erro ao criptografar dado sensível:', err);
-    return plaintext;
+    throw new Error('Não foi possível proteger o segredo.');
   }
 }
 
@@ -126,30 +126,9 @@ function initializeSecureVault(): void {
   const vault = readSecureVault();
   let changed = false;
 
-  const currentLiveKey = 'vk_live_eF_56g4XhMTio2pKYFrEu4n3hXbFoGjmWVC0dDWFahY';
-
-  if (!vault.DOTFY_API_KEY || vault.DOTFY_API_KEY.includes('0iTBD0DSt')) {
-    if (process.env.DOTFY_API_KEY && process.env.DOTFY_API_KEY.trim()) {
-      vault.DOTFY_API_KEY = process.env.DOTFY_API_KEY.trim();
-      changed = true;
-    } else {
-      vault.DOTFY_API_KEY = currentLiveKey;
-      changed = true;
-    }
-  }
-
-  if (process.env.DOTFY_API_KEY && process.env.DOTFY_API_KEY.trim() && vault.DOTFY_API_KEY !== process.env.DOTFY_API_KEY.trim()) {
-    vault.DOTFY_API_KEY = process.env.DOTFY_API_KEY.trim();
-    changed = true;
-  }
-
-  const validVapidPub = 'BH07BG2lpiz1-VOW9lNJiln-PJiyLuTijSfbEX9sZ7As_XhBaq9_5Y8UriTszqWR-BXWoFdS5j2J-oUrfzKDPMs';
-  const validVapidPriv = 'BDq1vfnN63I2wUvzAoJxAD4BJrQnoepRVFJCi_uUs4Q';
-
-  if (!vault.VAPID_PUBLIC_KEY || !vault.VAPID_PRIVATE_KEY || vault.VAPID_PUBLIC_KEY.startsWith('BExySgr') || vault.VAPID_PUBLIC_KEY.length < 87) {
-    vault.VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || validVapidPub;
-    vault.VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || validVapidPriv;
-    changed = true;
+  for (const key of ['DOTFY_API_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY']) {
+    const value = process.env[key]?.trim();
+    if (value && vault[key] !== value) { vault[key] = value; changed = true; }
   }
 
   if (changed) {
@@ -287,15 +266,17 @@ export function createSession(userId: string, req?: Request): string {
   return token;
 }
 
+const revokedTokens = new Set<string>();
+
 export function getSession(token: string): SessionData | null {
-  if (!token) return null;
+  if (!token || revokedTokens.has(token)) return null;
 
   // 1. Check in-memory cache first
   const existing = activeSessions.get(token);
   const now = Date.now();
 
   if (existing) {
-    if (now - existing.lastActiveAt > SESSION_TTL_MS) {
+    if (now - existing.createdAt > SESSION_TTL_MS) {
       activeSessions.delete(token);
       return null;
     }
@@ -321,9 +302,9 @@ export function getSession(token: string): SessionData | null {
           const rand = parts.pop()!;
           const timeStr = parts.pop()!;
           const userId = parts.join('_');
-          const createdAt = parseInt(timeStr, 10) || now;
+          const createdAt = Number(timeStr);
 
-          if (now - createdAt <= SESSION_TTL_MS) {
+          if (Number.isFinite(createdAt) && createdAt > 0 && createdAt <= now && now - createdAt <= SESSION_TTL_MS) {
             const restoredSession: SessionData = {
               userId,
               createdAt,
@@ -339,29 +320,12 @@ export function getSession(token: string): SessionData | null {
     }
   }
 
-  // 3. Fallback for legacy user tokens (tok_usr_<userId>_...)
-  if (token.startsWith('tok_usr_')) {
-    const raw = token.replace('tok_usr_', '');
-    const parts = raw.split('_');
-    const candidateId = raw.startsWith('usr_')
-      ? (parts.length >= 2 ? `${parts[0]}_${parts[1]}` : raw)
-      : (parts.length >= 2 ? `usr_${parts[1]}` : `usr_${parts[0]}`);
-
-    const restoredSession: SessionData = {
-      userId: candidateId,
-      createdAt: now,
-      lastActiveAt: now,
-      ip: 'legacy',
-      userAgent: 'legacy'
-    };
-    activeSessions.set(token, restoredSession);
-    return restoredSession;
-  }
 
   return null;
 }
 
 export function destroySession(token: string): boolean {
+  revokedTokens.add(token);
   return activeSessions.delete(token);
 }
 
@@ -382,7 +346,7 @@ export function getActiveOnlineUserSessions(withinMs: number = 15 * 60 * 1000): 
 const sessionCleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const [token, session] of activeSessions.entries()) {
-    if (now - session.lastActiveAt > SESSION_TTL_MS) {
+    if (now - session.createdAt > SESSION_TTL_MS) {
       activeSessions.delete(token);
     }
   }
@@ -398,6 +362,13 @@ interface RateLimitRecord {
 
 const rateLimitMap = new Map<string, RateLimitRecord>();
 const failedLoginMap = new Map<string, { attempts: number; blockedUntil?: number }>();
+const rateCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimitMap) if (record.resetAt <= now) rateLimitMap.delete(key);
+  for (const [key, record] of failedLoginMap) if (record.blockedUntil && record.blockedUntil <= now) failedLoginMap.delete(key);
+}, 60_000);
+rateCleanup.unref();
+
 
 export function checkRateLimit(key: string, maxRequests: number, windowMs: number): { allowed: boolean; retryAfterSec: number } {
   const now = Date.now();
@@ -481,6 +452,9 @@ export function verifyHmacSignature(rawBody: string, signature: string, secret: 
 }
 
 // --- 5. AUDIT SECURITY LOGGER ---
+const recentSecurityEvents: Array<{ id: string; event: string; timestamp: string; actorId?: string }> = [];
+export function getRecentSecurityEvents() { return recentSecurityEvents.slice(); }
+
 export function logSecurityEvent(event: string, metadata: Record<string, any>) {
   const sanitizedMeta: Record<string, any> = {};
 
@@ -496,13 +470,17 @@ export function logSecurityEvent(event: string, metadata: Record<string, any>) {
     }
   }
 
+  recentSecurityEvents.unshift({ id: crypto.randomUUID(), event,
+    timestamp: new Date().toISOString(), actorId: typeof metadata.adminId === 'string' ? metadata.adminId : undefined });
+  if (recentSecurityEvents.length > 300) recentSecurityEvents.length = 300;
   console.log(`[AUDIT_LOG_SECURITY] [${new Date().toISOString()}] EVENT: ${event} | META: ${JSON.stringify(sanitizedMeta)}`);
 }
 
 // --- 6. EXPRESS SECURITY MIDDLEWARES ---
 export function securityHeadersMiddleware(_req: Request, res: Response, next: NextFunction) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  // Allow iFrame embedding for AI Studio preview environment
+  res.removeHeader('X-Frame-Options');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -597,6 +575,18 @@ export function isDisposableEmail(email: string): boolean {
   return DISPOSABLE_EMAIL_DOMAINS.has(domain);
 }
 
+export const VALID_BRAZILIAN_DDDS = new Set([
+  '11', '12', '13', '14', '15', '16', '17', '18', '19',
+  '21', '22', '24', '27', '28',
+  '31', '32', '33', '34', '35', '37', '38',
+  '41', '42', '43', '44', '45', '46', '47', '48', '49',
+  '51', '53', '54', '55',
+  '61', '62', '64', '63', '65', '66', '67', '68', '69',
+  '71', '73', '74', '75', '77', '79',
+  '81', '82', '83', '84', '85', '86', '87', '88', '89',
+  '91', '92', '93', '94', '95', '96', '97', '98', '99'
+]);
+
 /**
  * Normaliza números de telefone removendo pontuação, DDI e caracteres especiais.
  */
@@ -608,6 +598,322 @@ export function normalizePhoneNumber(phone: string): string {
     return digits.substring(2);
   }
   return digits;
+}
+
+export function isCellPhone11Digits(digits: string): boolean {
+  if (!digits || digits.length !== 11) return false;
+  const ddd = digits.substring(0, 2);
+  if (!VALID_BRAZILIAN_DDDS.has(ddd)) return false;
+  if (digits.charAt(2) !== '9') return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+  return true;
+}
+
+export function isValidBrazilianPhone(phone: string | null | undefined): boolean {
+  if (!phone || typeof phone !== 'string') return false;
+  const digits = normalizePhoneNumber(phone);
+  if (isCellPhone11Digits(digits)) return true;
+  if (digits.length === 10) {
+    const ddd = digits.substring(0, 2);
+    if (!VALID_BRAZILIAN_DDDS.has(ddd)) return false;
+    if (!['2', '3', '4', '5'].includes(digits.charAt(2))) return false;
+    if (/^(\d)\1+$/.test(digits)) return false;
+    return true;
+  }
+  return false;
+}
+
+export function formatPhoneDisplay(phone: string | null | undefined): string {
+  if (!phone) return 'Não informado';
+  const digits = normalizePhoneNumber(phone);
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return phone;
+}
+
+// Códigos de Seleção de Prestadora (CSP / operadoras do Brasil)
+const BRAZILIAN_CARRIER_CODES = ['12', '14', '15', '21', '23', '25', '31', '41', '43'];
+
+export function healPhoneNumber(rawPhone: string | null | undefined): {
+  isValid: boolean;
+  wasRepaired: boolean;
+  rawPhone: string;
+  healedPhone: string;
+  formattedPhone: string;
+  whatsappNumber: string;
+  whatsappLink: string;
+  method: string;
+  label: string;
+} | null {
+  if (!rawPhone || typeof rawPhone !== 'string') return null;
+  const trimmed = rawPhone.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    lower === '' ||
+    lower.includes('não informado') ||
+    lower.includes('nao informado') ||
+    lower === '0' ||
+    lower === 'null' ||
+    lower === 'undefined' ||
+    lower.includes('teste')
+  ) {
+    return null;
+  }
+
+  const digits = rawPhone.replace(/\D/g, '');
+  if (!digits || digits.length < 8) return null;
+
+  if (isCellPhone11Digits(digits)) {
+    return {
+      isValid: true,
+      wasRepaired: false,
+      rawPhone: trimmed,
+      healedPhone: digits,
+      formattedPhone: formatPhoneDisplay(digits),
+      whatsappNumber: `55${digits}`,
+      whatsappLink: `https://wa.me/55${digits}`,
+      method: 'original',
+      label: 'WhatsApp Válido ✅'
+    };
+  }
+
+  // Lista de candidatos gerados por limpeza de prefixos (DDI 55, zeros, CSP)
+  const candidateVariants: Array<{ digits: string; origin: string; label: string }> = [];
+
+  let cleaned = digits;
+  if (cleaned.startsWith('0055')) cleaned = cleaned.substring(4);
+  else if (cleaned.startsWith('55') && cleaned.length >= 12) cleaned = cleaned.substring(2);
+  cleaned = cleaned.replace(/^0+/, '');
+
+  if (cleaned !== digits) {
+    candidateVariants.push({
+      digits: cleaned,
+      origin: 'strip_prefix',
+      label: 'Prefixo 0/55 Removido ✂️'
+    });
+  }
+
+  // Limpeza de Códigos de Operadora (CSP: 015, 021, etc.)
+  for (const csp of BRAZILIAN_CARRIER_CODES) {
+    if (cleaned.startsWith(csp) && cleaned.length >= 12) {
+      const withoutCSP = cleaned.substring(csp.length);
+      const possibleDDD = withoutCSP.substring(0, 2);
+      if (VALID_BRAZILIAN_DDDS.has(possibleDDD)) {
+        candidateVariants.push({
+          digits: withoutCSP,
+          origin: 'strip_carrier',
+          label: `Código Operadora (${csp}) Removido ✂️`
+        });
+      }
+    }
+  }
+
+  candidateVariants.push({
+    digits,
+    origin: 'strip_prefix',
+    label: 'Prefixo 0/55 Removido ✂️'
+  });
+
+  // Teste 1: Versões limpas com 11 dígitos válidos
+  for (const cand of candidateVariants) {
+    if (isCellPhone11Digits(cand.digits)) {
+      return {
+        isValid: true,
+        wasRepaired: true,
+        rawPhone: trimmed,
+        healedPhone: cand.digits,
+        formattedPhone: formatPhoneDisplay(cand.digits),
+        whatsappNumber: `55${cand.digits}`,
+        whatsappLink: `https://wa.me/55${cand.digits}`,
+        method: cand.origin,
+        label: cand.label
+      };
+    }
+  }
+
+  // Teste 2: ACRESCENTAR UM 9 (+9) para 10 dígitos (DDD + 8 dígitos)
+  for (const cand of candidateVariants) {
+    if (cand.digits.length === 10) {
+      const ddd = cand.digits.substring(0, 2);
+      if (VALID_BRAZILIAN_DDDS.has(ddd)) {
+        const with9 = ddd + '9' + cand.digits.substring(2);
+        if (isCellPhone11Digits(with9)) {
+          return {
+            isValid: true,
+            wasRepaired: true,
+            rawPhone: trimmed,
+            healedPhone: with9,
+            formattedPhone: formatPhoneDisplay(with9),
+            whatsappNumber: `55${with9}`,
+            whatsappLink: `https://wa.me/55${with9}`,
+            method: 'add_9',
+            label: '9º Dígito Adicionado (+9) ⚡'
+          };
+        }
+      }
+    }
+  }
+
+  // Teste 3: TIRAR UM 9 (-9)
+  for (const cand of candidateVariants) {
+    if (cand.digits.length === 12) {
+      const ddd = cand.digits.substring(0, 2);
+      if (VALID_BRAZILIAN_DDDS.has(ddd)) {
+        // 9 duplicado após DDD
+        if (cand.digits.substring(2, 4) === '99') {
+          const withoutExtra9 = ddd + '9' + cand.digits.substring(4);
+          if (isCellPhone11Digits(withoutExtra9)) {
+            return {
+              isValid: true,
+              wasRepaired: true,
+              rawPhone: trimmed,
+              healedPhone: withoutExtra9,
+              formattedPhone: formatPhoneDisplay(withoutExtra9),
+              whatsappNumber: `55${withoutExtra9}`,
+              whatsappLink: `https://wa.me/55${withoutExtra9}`,
+              method: 'remove_9',
+              label: '9 Duplicado Removido (-9) ✂️'
+            };
+          }
+        }
+        // 9 final excedente
+        if (cand.digits.endsWith('9')) {
+          const trimmedTrailing9 = cand.digits.substring(0, 11);
+          if (isCellPhone11Digits(trimmedTrailing9)) {
+            return {
+              isValid: true,
+              wasRepaired: true,
+              rawPhone: trimmed,
+              healedPhone: trimmedTrailing9,
+              formattedPhone: formatPhoneDisplay(trimmedTrailing9),
+              whatsappNumber: `55${trimmedTrailing9}`,
+              whatsappLink: `https://wa.me/55${trimmedTrailing9}`,
+              method: 'remove_9',
+              label: '9 Final Extra Removido (-9) ✂️'
+            };
+          }
+        }
+      }
+
+      // 9 digitado antes do DDD
+      if (cand.digits.startsWith('9')) {
+        const withoutLeading9 = cand.digits.substring(1);
+        if (isCellPhone11Digits(withoutLeading9)) {
+          return {
+            isValid: true,
+            wasRepaired: true,
+            rawPhone: trimmed,
+            healedPhone: withoutLeading9,
+            formattedPhone: formatPhoneDisplay(withoutLeading9),
+            whatsappNumber: `55${withoutLeading9}`,
+            whatsappLink: `https://wa.me/55${withoutLeading9}`,
+            method: 'remove_leading_9',
+            label: '9 Inicial Removido (-9) ✂️'
+          };
+        }
+      }
+    }
+  }
+
+  // Teste 4: REMOVER DÍGITO EXTRA NO FINAL (12 ou 13 dígitos)
+  for (const cand of candidateVariants) {
+    if (cand.digits.length === 12) {
+      const trimmed11 = cand.digits.substring(0, 11);
+      if (isCellPhone11Digits(trimmed11)) {
+        return {
+          isValid: true,
+          wasRepaired: true,
+          rawPhone: trimmed,
+          healedPhone: trimmed11,
+          formattedPhone: formatPhoneDisplay(trimmed11),
+          whatsappNumber: `55${trimmed11}`,
+          whatsappLink: `https://wa.me/55${trimmed11}`,
+          method: 'remove_trailing',
+          label: 'Dígito Final Extra Removido ✂️'
+        };
+      }
+    }
+    if (cand.digits.length === 13) {
+      const trimmed11 = cand.digits.substring(0, 11);
+      if (isCellPhone11Digits(trimmed11)) {
+        return {
+          isValid: true,
+          wasRepaired: true,
+          rawPhone: trimmed,
+          healedPhone: trimmed11,
+          formattedPhone: formatPhoneDisplay(trimmed11),
+          whatsappNumber: `55${trimmed11}`,
+          whatsappLink: `https://wa.me/55${trimmed11}`,
+          method: 'remove_trailing',
+          label: 'Dígitos Extras Finais Removidos ✂️'
+        };
+      }
+    }
+  }
+
+  // Teste 5: Se digitou 9 dígitos celular sem DDD, adiciona 11
+  for (const cand of candidateVariants) {
+    if (cand.digits.length === 9 && cand.digits.charAt(0) === '9') {
+      const withDDD11 = '11' + cand.digits;
+      if (isCellPhone11Digits(withDDD11)) {
+        return {
+          isValid: true,
+          wasRepaired: true,
+          rawPhone: trimmed,
+          healedPhone: withDDD11,
+          formattedPhone: formatPhoneDisplay(withDDD11),
+          whatsappNumber: `55${withDDD11}`,
+          whatsappLink: `https://wa.me/55${withDDD11}`,
+          method: 'add_ddd_11',
+          label: 'DDD 11 Adicionado (+DDD) 📍'
+        };
+      }
+    }
+  }
+
+  // Teste 6: Se digitou 8 dígitos sem DDD e sem 9, adiciona 119
+  for (const cand of candidateVariants) {
+    if (cand.digits.length === 8) {
+      const withDDD9 = '119' + cand.digits;
+      if (isCellPhone11Digits(withDDD9)) {
+        return {
+          isValid: true,
+          wasRepaired: true,
+          rawPhone: trimmed,
+          healedPhone: withDDD9,
+          formattedPhone: formatPhoneDisplay(withDDD9),
+          whatsappNumber: `55${withDDD9}`,
+          whatsappLink: `https://wa.me/55${withDDD9}`,
+          method: 'add_ddd_and_9',
+          label: 'DDD 11 e 9º Adicionados 📍'
+        };
+      }
+    }
+  }
+
+  // Teste 7: Se tem 10 dígitos e é um fixo válido
+  if (digits.length === 10) {
+    const ddd = digits.substring(0, 2);
+    if (VALID_BRAZILIAN_DDDS.has(ddd)) {
+      return {
+        isValid: true,
+        wasRepaired: false,
+        rawPhone: trimmed,
+        healedPhone: digits,
+        formattedPhone: formatPhoneDisplay(digits),
+        whatsappNumber: `55${digits}`,
+        whatsappLink: `https://wa.me/55${digits}`,
+        method: 'original',
+        label: 'Telefone Fixo (10 Dígitos) ☎️'
+      };
+    }
+  }
+
+  return null;
 }
 
 /**

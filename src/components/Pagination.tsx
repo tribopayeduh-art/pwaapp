@@ -27,7 +27,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           Exibindo todos os <strong>{totalItems}</strong> {itemLabel}
         </span>
         <span className="text-[10px] font-medium bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md">
-          Página 1 de 1 (40 por página)
+          Página 1 de 1 ({pageSize} por página)
         </span>
       </div>
     );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
-import { X, Copy, Check, Download, Share2, Sparkles } from 'lucide-react';
+import { X, Copy, Check, Download, Share2, QrCode } from 'lucide-react';
 
 interface PartnerQRCodeModalProps {
   isOpen: boolean;
@@ -70,7 +70,7 @@ export const PartnerQRCodeModal: React.FC<PartnerQRCodeModalProps> = ({
 
         <div className="text-center mt-2 mb-4">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold mb-2">
-            <Sparkles className="w-3.5 h-3.5" />
+            <QrCode className="w-3.5 h-3.5" />
             Recrutamento VIP
           </div>
           <h3 className="text-lg font-bold text-zinc-900">QR Code de Parceiro</h3>

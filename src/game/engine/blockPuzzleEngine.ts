@@ -427,8 +427,13 @@ export function generateRandomPieces(
         const lowProgress = (currentRunProfit - easyThreshold) / Math.max(1, midThreshold - easyThreshold);
         effectiveRtp = Math.max(60, rtp - lowProgress * 15.0);
       } else {
-        // Under easyThreshold: Friendly onboarding
-        effectiveRtp = Math.max(88, rtp);
+        // Under easyThreshold: Friendly onboarding ONLY if RTP is high (>= 75%)
+        effectiveRtp = (rtp >= 75 && difficulty !== 'hard' && difficulty !== 'extreme') ? Math.max(88, rtp) : rtp;
+        if (rtp < 75 || difficulty === 'hard' || difficulty === 'extreme') {
+          giantPieceFrequency = Math.max(giantPieceFrequency, 45);
+          if (rtp < 50) heavyBlocksForce = true;
+          if (rtp < 30) antiBailoutMode = true;
+        }
       }
     }
   } else if (Array.isArray(optionsOrBoardOrCountOrDiff)) {

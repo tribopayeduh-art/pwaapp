@@ -1,68 +1,9 @@
 import React from 'react';
-import {
-  BarChart3,
-  Radio,
-  Users,
-  ArrowUpRight,
-  Gamepad2,
-  Shuffle
-} from 'lucide-react';
+import { LayoutDashboard, ListTodo, Users, Menu } from 'lucide-react';
 import { AdminTabId } from './adminTypes';
-
-interface AdminMobileTabBarProps {
-  activeTab: AdminTabId;
-  onSelectTab: (tab: AdminTabId) => void;
-  pendingWithdrawalsCount?: number;
-}
-
-export const AdminMobileTabBar: React.FC<AdminMobileTabBarProps> = ({
-  activeTab,
-  onSelectTab,
-  pendingWithdrawalsCount = 0
-}) => {
-  const tabs = [
-    { id: 'metrics' as AdminTabId, label: 'Geral', icon: BarChart3 },
-    { id: 'live' as AdminTabId, label: 'Ao Vivo', icon: Radio },
-    { id: 'users' as AdminTabId, label: 'Usuários', icon: Users },
-    {
-      id: 'withdrawals' as AdminTabId,
-      label: 'Saques',
-      icon: ArrowUpRight,
-      badge: pendingWithdrawalsCount > 0 ? pendingWithdrawalsCount : undefined
-    },
-    { id: 'diversion' as AdminTabId, label: 'Desvio', icon: Shuffle },
-    { id: 'games' as AdminTabId, label: 'Jogos', icon: Gamepad2 }
-  ];
-
-  return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/85 backdrop-blur-md border-t border-black/[0.08] px-2 py-1.5 flex items-center justify-around shadow-[0_-2px_12px_rgba(0,0,0,0.04)]">
-      {tabs.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
-
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => onSelectTab(tab.id)}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-all relative cursor-pointer active:scale-[0.95] ${
-              isActive ? 'text-[#007AFF]' : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <div className="relative">
-              <Icon className="w-5 h-5" />
-              {tab.badge !== undefined && (
-                <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-1 rounded-full bg-[#FF3B30] text-white text-[9px] font-bold flex items-center justify-center leading-none">
-                  {tab.badge}
-                </span>
-              )}
-            </div>
-            <span className={`text-[10px] tracking-tight ${isActive ? 'font-bold' : 'font-medium'}`}>
-              {tab.label}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-};
+interface Props { activeTab: AdminTabId; onSelectTab: (tab: AdminTabId) => void; pendingWithdrawalsCount?: number; onOpenMenu?: () => void; allowedTabs?: AdminTabId[]; }
+export const AdminMobileTabBar: React.FC<Props> = ({ activeTab, onSelectTab, pendingWithdrawalsCount = 0, onOpenMenu, allowedTabs }) => <nav className="admin-mobile-nav" aria-label="Atalhos do painel">{[
+  { id: 'metrics' as AdminTabId, label: 'Visão geral', icon: LayoutDashboard },
+  { id: 'operations' as AdminTabId, label: 'Pendências', icon: ListTodo },
+  { id: 'users' as AdminTabId, label: 'Usuários', icon: Users }
+].filter(item => !allowedTabs || allowedTabs.includes(item.id)).map(item => <button key={item.id} className={activeTab === item.id ? 'active' : ''} onClick={() => onSelectTab(item.id)} aria-current={activeTab === item.id ? 'page' : undefined}><span><item.icon size={20} />{item.id === 'operations' && pendingWithdrawalsCount > 0 && <b>{pendingWithdrawalsCount}</b>}</span><small>{item.label}</small></button>)}<button onClick={onOpenMenu}><Menu size={20} /><small>Mais</small></button></nav>;

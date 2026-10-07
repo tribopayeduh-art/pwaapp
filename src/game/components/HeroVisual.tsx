@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameUser } from '../types';
-import { Play, Sparkles, UserPlus, LogIn, Flame, Trophy } from 'lucide-react';
+import { Play, UserPlus, LogIn, Flame, Trophy } from 'lucide-react';
 
 interface HeroVisualProps {
   user: GameUser | null;
@@ -24,7 +24,7 @@ export const HeroVisual: React.FC<HeroVisualProps> = ({
       <div className="max-w-md mx-auto text-center space-y-6 relative z-10">
         {/* Badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold backdrop-blur-md">
-          <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+          <Flame className="w-3.5 h-3.5 text-cyan-400" />
           <span>Jogo de Raciocínio & Combos</span>
         </div>
 

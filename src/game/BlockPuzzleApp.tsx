@@ -136,7 +136,7 @@ export const BlockPuzzleApp: React.FC<BlockPuzzleAppProps> = ({ onReturnToPortal
       if (!token) {
         setActiveTab('register');
         if (capturedRef) {
-          showToast(`✨ Bônus de Indicação ativado para ${capturedRef}! Cadastre-se na blockwinner.site`, 'success');
+          showToast(`Bônus de Indicação ativado para ${capturedRef}! Cadastre-se na blockwinner.site`, 'success');
         }
       }
     } else if (pathname.includes('/login') || pathname.includes('/entrar')) {

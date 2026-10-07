@@ -9,3 +9,5 @@ coverage/
 .jwt-secret.local
 .system_secrets.vault
 *.vault
+bun.lock
+bun.lockb

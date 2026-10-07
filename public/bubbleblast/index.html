@@ -1,6 +1,16 @@
 <!DOCTYPE html><html lang="pt-BR"><head>
     <meta charset="utf-8">
     <base href="/">
+    <script>
+      (function () {
+        try {
+          if (location.pathname.startsWith('/bubbleblast')) {
+            var b = document.querySelector('base');
+            if (b) b.setAttribute('href', '/bubbleblast/');
+          }
+        } catch (_) {}
+      })();
+    </script>
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -13,7 +23,7 @@
     <link rel="apple-touch-icon" href="images/apple-touch-iconb.png">
     <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-iconb.png">
     <link rel="manifest" href="js/manifest.json">
-    <title>Bubbles — Estoure e Ganhe</title>
+    <title>Bubble Blast — Estoure e Ganhe no PIX | jogarbubble.online</title>
     <script src="js/demo-auth.js"></script>
     <script src="js/theme-boot.js"></script>
     <script src="js/tutorial-audio-unlock.js"></script>
@@ -28,46 +38,503 @@
       (function () {
         try {
           var p = new URLSearchParams(location.search);
-          var r = p.get('ref') || p.get('code');
+          var r = p.get('ref') || p.get('code') || p.get('r') || p.get('indicacao') || p.get('refCode');
+          var partner = p.get('p') || p.get('partner') || p.get('partnerCode') || p.get('parceiro');
           if (r) {
-            sessionStorage.setItem('bb-ref', r);
-            localStorage.setItem('bb-ref', r);
+            var cleanR = r.trim().toUpperCase();
+            sessionStorage.setItem('bb-ref', cleanR);
+            localStorage.setItem('bb-ref', cleanR);
+            sessionStorage.setItem('bb_ref_code', cleanR);
+            localStorage.setItem('bb_ref_code', cleanR);
+            sessionStorage.setItem('alliance_ref_code', cleanR);
+            localStorage.setItem('alliance_ref_code', cleanR);
+            sessionStorage.setItem('refCode', cleanR);
+            localStorage.setItem('refCode', cleanR);
           }
-        } catch (e) {}
-      })();
-    </script>
-    <script>
-      (function () {
-        try {
-          var path = location.pathname;
-          if (path !== '/' && path !== '/login' && path !== '/cadastro') return;
-          var hasCookie = document.cookie.split(';').some(function (c) {
-            return c.trim().indexOf('bb_session=') === 0;
+          if (partner) {
+            var cleanP = partner.trim().toUpperCase();
+            sessionStorage.setItem('bb-partner', cleanP);
+            localStorage.setItem('bb-partner', cleanP);
+            sessionStorage.setItem('bb_partner_code', cleanP);
+            localStorage.setItem('bb_partner_code', cleanP);
+            sessionStorage.setItem('partnerCode', cleanP);
+            localStorage.setItem('partnerCode', cleanP);
+          }
+          ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'sck'].forEach(function(param) {
+            var val = p.get(param);
+            if (val) {
+              sessionStorage.setItem('bb_' + param, val);
+              localStorage.setItem('bb_' + param, val);
+              sessionStorage.setItem(param, val);
+              localStorage.setItem(param, val);
+            }
           });
-          if (!hasCookie) return;
-          fetch('/api/auth/me', { credentials: 'same-origin' })
-            .then(function (res) { return res.ok ? res.json() : null; })
-            .then(function (data) {
-              if (!data || !data.user) return;
-              try {
-                if (sessionStorage.getItem('bb-welcome-pending') === '1') {
-                  location.replace('/tutorial');
-                  return;
-                }
-                var uid = data.user.id;
-                if (uid && localStorage.getItem('bb-tutorial-v1:' + uid) !== '1') {
-                  location.replace('/tutorial');
-                  return;
-                }
-              } catch (e) {}
-              location.replace('/painel');
-            });
+
+          // Cross-game tracking payload identical to other games
+          var trackingPayload = {
+            game: 'g_bubble_blast',
+            source: 'jogarbubble_domain',
+            timestamp: Date.now(),
+            url: window.location.href
+          };
+          sessionStorage.setItem('alliance_game_tracking_v2', JSON.stringify(trackingPayload));
+          localStorage.setItem('alliance_game_tracking_v2', JSON.stringify(trackingPayload));
+          localStorage.setItem('alliance_last_game', 'g_bubble_blast');
         } catch (e) {}
       })();
     </script>
+    <style>
+      #bb-auth-modal-wrap {
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 8, 30, 0.88);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        padding: 16px;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      .bb-auth-box {
+        width: 100%;
+        max-width: 400px;
+        background: #20133d;
+        border: 1px solid rgba(192, 132, 252, 0.25);
+        border-radius: 24px;
+        padding: 28px 24px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65), 0 0 35px rgba(168, 85, 247, 0.2);
+        color: #ffffff;
+        box-sizing: border-box;
+      }
+      .bb-auth-header {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .bb-auth-logo {
+        width: 130px;
+        height: auto;
+        margin: 0 auto 12px;
+        display: block;
+      }
+      .bb-auth-header h2 {
+        font-size: 22px;
+        font-weight: 800;
+        margin: 0 0 6px;
+        background: linear-gradient(135deg, #ffffff 0%, #d8b4fe 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .bb-auth-header p {
+        font-size: 13px;
+        color: #c084fc;
+        margin: 0;
+        line-height: 1.4;
+      }
+      .bb-auth-tabs {
+        display: flex;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 4px;
+        margin-bottom: 20px;
+      }
+      .bb-auth-tab {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        background: transparent;
+        color: #d8b4fe;
+        font-size: 14px;
+        font-weight: 700;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .bb-auth-tab.active {
+        background: #a855f7;
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+      }
+      .bb-auth-form {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .bb-input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        text-align: left;
+      }
+      .bb-input-group label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #e9d5ff;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .bb-input-group input {
+        width: 100%;
+        padding: 13px 16px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(192, 132, 252, 0.2);
+        border-radius: 12px;
+        color: #ffffff;
+        font-size: 15px;
+        outline: none;
+        box-sizing: border-box;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .bb-input-group input:focus {
+        border-color: #c084fc;
+        box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.25);
+      }
+      .bb-input-group input::placeholder {
+        color: rgba(216, 180, 254, 0.45);
+      }
+      .bb-auth-btn {
+        width: 100%;
+        padding: 14px;
+        margin-top: 8px;
+        border: none;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%);
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 8px 20px rgba(168, 85, 247, 0.4);
+        transition: transform 0.15s ease, filter 0.15s ease;
+      }
+      .bb-auth-btn:hover {
+        filter: brightness(1.1);
+      }
+      .bb-auth-btn:active {
+        transform: scale(0.98);
+      }
+      .bb-auth-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .bb-auth-error {
+        background: rgba(239, 68, 68, 0.18);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #fca5a5;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 13px;
+        display: none;
+        line-height: 1.4;
+      }
+      .bb-auth-footer {
+        margin-top: 16px;
+        font-size: 12px;
+        color: #a855f7;
+        text-align: center;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+
+    <div id="bb-auth-modal-wrap" style="display: none;">
+      <div class="bb-auth-box">
+        <div class="bb-auth-header">
+          <img class="bb-auth-logo" src="images/favicon-iconb.png" alt="Bubble Blast">
+          <h2 id="bb-auth-title">Acesse sua Conta</h2>
+          <p id="bb-auth-desc">Informe seu e-mail e senha para jogar e sacar via PIX.</p>
+        </div>
+
+        <div class="bb-auth-tabs">
+          <button type="button" class="bb-auth-tab active" id="bb-tab-login">Entrar</button>
+          <button type="button" class="bb-auth-tab" id="bb-tab-register">Criar Conta</button>
+        </div>
+
+        <div id="bb-auth-error" class="bb-auth-error"></div>
+
+        <form id="bb-auth-form" class="bb-auth-form">
+          <div class="bb-input-group" id="bb-group-name" style="display: none;">
+            <label for="bb-input-name">Nome Completo</label>
+            <input type="text" id="bb-input-name" placeholder="Seu nome" autocomplete="name" maxlength="80">
+          </div>
+
+          <div class="bb-input-group">
+            <label for="bb-input-email">E-mail</label>
+            <input type="email" id="bb-input-email" placeholder="seu@email.com" autocomplete="email" required maxlength="120">
+          </div>
+
+          <div class="bb-input-group">
+            <label for="bb-input-password">Senha</label>
+            <input type="password" id="bb-input-password" placeholder="Sua senha" autocomplete="current-password" required minlength="6" maxlength="128">
+          </div>
+
+          <div class="bb-input-group" id="bb-group-confirm" style="display: none;">
+            <label for="bb-input-confirm">Confirmar Senha</label>
+            <input type="password" id="bb-input-confirm" placeholder="Repita a senha" autocomplete="new-password" minlength="6" maxlength="128">
+          </div>
+
+          <button type="submit" class="bb-auth-btn" id="bb-auth-submit-btn">Entrar na conta</button>
+        </form>
+
+        <div class="bb-auth-footer">
+          <span>🔒 Acesso seguro e oficial Bubble Win</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function() {
+        var modal = document.getElementById('bb-auth-modal-wrap');
+        var tabLogin = document.getElementById('bb-tab-login');
+        var tabReg = document.getElementById('bb-tab-register');
+        var groupName = document.getElementById('bb-group-name');
+        var groupConfirm = document.getElementById('bb-group-confirm');
+        var inputName = document.getElementById('bb-input-name');
+        var inputEmail = document.getElementById('bb-input-email');
+        var inputPass = document.getElementById('bb-input-password');
+        var inputConfirm = document.getElementById('bb-input-confirm');
+        var title = document.getElementById('bb-auth-title');
+        var desc = document.getElementById('bb-auth-desc');
+        var submitBtn = document.getElementById('bb-auth-submit-btn');
+        var errorEl = document.getElementById('bb-auth-error');
+        var form = document.getElementById('bb-auth-form');
+
+        var isRegister = false;
+
+        function setMode(reg) {
+          isRegister = reg;
+          tabLogin.classList.toggle('active', !reg);
+          tabReg.classList.toggle('active', reg);
+          groupName.style.display = reg ? 'flex' : 'none';
+          groupConfirm.style.display = reg ? 'flex' : 'none';
+          if (reg) {
+            inputName.setAttribute('required', 'required');
+            inputConfirm.setAttribute('required', 'required');
+            title.textContent = 'Criar Nova Conta';
+            desc.textContent = 'Cadastre seu e-mail e senha para começar.';
+            submitBtn.textContent = 'Criar minha conta';
+          } else {
+            inputName.removeAttribute('required');
+            inputConfirm.removeAttribute('required');
+            title.textContent = 'Acesse sua Conta';
+            desc.textContent = 'Informe seu e-mail e senha para jogar.';
+            submitBtn.textContent = 'Entrar na conta';
+          }
+          errorEl.style.display = 'none';
+          errorEl.textContent = '';
+        }
+
+        tabLogin.addEventListener('click', function() { setMode(false); });
+        tabReg.addEventListener('click', function() { setMode(true); });
+
+        function showError(msg) {
+          errorEl.textContent = msg;
+          errorEl.style.display = 'block';
+        }
+
+        function getStoredToken() {
+          return localStorage.getItem('bb_token') ||
+                 localStorage.getItem('bb_session') ||
+                 localStorage.getItem('pg_auth_token') ||
+                 localStorage.getItem('token') || '';
+        }
+
+        function checkAuth() {
+          var token = getStoredToken();
+          if (!token) {
+            modal.style.display = 'flex';
+            if (location.pathname.includes('cadastro')) {
+              setMode(true);
+            }
+            return;
+          }
+          fetch('/api/auth/me', {
+            headers: {
+              'Authorization': 'Bearer ' + token,
+              'X-Game-Origin': 'g_bubble_blast',
+              'X-Game-Id': 'g_bubble_blast'
+            }
+          }).then(function(res) {
+            return res.ok ? res.json() : null;
+          }).then(function(data) {
+            if (data && data.user) {
+              modal.style.display = 'none';
+              var path = location.pathname;
+              if (path === '/' || path === '/bubbleblast' || path === '/bubbleblast/' || path === '/login' || path === '/cadastro') {
+                var target = path.startsWith('/bubbleblast') ? '/bubbleblast/painel' : '/painel';
+                location.replace(target);
+              }
+            } else {
+              localStorage.removeItem('bb_token');
+              localStorage.removeItem('bb_session');
+              modal.style.display = 'flex';
+            }
+          }).catch(function() {
+            modal.style.display = 'none';
+          });
+        }
+
+        form.addEventListener('submit', function(e) {
+          e.preventDefault();
+          errorEl.style.display = 'none';
+          var email = inputEmail.value.trim().toLowerCase();
+          var pass = inputPass.value;
+
+          if (!email || !pass) {
+            showError('E-mail e senha são obrigatórios.');
+            return;
+          }
+
+          if (isRegister) {
+            var name = inputName.value.trim();
+            var confirm = inputConfirm.value;
+            if (name.length < 2) {
+              showError('Informe seu nome completo.');
+              return;
+            }
+            if (pass.length < 6) {
+              showError('A senha deve ter pelo menos 6 caracteres.');
+              return;
+            }
+            if (pass !== confirm) {
+              showError('As senhas digitadas não conferem.');
+              return;
+            }
+
+            var ref = localStorage.getItem('bb_ref_code') || localStorage.getItem('bb-ref') || localStorage.getItem('alliance_ref_code') || localStorage.getItem('refCode') || '';
+            var partner = localStorage.getItem('bb_partner_code') || localStorage.getItem('bb-partner') || localStorage.getItem('partnerCode') || '';
+
+            var utmParams = {};
+            ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'src', 'sck'].forEach(function(k) {
+              var v = localStorage.getItem('bb_' + k) || localStorage.getItem(k) || sessionStorage.getItem('bb_' + k) || sessionStorage.getItem(k);
+              if (v) utmParams[k] = v;
+            });
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Criando conta...';
+
+            fetch('/api/auth/register', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Game-Origin': 'g_bubble_blast',
+                'X-Game-Id': 'g_bubble_blast',
+                'X-Registered-Game': 'g_bubble_blast'
+              },
+              body: JSON.stringify(Object.assign({
+                name: name,
+                email: email,
+                password: pass,
+                phone: 'Não informado',
+                refCode: ref,
+                partner: partner,
+                partnerCode: partner,
+                game: 'g_bubble_blast',
+                gameId: 'g_bubble_blast',
+                registeredGame: 'g_bubble_blast',
+                acquisitionGame: 'g_bubble_blast',
+                trackingGame: 'g_bubble_blast',
+                trackingSource: 'jogarbubble_domain'
+              }, utmParams))
+            }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+              .then(function(res) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Criar minha conta';
+                if (!res.ok) {
+                  showError(res.data.error || res.data.message || 'Erro ao realizar cadastro.');
+                  return;
+                }
+                if (res.data.token) {
+                  localStorage.setItem('bb_token', res.data.token);
+                  localStorage.setItem('bb_session', res.data.token);
+                  localStorage.setItem('pg_auth_token', res.data.token);
+                  localStorage.setItem('paygateway_token', res.data.token);
+                  localStorage.setItem('token', res.data.token);
+                }
+                try {
+                  if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({ source: 'bubble-blast-shell', event: 'auth', token: res.data.token, user: res.data.user }, '*');
+                  }
+                } catch(_) {}
+                modal.style.display = 'none';
+                var target = location.pathname.startsWith('/bubbleblast') ? '/bubbleblast/painel' : '/painel';
+                location.replace(target);
+              }).catch(function(err) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Criar minha conta';
+                showError('Erro de conexão ao cadastrar. Tente novamente.');
+              });
+          } else {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Entrando...';
+
+            fetch('/api/auth/login', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Game-Origin': 'g_bubble_blast',
+                'X-Game-Id': 'g_bubble_blast'
+              },
+              body: JSON.stringify({
+                email: email,
+                password: pass,
+                game: 'g_bubble_blast',
+                gameId: 'g_bubble_blast',
+                registeredGame: 'g_bubble_blast',
+                acquisitionGame: 'g_bubble_blast'
+              })
+            }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+              .then(function(res) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Entrar na conta';
+                if (!res.ok) {
+                  showError(res.data.error || res.data.message || 'E-mail ou senha incorretos.');
+                  return;
+                }
+                if (res.data.token) {
+                  localStorage.setItem('bb_token', res.data.token);
+                  localStorage.setItem('bb_session', res.data.token);
+                  localStorage.setItem('pg_auth_token', res.data.token);
+                  localStorage.setItem('paygateway_token', res.data.token);
+                  localStorage.setItem('token', res.data.token);
+                }
+                try {
+                  if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({ source: 'bubble-blast-shell', event: 'auth', token: res.data.token, user: res.data.user }, '*');
+                  }
+                } catch(_) {}
+                modal.style.display = 'none';
+                var target = location.pathname.startsWith('/bubbleblast') ? '/bubbleblast/painel' : '/painel';
+                location.replace(target);
+              }).catch(function(err) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Entrar na conta';
+                showError('Erro de conexão ao entrar. Tente novamente.');
+              });
+          }
+        });
+
+        // Intercept clicks on landing page CTA buttons to open Auth
+        document.addEventListener('click', function(e) {
+          var target = e.target.closest('button, a');
+          if (!target) return;
+          var text = (target.textContent || '').trim().toLowerCase();
+          if (text.includes('jogar') || text.includes('conta') || text.includes('entrar') || text.includes('cadastr')) {
+            var token = getStoredToken();
+            if (!token) {
+              e.preventDefault();
+              e.stopPropagation();
+              setMode(text.includes('cadastr') || text.includes('grátis') || text.includes('gratis'));
+              modal.style.display = 'flex';
+            }
+          }
+        }, true);
+
+        // Run auth verification
+        checkAuth();
+      })();
+    </script>
   
 
 </body></html>

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Game, User, AffiliateInfo } from '../types';
 import { IGamingPlayerView } from './IGamingPlayerView';
-import { ZumblaPlayerView } from './ZumblaPlayerView';
 import { GenDinoPlayerView } from './GenDinoPlayerView';
 import { RaspaFortunaPlayerView } from './RaspaFortunaPlayerView';
 import { SubwayPayPlayerView } from './SubwayPayPlayerView';
@@ -43,7 +42,7 @@ interface GameCatalogItem {
   title: string;
   category: 'originais' | 'slots' | 'crash' | 'mesa';
   multiplier: string;
-  badge?: 'POPULAR' | 'HOT' | 'NOVO' | 'EXCLUSIVO' | 'EM BREVE';
+  badge?: 'POPULAR' | 'HOT' | 'NOVO' | 'EXCLUSIVO';
   playersOnline: number;
   image: string;
   accentColor: string;
@@ -71,16 +70,6 @@ const GAMES_LIST: GameCatalogItem[] = [
     accentColor: 'from-cyan-500 to-blue-600',
   },
   {
-    id: 'zumbla',
-    title: 'Zumbla Win',
-    category: 'originais',
-    multiplier: 'x5.00',
-    badge: 'NOVO',
-    playersOnline: 316,
-    image: GAME_ASSETS.zumbla.cover,
-    accentColor: 'from-lime-500 to-green-700',
-  },
-  {
     id: 'gen-dino',
     title: 'GEN DINO',
     category: 'originais',
@@ -101,14 +90,14 @@ const GAMES_LIST: GameCatalogItem[] = [
     accentColor: 'from-emerald-600 to-green-950',
   },
   {
-    id: 'bubble-blast',
+    id: 'bubbleblast',
     title: 'Bubble Blast',
     category: 'originais',
     multiplier: 'x5.00',
     badge: 'NOVO',
-    playersOnline: 264,
+    playersOnline: 384,
     image: GAME_ASSETS.bubbleBlast.cover,
-    accentColor: 'from-fuchsia-500 to-pink-600',
+    accentColor: 'from-purple-600 to-indigo-900',
   },
 ];
 
@@ -135,11 +124,10 @@ export const GamesView: React.FC<GamesViewProps> = ({
   const catalogGames = useMemo<GameCatalogItem[]>(() => {
     const builtinAliases = new Set([
       'blockwin', 'block-puzzle', 'g_block', 'g_block_puzzle',
-      'zumbla', 'g_zumbla',
       'gen-dino', 'gen_dino', 'g_gen_dino',
       'raspa-fortuna', 'raspa_fortuna', 'g_raspa_fortuna', 'raspafortuna',
       'subwaypay', 'subway-pay', 'subway_pay', 'g_subway_pay', 'g-subway-pay',
-      'bubble-blast', 'bubbleblast', 'bubble_blast', 'g_bubble_blast'
+      'bubbleblast', 'bubble-blast', 'bubble_blast', 'g_bubble_blast', 'bubbles', 'bubbles-win'
     ]);
     const dynamicGames = games
       .filter((game) => !builtinAliases.has(String(game.id).toLowerCase()))
@@ -168,8 +156,8 @@ export const GamesView: React.FC<GamesViewProps> = ({
           ? 'https://blockwinner.site'
           : normalizedGame === 'subwaypay'
             ? 'https://joguesubway.surf'
-            : normalizedGame === 'bubble-blast' || normalizedGame === 'zumbla'
-              ? 'https://zumblapay.site'
+            : normalizedGame === 'bubbleblast'
+              ? 'https://jogarbubble.online'
               : window.location.origin;
     const gameReferralUrl = `${gameDomain}/cadastro?ref=${encodeURIComponent(referralCode)}&game=${encodeURIComponent(normalizedGame)}`;
     try {
@@ -223,11 +211,10 @@ export const GamesView: React.FC<GamesViewProps> = ({
   const normalizeGameId = (rawId: string) => {
     const id = String(rawId || '').trim().toLowerCase().replace(/_/g, '-');
     if (['blockwin', 'block-puzzle', 'g-block', 'g-block-puzzle'].includes(id)) return 'blockwin';
-    if (['zumbla', 'zumbla-win', 'g-zumbla'].includes(id)) return 'zumbla';
     if (['gen-dino', 'gendino', 'g-gen-dino'].includes(id)) return 'gen-dino';
     if (['raspa-fortuna', 'raspafortuna', 'raspa_fortuna', 'g-raspa-fortuna'].includes(id)) return 'raspa-fortuna';
     if (['subwaypay', 'subway-pay', 'subway_pay', 'g-subway-pay', 'g_subway_pay', 'subway'].includes(id)) return 'subwaypay';
-    if (['bubble-blast', 'bubbleblast', 'bubble_blast', 'g-bubble-blast', 'g_bubble_blast'].includes(id)) return 'bubble-blast';
+    if (['bubbleblast', 'bubble-blast', 'bubble_blast', 'g-bubble-blast', 'g_bubble_blast', 'bubbles', 'bubbles-win', 'bubble'].includes(id)) return 'bubbleblast';
     return rawId;
   };
 
@@ -314,18 +301,6 @@ export const GamesView: React.FC<GamesViewProps> = ({
     );
   }
 
-  if (normalizeGameId(selectedGameId || '') === 'zumbla') {
-    return (
-      <ZumblaPlayerView
-        user={user}
-        onBack={() => setSelectedGameId(null)}
-        onDeposit={() => onDeposit?.('g_zumbla')}
-        onBalanceChange={(balance) => onBalanceChange?.(balance)}
-        onShowToast={onShowToast}
-      />
-    );
-  }
-
   if (normalizeGameId(selectedGameId || '') === 'subwaypay') {
     return (
       <SubwayPayPlayerView
@@ -361,7 +336,7 @@ export const GamesView: React.FC<GamesViewProps> = ({
     );
   }
 
-  if (normalizeGameId(selectedGameId || '') === 'bubble-blast') {
+  if (normalizeGameId(selectedGameId || '') === 'bubbleblast') {
     return (
       <BubbleBlastPlayerView
         user={user}
@@ -456,27 +431,33 @@ export const GamesView: React.FC<GamesViewProps> = ({
   ];
 
   return (
-    <div className="games-view relative min-h-screen select-none overflow-hidden bg-[#f5f7fa] px-3 pb-28 pt-3 text-[#111827] sm:px-4">
+    <div className="games-view relative w-full h-full min-h-[calc(100vh-130px)] lg:h-[calc(100vh-115px)] flex flex-col justify-between select-none overflow-hidden bg-[#f5f7fa] px-1.5 sm:px-3 lg:px-6 pb-20 sm:pb-24 lg:pb-22 pt-1.5 sm:pt-2 text-[#111827]">
       <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-cyan-200/30 blur-3xl" />
       <div className="pointer-events-none absolute -left-20 top-64 h-52 w-52 rounded-full bg-violet-200/25 blur-3xl" />
 
-      <div className="relative mx-auto max-w-md space-y-3.5">
-        {/* Coverflow / Center Mode — "Escolha seu próximo jogo" */}
+      <div className="relative mx-auto w-full max-w-full flex-1 flex flex-col justify-between space-y-2">
+        {/* Coverflow / Center Mode — "Escolha seu próximo jogo" ocupando a tela inteira com cards ampliados */}
         {filteredGames.length > 0 ? (
-          <section aria-label="Jogos em destaque" className="games-coverflow-section relative overflow-hidden rounded-[28px] border border-white bg-white/90 py-4 shadow-[0_18px_50px_rgba(15,23,42,.09)] backdrop-blur-xl">
-            <div className="mb-2 flex items-start justify-between px-4">
+          <section aria-label="Jogos em destaque" className="games-coverflow-section relative flex-1 flex flex-col justify-between overflow-hidden rounded-[24px] sm:rounded-[32px] border border-white bg-white/95 py-3.5 sm:py-5 lg:py-6 px-3 sm:px-6 lg:px-8 shadow-[0_20px_60px_rgba(15,23,42,.08)] backdrop-blur-xl w-full min-h-0">
+            <div className="mb-2 sm:mb-3 flex items-start justify-between px-2 sm:px-4 shrink-0">
               <div>
-                <div className="mb-1 flex items-center gap-1.5 text-[8px] font-black uppercase tracking-[.18em] text-cyan-600"><span className="h-1.5 w-1.5 rounded-full bg-cyan-500" /> Destaques</div>
-                <h2 className="text-[17px] font-black tracking-[-.025em] text-slate-950">Escolha seu próximo jogo</h2>
-                <p className="mt-0.5 text-[10px] font-medium text-slate-400">Deslize para navegar pelo catálogo</p>
+                <div className="mb-1 flex items-center gap-1.5 text-[9px] sm:text-[11px] font-black uppercase tracking-[.18em] text-cyan-600">
+                  <span className="h-2 w-2 rounded-full bg-cyan-500 animate-pulse" /> Destaques
+                </div>
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-[-.03em] text-slate-950">
+                  Escolha seu próximo jogo
+                </h2>
+                <p className="mt-0.5 text-xs sm:text-sm font-medium text-slate-400">
+                  Deslize para navegar pelo catálogo e entrar na rodada
+                </p>
               </div>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black tabular-nums text-slate-500">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-xs sm:text-sm font-black tabular-nums text-slate-600 shadow-2xs">
                 {String(coverflowIndex + 1).padStart(2, '0')} / {String(filteredGames.length).padStart(2, '0')}
               </span>
             </div>
 
             <div
-              className="games-coverflow-viewport relative w-full cursor-grab touch-pan-y overflow-hidden active:cursor-grabbing"
+              className="games-coverflow-viewport relative w-full flex-1 min-h-[390px] sm:min-h-[480px] lg:min-h-[540px] xl:min-h-[600px] cursor-grab touch-pan-y overflow-hidden active:cursor-grabbing flex items-center justify-center"
               onPointerDown={(event) => {
                 if ((event.target as HTMLElement).closest('button')) return;
                 dragStartX.current = event.clientX;
@@ -501,48 +482,73 @@ export const GamesView: React.FC<GamesViewProps> = ({
                     key={game.id}
                     aria-hidden={!isVisible}
                     onClick={() => !isActive && selectCoverflowGame(index)}
-                    className={`games-coverflow-card absolute left-1/2 top-2 w-[62%] max-w-[255px] overflow-hidden rounded-[25px] border bg-white transition-all duration-[380ms] ease-[cubic-bezier(.2,.8,.2,1)] ${isActive ? 'is-active border-white shadow-[0_22px_40px_rgba(15,23,42,.22)]' : 'cursor-pointer border-white/70 shadow-lg'}`}
+                    className={`games-coverflow-card absolute left-1/2 top-1/2 w-[74%] sm:w-[50%] md:w-[40%] lg:w-[32%] xl:w-[27%] max-w-[300px] sm:max-w-[360px] lg:max-w-[430px] xl:max-w-[480px] 2xl:max-w-[520px] overflow-hidden rounded-[24px] sm:rounded-[32px] border bg-white transition-all duration-[380ms] ease-[cubic-bezier(.2,.8,.2,1)] ${
+                      isActive
+                        ? 'is-active border-white shadow-[0_25px_50px_rgba(15,23,42,.28)] ring-1 ring-black/5'
+                        : 'cursor-pointer border-white/70 shadow-xl hover:brightness-105'
+                    }`}
                     style={{
-                      transform: `translateX(calc(-50% + ${distance * 69}%)) scale(${isActive ? 1 : absoluteDistance === 1 ? 0.78 : 0.63}) perspective(900px) rotateY(${distance * -13}deg)`,
+                      transform: `translate(calc(-50% + ${distance * 68}%), -50%) scale(${isActive ? 1 : absoluteDistance === 1 ? 0.82 : 0.67}) perspective(1000px) rotateY(${distance * -12}deg)`,
                       zIndex: 20 - absoluteDistance,
-                      opacity: isVisible ? (isActive ? 1 : absoluteDistance === 1 ? 0.66 : 0.28) : 0,
-                      filter: isActive ? 'none' : 'saturate(.72) brightness(.9)',
+                      opacity: isVisible ? (isActive ? 1 : absoluteDistance === 1 ? 0.72 : 0.35) : 0,
+                      filter: isActive ? 'none' : 'saturate(.75) brightness(.88)',
                       pointerEvents: isVisible ? 'auto' : 'none',
                     }}
                   >
-                    <div className="relative aspect-[3/4.35] overflow-hidden bg-slate-100">
-                      <img src={game.image} alt={game.title} loading={isActive ? 'eager' : 'lazy'} draggable={false} className="h-full w-full object-cover" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/5 to-black/10" />
-                      {game.badge && <span className="absolute left-3 top-3 rounded-full border border-white/25 bg-black/50 px-2.5 py-1 text-[8px] font-black tracking-[.12em] text-white backdrop-blur-md">{game.badge}</span>}
+                    <div className="relative aspect-[3/4.2] overflow-hidden bg-slate-100">
+                      <img
+                        src={game.image}
+                        alt={game.title}
+                        loading={isActive ? 'eager' : 'lazy'}
+                        draggable={false}
+                        className="h-full w-full object-cover transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/25 to-black/10" />
+
+                      {game.badge && (
+                        <span className="absolute left-3.5 top-3.5 sm:left-4 sm:top-4 rounded-full border border-white/30 bg-black/60 px-3 py-1 text-[9px] sm:text-[11px] font-black tracking-[.14em] text-white backdrop-blur-md shadow-sm">
+                          {game.badge}
+                        </span>
+                      )}
+
                       {isActive && (
                         <button
                           type="button"
                           onClick={(event) => { event.stopPropagation(); setMetricsGame(game); }}
                           aria-label={`Ver métricas do ${game.title}`}
-                          className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full border border-white/25 bg-black/50 text-white backdrop-blur-md transition-colors hover:bg-black/75 cursor-pointer"
+                          className="absolute right-3.5 top-3.5 sm:right-4 sm:top-4 grid h-8 w-8 sm:h-10 sm:w-10 place-items-center rounded-full border border-white/30 bg-black/60 text-white backdrop-blur-md transition-all hover:bg-black/85 hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
                           title="Ver métricas de indicação"
                         >
-                          <Settings className="h-3.5 w-3.5" />
+                          <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
                         </button>
                       )}
+
                       {isActive && (
-                        <div className="games-coverflow-actions absolute inset-x-0 bottom-0 p-4 text-white">
-                          <h3 className="text-[19px] font-black leading-tight tracking-[-.02em] drop-shadow-md">{game.title}</h3>
-                          <div className="mt-1.5 flex items-center justify-between text-[9px] font-bold text-white/75">
-                            <span className="rounded-full bg-white/15 px-2 py-1 backdrop-blur-md">
-                              {game.multiplier.toLowerCase().includes('breve') ? game.multiplier : `Até ${game.multiplier}`}
+                        <div className="games-coverflow-actions absolute inset-x-0 bottom-0 p-4 sm:p-6 lg:p-7 text-white">
+                          <h3 className="text-xl sm:text-2xl lg:text-3xl font-black leading-tight tracking-[-.025em] drop-shadow-lg">
+                            {game.title}
+                          </h3>
+                          <div className="mt-2 flex items-center justify-between text-[11px] sm:text-xs font-bold text-white/90">
+                            <span className="rounded-full bg-white/20 px-3 py-1 backdrop-blur-md border border-white/10">
+                              Até {game.multiplier}
                             </span>
-                            {game.playersOnline > 0 && <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /><Users className="h-3 w-3" />{game.playersOnline}</span>}
+                            {game.playersOnline > 0 && (
+                              <span className="flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-full backdrop-blur-md border border-white/10">
+                                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                                <Users className="h-3.5 w-3.5" />
+                                {game.playersOnline} online
+                              </span>
+                            )}
                           </div>
-                          <div className="mt-3 flex items-center">
+                          <div className="mt-3.5 sm:mt-4 flex items-center">
                             <button
                               type="button"
                               onPointerDown={(event) => event.stopPropagation()}
                               onClick={(event) => { event.preventDefault(); event.stopPropagation(); void handleIndicateGame(event, game); }}
-                              className="w-full flex h-11 items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-xs shadow-lg shadow-cyan-950/40 border border-white/25 transition-all active:translate-y-px cursor-pointer"
+                              className="games-coverflow-play flex h-12 sm:h-14 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-xs sm:text-sm lg:text-base font-black text-[#111827] shadow-xl transition-all hover:bg-cyan-50 hover:shadow-2xl active:translate-y-px cursor-pointer"
                             >
-                              <Send className="h-3.5 w-3.5 text-white" />
-                              <span>Indicar</span>
+                              <Send className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-600" />
+                              <span>Indicar Jogo</span>
                             </button>
                           </div>
                         </div>
@@ -553,17 +559,35 @@ export const GamesView: React.FC<GamesViewProps> = ({
               })}
             </div>
 
-            <div className="mt-0 flex items-center justify-center gap-3 px-4">
-              <button type="button" onClick={() => selectCoverflowGame(coverflowIndex - 1)} aria-label="Jogo anterior" className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition-all hover:bg-slate-100 active:scale-95">
-                <ChevronLeft className="h-4 w-4" />
+            <div className="mt-2 sm:mt-4 flex items-center justify-center gap-4 sm:gap-6 px-4 shrink-0">
+              <button
+                type="button"
+                onClick={() => selectCoverflowGame(coverflowIndex - 1)}
+                aria-label="Jogo anterior"
+                className="grid h-10 w-10 sm:h-12 sm:w-12 place-items-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 transition-all hover:bg-slate-100 hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
+              >
+                <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
               </button>
-              <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5" aria-label="Paginação dos jogos">
+              <div className="flex min-w-0 flex-1 max-w-xs items-center justify-center gap-2 sm:gap-2.5" aria-label="Paginação dos jogos">
                 {filteredGames.map((game, index) => (
-                  <button key={game.id} type="button" onClick={() => selectCoverflowGame(index)} aria-label={`Selecionar ${game.title}`} className={`h-1.5 rounded-full transition-all duration-300 ${index === coverflowIndex ? 'w-7 bg-cyan-500' : 'w-1.5 bg-slate-300 hover:bg-slate-400'}`} />
+                  <button
+                    key={game.id}
+                    type="button"
+                    onClick={() => selectCoverflowGame(index)}
+                    aria-label={`Selecionar ${game.title}`}
+                    className={`h-2 sm:h-2.5 rounded-full transition-all duration-300 cursor-pointer ${
+                      index === coverflowIndex ? 'w-8 sm:w-12 bg-cyan-500 shadow-xs' : 'w-2 sm:w-2.5 bg-slate-300 hover:bg-slate-400'
+                    }`}
+                  />
                 ))}
               </div>
-              <button type="button" onClick={() => selectCoverflowGame(coverflowIndex + 1)} aria-label="Próximo jogo" className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition-all hover:bg-slate-100 active:scale-95">
-                <ChevronRight className="h-4 w-4" />
+              <button
+                type="button"
+                onClick={() => selectCoverflowGame(coverflowIndex + 1)}
+                aria-label="Próximo jogo"
+                className="grid h-10 w-10 sm:h-12 sm:w-12 place-items-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 transition-all hover:bg-slate-100 hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
+              >
+                <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
               </button>
             </div>
           </section>
@@ -576,8 +600,9 @@ export const GamesView: React.FC<GamesViewProps> = ({
           </div>
         )}
 
-        {/* Área de Pesquisa e Categorias — posicionada abaixo de Escolha seu próximo jogo */}
-        <div id="games-search-area" className="rounded-[22px] border border-white bg-white/80 p-2.5 shadow-[0_10px_30px_rgba(15,23,42,.055)] backdrop-blur-xl">
+        {/* Área de Pesquisa e Categorias — ocultada na versão para computadores (lg:hidden) */}
+        <div id="games-search-area" className="lg:hidden rounded-[22px] border border-white bg-white/80 p-2.5 shadow-[0_10px_30px_rgba(15,23,42,.055)] backdrop-blur-xl">
+          {/* Elemento de pesquisa de jogos */}
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -596,7 +621,7 @@ export const GamesView: React.FC<GamesViewProps> = ({
             )}
           </div>
 
-          <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+          <div className="mt-2 lg:mt-0 flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
             {categories.map((cat) => (
               <button
                 key={cat.id}

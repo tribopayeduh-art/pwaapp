@@ -1,3 +1,4 @@
+import { fetchWithTimeout as fetch } from './network.ts';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 import path from 'path';

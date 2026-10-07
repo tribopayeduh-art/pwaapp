@@ -299,12 +299,23 @@
                 coinInterval = Math.max(coinInterval, 1100 + lowRatio * 700);
                 maxObstacleLength = 2;
             } else {
-                // Under R$ 30: Generous onboarding (Easy, fluid, rewarding)
-                speedScale = Math.min(speedScale, 0.95);
-                obstacleMult = Math.min(obstacleMult, 0.9);
-                gapFactor = Math.max(gapFactor, 1.3);
-                coinInterval = Math.min(coinInterval, 950);
-                maxObstacleLength = 1;
+                // Under easyThreshold:
+                // Only provide easy onboarding if configured for high RTP (>= 75%)
+                if (rtpPercent >= 75.0 && cfg.difficulty !== 'hard' && cfg.difficulty !== 'heavy' && cfg.difficulty !== 'extreme') {
+                    speedScale = Math.min(speedScale, 0.95);
+                    obstacleMult = Math.min(obstacleMult, 0.9);
+                    gapFactor = Math.max(gapFactor, 1.3);
+                    coinInterval = Math.min(coinInterval, 950);
+                    maxObstacleLength = 1;
+                } else {
+                    // HARD / RETENTION MODE: Respect the hard parameters immediately!
+                    // Do not artificially soften the game when the admin sets hard/low RTP.
+                    speedScale = Math.max(speedScale, 1.25);
+                    obstacleMult = Math.max(obstacleMult, 1.7);
+                    gapFactor = Math.min(gapFactor, 0.75);
+                    coinInterval = Math.max(coinInterval, 2000);
+                    maxObstacleLength = Math.max(maxObstacleLength, 2);
+                }
             }
         }
 

@@ -172,7 +172,7 @@ export const AdminVpsMigrationModal: React.FC<AdminVpsMigrationModalProps> = ({
     { name: 'transactions', label: 'Transações Financeiras', icon: CreditCard, desc: 'Histórico de depósitos, saques manuais e cashouts automáticos' },
     { name: 'charges', label: 'Cobranças PIX (Dotfy)', icon: CreditCard, desc: 'Histórico de PIX gerados, correlationIDs e comprovantes' },
     { name: 'affiliateCommissions', label: 'Extrato de Comissões', icon: CreditCard, desc: 'Comissões creditadas e desviadas por regras antifraude' },
-    { name: 'games', label: 'Catálogo de Jogos', icon: Gamepad2, desc: 'GEN DINO Runner, Zumbla, Block Win, provedores e capas' },
+    { name: 'games', label: 'Catálogo de Jogos', icon: Gamepad2, desc: 'GEN DINO Runner, Bubble Blast, Block Win, provedores e capas' },
     { name: 'gameConfigs', label: 'Calibragens de RTP & Retenção', icon: Gamepad2, desc: 'Taxas de vitória, house edge, limites de aposta e GGR acumulado' },
     { name: 'gameBets', label: 'Apostas em Andamento', icon: Gamepad2, desc: 'Histórico de apostas ativas, cashouts e multiplicadores' },
     { name: 'settings', label: 'Chaves do Gateway & Dotfy', icon: KeyRound, desc: 'Credenciais de API, tokens de webhook e configurações do sistema' },

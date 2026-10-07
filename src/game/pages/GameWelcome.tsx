@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameUser } from '../types';
-import { CheckCircle2, Play, LayoutDashboard, Sparkles, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Play, LayoutDashboard, ShieldCheck } from 'lucide-react';
 
 interface GameWelcomeProps {
   user: GameUser;
@@ -26,7 +26,7 @@ export const GameWelcome: React.FC<GameWelcomeProps> = ({
 
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-400/30 text-emerald-300 rounded-full text-xs font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
             <span>Conta Pronta!</span>
           </div>
           <h1 className="text-2xl font-black text-white font-mono">

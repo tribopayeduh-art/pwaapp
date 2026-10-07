@@ -3,10 +3,10 @@
 
 export type CanonicalGameId =
   | 'g_gen_dino'
-  | 'g_zumbla'
   | 'g_raspa_fortuna'
   | 'g_block_puzzle'
   | 'g_subway_pay'
+  | 'g_bubble_blast'
   | 'alliance_hub';
 
 export interface GameTrackingPayload {
@@ -28,7 +28,7 @@ export function normalizeGameId(raw: string | null | undefined): CanonicalGameId
   if (['gen-dino', 'gendino', 'g-gen-dino', 'dino', 'dinopay', 'dinoplay', 'dinipay', 't-rex', 't-rex-run'].some((k) => str.includes(k))) {
     return 'g_gen_dino';
   }
-  if (['subway', 'subwaypay', 'subway-pay', 'g-subway-pay', 'subway_pay', 'joguesubway', 'zumbla', 'zumbla-win', 'g-zumbla', 'zumblapay'].some((k) => str.includes(k))) {
+  if (['subway', 'subwaypay', 'subway-pay', 'g-subway-pay', 'subway_pay', 'joguesubway'].some((k) => str.includes(k))) {
     return 'g_subway_pay';
   }
   if (['raspa', 'raspafortuna', 'raspa-fortuna', 'g-raspa-fortuna', 'scratch', 'raspadinha', 'raspadinhaadasorte'].some((k) => str.includes(k))) {
@@ -36,6 +36,9 @@ export function normalizeGameId(raw: string | null | undefined): CanonicalGameId
   }
   if (['block', 'blockwin', 'block-win', 'block-puzzle', 'g-block-puzzle', 'blockwinn', 'blockwinner'].some((k) => str.includes(k))) {
     return 'g_block_puzzle';
+  }
+  if (['bubble', 'bubbleblast', 'bubble-blast', 'bubbles', 'bubbles-win', 'bubbleswin', 'jogarbubble', 'jogarbubble.online', 'g-bubble-blast', 'g_bubble_blast', 'zumbla', 'zumblawin', 'zumbla-win', 'zumblapay', 'g_zumbla'].some((k) => str.includes(k))) {
+    return 'g_bubble_blast';
   }
   if (['hub', 'portal', 'goalliancehub', 'alliance'].some((k) => str.includes(k))) {
     return 'alliance_hub';
@@ -65,7 +68,7 @@ export function detectGameFromEnvironment(): { game: CanonicalGameId; source: st
   if (pathname.includes('/gen-dino') || pathname.includes('/dino') || pathname.includes('/dinopay') || pathname.includes('/dinoplay')) {
     return { game: 'g_gen_dino', source: 'pathname_dino' };
   }
-  if (pathname.includes('/zumbla') || pathname.includes('/subway')) {
+  if (pathname.includes('/subway')) {
     return { game: 'g_subway_pay', source: 'pathname_subway' };
   }
   if (pathname.includes('/raspa')) {
@@ -74,12 +77,15 @@ export function detectGameFromEnvironment(): { game: CanonicalGameId; source: st
   if (pathname.includes('/blockwin') || pathname.includes('/block-puzzle')) {
     return { game: 'g_block_puzzle', source: 'pathname_block' };
   }
+  if (pathname.includes('/bubble') || pathname.includes('/bubbles') || pathname.includes('/zumbla')) {
+    return { game: 'g_bubble_blast', source: 'pathname_bubble' };
+  }
 
   // 3. Hostname-based detection
   if (hostname.includes('dinopay') || hostname.includes('dinoplay') || hostname.includes('gendino')) {
     return { game: 'g_gen_dino', source: 'hostname_dino' };
   }
-  if (hostname.includes('joguesubway') || hostname.includes('zumblapay') || hostname.includes('subwaypay') || ((hostname.includes('zumbla') || hostname.includes('subway')) && !hostname.includes('alliance'))) {
+  if (hostname.includes('joguesubway') || hostname.includes('subwaypay') || (hostname.includes('subway') && !hostname.includes('alliance'))) {
     return { game: 'g_subway_pay', source: 'hostname_subway' };
   }
   if (hostname.includes('raspafortuna') || hostname.includes('raspadinhaadasorte') || hostname.includes('raspadinha')) {
@@ -87,6 +93,9 @@ export function detectGameFromEnvironment(): { game: CanonicalGameId; source: st
   }
   if (hostname.includes('blockwinn') || hostname.includes('blockwinner') || hostname.includes('blockwin')) {
     return { game: 'g_block_puzzle', source: 'hostname_block' };
+  }
+  if (hostname.includes('jogarbubble') || hostname.includes('bubbleswin') || hostname.includes('bubbleblast') || hostname.includes('zumbla') || hostname.includes('zumblawin') || (hostname.includes('bubble') && !hostname.includes('alliance'))) {
+    return { game: 'g_bubble_blast', source: 'hostname_bubble' };
   }
   if (hostname.includes('subwaypay') || (hostname.includes('subway') && !hostname.includes('alliance'))) {
     return { game: 'g_subway_pay', source: 'hostname_subway' };

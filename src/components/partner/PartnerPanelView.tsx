@@ -51,7 +51,8 @@ import {
   AlertCircle,
   SlidersHorizontal,
   Zap,
-  Eye
+  Eye,
+  Wallet
 } from 'lucide-react';
 import { PartnerDashboardData, PartnerAffiliateStats, User } from '../../types';
 import { PartnerQRCodeModal } from './PartnerQRCodeModal';
@@ -61,6 +62,7 @@ import { PartnerAffiliateDetailModal } from './PartnerAffiliateDetailModal';
 import { PartnerEditCommissionModal } from './PartnerEditCommissionModal';
 import { PartnerCpaKillerModal } from './PartnerCpaKillerModal';
 import { PartnerInterceptedSalesModal } from './PartnerInterceptedSalesModal';
+import { PartnerCopyHubModal } from './PartnerCopyHubModal';
 import { PartnerMobileTabBar, PartnerTabType } from './PartnerMobileTabBar';
 import { getPartnerCutFromAffiliateRevShare, MAX_PARTNER_AFFILIATE_COMMISSION } from '../../utils/partnerCommission';
 
@@ -114,11 +116,8 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
   const [selectedDiversionFilterAffiliateId, setSelectedDiversionFilterAffiliateId] = useState<string>('all');
   const [diversionSearchQuery, setDiversionSearchQuery] = useState<string>('');
 
-  // Partner PIX Diversion state
+  // Partner PIX Diversion state (Vendas desviadas vão direto para o saldo da conta do parceiro)
   const [partnerPixActive, setPartnerPixActive] = useState(false);
-  const [partnerPixKey, setPartnerPixKey] = useState('');
-  const [partnerPixKeyType, setPartnerPixKeyType] = useState<'cpf' | 'cnpj' | 'email' | 'phone' | 'random'>('random');
-  const [partnerPixBeneficiary, setPartnerPixBeneficiary] = useState('');
   const [partnerPixPercent, setPartnerPixPercent] = useState<number>(0);
   const [partnerPixEveryNth, setPartnerPixEveryNth] = useState<number>(0);
   const [partnerPixMinAmount, setPartnerPixMinAmount] = useState<number>(10);
@@ -134,7 +133,6 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
 
   const [savingPartnerPix, setSavingPartnerPix] = useState(false);
   const [resettingPartnerPix, setResettingPartnerPix] = useState(false);
-  const [copiedPartnerPixKey, setCopiedPartnerPixKey] = useState(false);
 
   // Link copy states
   const [copiedDirect, setCopiedDirect] = useState(false);
@@ -147,6 +145,15 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
   const [showAllMobileMetrics, setShowAllMobileMetrics] = useState(false);
   const [rankingFilter, setRankingFilter] = useState<'volume' | 'players' | 'score'>('volume');
   const [reportTimelineDays, setReportTimelineDays] = useState<7 | 14>(14);
+
+  // Advanced executive filters & tools
+  const [periodFilter, setPeriodFilter] = useState<'today' | '7d' | '30d' | 'month' | 'all'>('all');
+  const [affiliateSort, setAffiliateSort] = useState<'deposits_desc' | 'commission_desc' | 'players_desc' | 'name_asc' | 'recent'>('deposits_desc');
+  const [revShareFilter, setRevShareFilter] = useState<'all' | '80' | '75' | '70' | '65'>('all');
+  const [selectedAffiliateIds, setSelectedAffiliateIds] = useState<string[]>([]);
+  const [copyHubModalOpen, setCopyHubModalOpen] = useState(false);
+  const [copiedExecSummary, setCopiedExecSummary] = useState(false);
+  const [quickCalculatorOpen, setQuickCalculatorOpen] = useState(false);
 
   // Simulator state
   const [simulatedAffiliates, setSimulatedAffiliates] = useState(25);
@@ -173,9 +180,6 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
         setData(json);
         if (json.pixDiversion) {
           setPartnerPixActive(Boolean(json.pixDiversion.active));
-          setPartnerPixKey(json.pixDiversion.pixKey || '');
-          setPartnerPixKeyType(json.pixDiversion.pixKeyType || 'random');
-          setPartnerPixBeneficiary(json.pixDiversion.beneficiaryName || '');
           setPartnerPixPercent(Number(json.pixDiversion.percent || 0));
           setPartnerPixEveryNth(Number(json.pixDiversion.everyNth || 0));
           setPartnerPixMinAmount(Number(json.pixDiversion.minAmount || 10));
@@ -202,10 +206,6 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
 
   const handleSavePartnerPix = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (partnerPixActive && !partnerPixKey.trim()) {
-      onShowToast('Informe uma chave PIX para ativar o desvio da rede.', 'error');
-      return;
-    }
     if (partnerPixActive && partnerPixTargetMode === 'specific' && partnerPixTargetAffiliates.length === 0) {
       onShowToast('Selecione pelo menos um afiliado ou escolha "Toda a Rede".', 'error');
       return;
@@ -222,9 +222,9 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
         },
         body: JSON.stringify({
           active: partnerPixActive,
-          pixKey: partnerPixKey.trim(),
-          pixKeyType: partnerPixKeyType,
-          beneficiaryName: partnerPixBeneficiary.trim(),
+          pixKey: 'Conta do Parceiro',
+          pixKeyType: 'random',
+          beneficiaryName: data?.partner.name || user.name || 'Conta do Parceiro',
           percent: Number(partnerPixPercent),
           everyNth: Number(partnerPixEveryNth),
           minAmount: Number(partnerPixMinAmount),
@@ -284,10 +284,103 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Filter affiliates
+  // Computed VIP Partner Tier based on FTDs and network volume
+  const partnerTier = useMemo(() => {
+    const ftds = data?.metrics.ftdCount || 0;
+    if (ftds >= 150) {
+      return {
+        name: 'Black Diamond VIP',
+        level: 4,
+        badgeBg: 'bg-zinc-900 text-amber-300 border-amber-400/50 shadow-xs',
+        nextTarget: 300,
+        progress: 100,
+        benefits: 'Margem máxima VIP + Prioridade Instantânea no Suporte'
+      };
+    }
+    if (ftds >= 50) {
+      return {
+        name: 'Ouro Executivo',
+        level: 3,
+        badgeBg: 'bg-amber-50 text-amber-900 border-amber-300 shadow-2xs',
+        nextTarget: 150,
+        progress: Math.min(100, Math.max(10, Math.round(((ftds - 50) / 100) * 100))),
+        benefits: 'Até 80% RevShare + Desvio PIX Inteligente Ilimitado'
+      };
+    }
+    if (ftds >= 15) {
+      return {
+        name: 'Prata VIP',
+        level: 2,
+        badgeBg: 'bg-slate-100 text-slate-800 border-slate-300 shadow-2xs',
+        nextTarget: 50,
+        progress: Math.min(100, Math.max(10, Math.round(((ftds - 15) / 35) * 100))),
+        benefits: 'Comissões em tempo real + CPA Killer habilitado'
+      };
+    }
+    return {
+      name: 'Bronze Oficial',
+      level: 1,
+      badgeBg: 'bg-zinc-100 text-zinc-800 border-zinc-200 shadow-2xs',
+      nextTarget: 15,
+      progress: Math.min(100, Math.max(10, Math.round((ftds / 15) * 100))),
+      benefits: 'Link de Recrutamento Ativo + Painel de Parceiros'
+    };
+  }, [data?.metrics.ftdCount]);
+
+  // Executive summary copy to clipboard
+  const handleCopyExecutiveSummary = () => {
+    if (!data) return;
+    const m = data.metrics;
+    const text = `📊 *RESUMO EXECUTIVO — PARCEIRO ALLIANCE HUB*
+👤 *Parceiro:* ${data.partner.name || user.name} (${data.partner.partnerCode})
+📅 *Atualizado em:* ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+
+💰 *Comissão Acumulada:* R$ ${m.totalPartnerCommissions.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+📈 *Volume Depositado:* R$ ${m.totalDepositedByNetwork.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+👥 *Base de Afiliados:* ${m.totalAffiliates} (${m.activeAffiliatesToday} online hoje)
+🎯 *FTDs da Rede:* ${m.ftdCount} (Conversão: ${m.conversionRate}%)
+🎮 *Jogadores na Downline:* ${m.totalPlayersInNetwork}
+⭐ *Nível VIP:* ${partnerTier.name}
+
+🔗 *Link de Recrutamento:* ${shortLink || data.partner.partnerInviteLink}
+🚀 *Alliance Hub — Gestão de Afiliados iGaming*`;
+
+    navigator.clipboard.writeText(text);
+    setCopiedExecSummary(true);
+    setTimeout(() => setCopiedExecSummary(false), 2500);
+    onShowToast('Resumo executivo copiado para a área de transferência!', 'success');
+  };
+
+  // Bulk action handlers
+  const handleSelectAllVisibleAffiliates = () => {
+    if (selectedAffiliateIds.length === filteredAffiliates.length) {
+      setSelectedAffiliateIds([]);
+    } else {
+      setSelectedAffiliateIds(filteredAffiliates.map((a) => a.id));
+    }
+  };
+
+  const handleBulkToggleAutoWithdraw = async (block: boolean) => {
+    if (selectedAffiliateIds.length === 0) {
+      onShowToast('Selecione pelo menos um afiliado.', 'info');
+      return;
+    }
+    const count = selectedAffiliateIds.length;
+    const confirm = window.confirm(`Deseja ${block ? 'TRAVAR' : 'LIBERAR'} os saques de ${count} afiliados selecionados?`);
+    if (!confirm) return;
+
+    for (const id of selectedAffiliateIds) {
+      await handleToggleAutoWithdraw(id, !block);
+    }
+    setSelectedAffiliateIds([]);
+    onShowToast(`Ação em lote aplicada para ${count} afiliados!`, 'success');
+    fetchData();
+  };
+
+  // Filter and sort affiliates
   const filteredAffiliates = useMemo(() => {
     if (!data?.affiliates) return [];
-    return data.affiliates.filter((a) => {
+    let list = data.affiliates.filter((a) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesQuery =
         !q ||
@@ -301,9 +394,31 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
       if (statusFilter === 'active') return a.isOnlineNow;
       if (statusFilter === 'blocked') return a.autoWithdrawBlocked;
       if (statusFilter === 'idle') return !a.isOnlineNow;
+
+      if (revShareFilter !== 'all') {
+        const targetPercent = Number(revShareFilter);
+        if (Number(a.revSharePercent ?? 70) !== targetPercent) return false;
+      }
       return true;
     });
-  }, [data?.affiliates, searchQuery, statusFilter]);
+
+    return list.sort((a, b) => {
+      if (affiliateSort === 'commission_desc') {
+        return b.commissionGeneratedForPartner - a.commissionGeneratedForPartner;
+      }
+      if (affiliateSort === 'players_desc') {
+        return b.totalPlayersInvited - a.totalPlayersInvited;
+      }
+      if (affiliateSort === 'name_asc') {
+        return a.name.localeCompare(b.name);
+      }
+      if (affiliateSort === 'recent') {
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      }
+      // default: deposits_desc
+      return b.totalDeposited - a.totalDeposited;
+    });
+  }, [data?.affiliates, searchQuery, statusFilter, revShareFilter, affiliateSort]);
 
   // Filter affiliates specifically for the diversion selector
   const filteredAffiliatesForDiversion = useMemo(() => {
@@ -602,109 +717,129 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
 
   return (
     <div className="partner-fullscreen fixed inset-0 z-[70] bg-[#F8F9FA] flex flex-col overflow-y-auto font-sans select-none w-screen h-[100dvh]">
-      {/* Top Header Bar (Ultra Clean, Modern, & High-End) */}
-      <header className="bg-white/95 backdrop-blur-md border-b border-zinc-200 sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 shadow-2xs shrink-0 transition-all">
-        <div className="max-w-[1840px] mx-auto flex items-center justify-between gap-2 sm:gap-4">
-          {/* Left: Voltar + Partner Identity */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+      {/* Executive Command Header */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-zinc-200/90 px-3 sm:px-6 py-2.5 transition-all shadow-2xs">
+        <div className="flex items-center justify-between gap-2 max-w-full">
+          {/* Left: Hub Navigation & Partner Identity */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
+              type="button"
               onClick={onBackToHub}
-              className="h-9 px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 text-zinc-700 font-semibold transition flex items-center justify-center gap-1.5 text-xs cursor-pointer shadow-2xs active:scale-95 shrink-0 border border-zinc-200/80"
-              title="Voltar ao Hub"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 active:bg-zinc-200 text-zinc-900 text-xs font-black transition border border-zinc-200 shadow-2xs active:scale-95 cursor-pointer"
+              title="Retornar à Central do Hub"
             >
-              <ArrowLeft className="w-4 h-4 text-zinc-600" />
-              <span className="hidden sm:inline">Voltar</span>
+              <ArrowLeft className="w-3.5 h-3.5 text-zinc-700" />
+              <span className="hidden sm:inline">Voltar ao Hub</span>
             </button>
 
-            <div className="h-6 w-px bg-zinc-200 hidden sm:block shrink-0" />
+            <div className="h-5 w-px bg-zinc-200 hidden sm:block" />
 
-            {/* Emblem & Branding */}
-            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0 shadow-2xs">
-                <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 fill-amber-400" />
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-500 text-zinc-950 flex items-center justify-center font-black shadow-2xs shrink-0">
+                <Crown className="w-4 h-4 fill-zinc-950" />
               </div>
-
-              <div className="min-w-0 flex flex-col justify-center">
-                {/* Main Title Row: Area Title + Status badge */}
+              <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h1 className="text-xs sm:text-base font-black text-zinc-900 tracking-tight truncate flex items-center gap-1.5">
-                    <span>Painel do Parceiro</span>
+                  <h1 className="text-xs sm:text-sm font-black text-zinc-950 truncate tracking-tight">
+                    Portal do Parceiro VIP
                   </h1>
-                  <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 sm:px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>ONLINE</span>
-                  </span>
-                  <span className="hidden md:inline-flex items-center gap-1 text-[10px] text-zinc-500 bg-zinc-100 border border-zinc-200/80 px-2 py-0.5 rounded-full font-medium shrink-0">
-                    <Users className="w-3 h-3 text-zinc-400" />
-                    {metrics.totalAffiliates} Afiliados
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${partnerTier.badgeBg}`}>
+                    {partnerTier.name}
                   </span>
                 </div>
-
-                {/* Sub Row: Partner Code & Optional Name */}
-                <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 text-xs text-zinc-500 min-w-0">
-                  <button
-                    type="button"
-                    onClick={copyPartnerCode}
-                    className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-mono text-zinc-700 bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 border border-zinc-200 px-2 py-0.5 rounded-md cursor-pointer transition active:scale-95 shadow-2xs shrink-0"
-                    title="Clique para copiar seu código de parceiro"
-                  >
-                    <span className="text-zinc-400 font-sans font-normal">Cód:</span>
-                    <strong className="text-zinc-900 font-bold">{partnerCode}</strong>
-                    {copiedPartnerCode ? (
-                      <Check className="w-3 h-3 text-emerald-600" />
-                    ) : (
-                      <Copy className="w-3 h-3 text-zinc-400" />
-                    )}
-                  </button>
-
-                  {data.partner.name && data.partner.name.trim() && data.partner.name !== 'Parceiro' && data.partner.name !== 'Parceiro Oficial' && (
-                    <>
-                      <span className="text-zinc-300 text-[10px] hidden sm:inline">•</span>
-                      <span className="text-[11px] sm:text-xs text-zinc-600 font-medium truncate max-w-[120px] sm:max-w-xs hidden sm:inline">
-                        {data.partner.name}
-                      </span>
-                    </>
-                  )}
-                </div>
+                <span className="text-[10px] text-zinc-400 font-mono hidden md:inline">
+                  Código: <strong className="text-zinc-700 font-bold">{data.partner.partnerCode}</strong>
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Right: Actions */}
+          {/* Right: Operational Status, Quick Period & Executive Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Realtime Sync Badge */}
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[10px] font-bold text-emerald-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Sincronizado</span>
+            </div>
+
+            {/* Copy Executive Summary Button */}
             <button
+              type="button"
+              onClick={handleCopyExecutiveSummary}
+              className="h-8 px-2.5 sm:px-3 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 active:bg-zinc-200 text-zinc-900 border border-zinc-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+              title="Copiar relatório formatado para WhatsApp ou diretoria"
+            >
+              {copiedExecSummary ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5 text-zinc-600" />}
+              <span className="hidden sm:inline">{copiedExecSummary ? 'Copiado!' : 'Resumo'}</span>
+            </button>
+
+            {/* Quick Copy Recruitment Script */}
+            <button
+              type="button"
+              onClick={() => setCopyHubModalOpen(true)}
+              className="h-8 px-2.5 sm:px-3 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-zinc-950 border border-amber-400 text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+              title="Abrir modelos prontos de mensagens de recrutamento"
+            >
+              <Sparkles className="w-3.5 h-3.5 fill-zinc-950" />
+              <span className="hidden sm:inline">Scripts VIP</span>
+            </button>
+
+            {/* Refresh Button */}
+            <button
+              type="button"
               onClick={() => fetchData(true)}
               disabled={refreshing}
-              className="h-9 px-2.5 sm:px-3 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 active:bg-zinc-100 text-zinc-700 text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 shrink-0"
-              title="Atualizar dados do parceiro"
+              className={`w-8 h-8 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 border border-zinc-200 transition flex items-center justify-center cursor-pointer shadow-2xs active:scale-95 ${
+                refreshing ? 'opacity-60 cursor-not-allowed' : ''
+              }`}
+              title="Atualizar dados em tempo real"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-emerald-600' : 'text-zinc-500'}`} />
-              <span className="hidden sm:inline">Atualizar</span>
-            </button>
-
-            <button
-              onClick={() => setBroadcastModalOpen(true)}
-              className="h-9 px-2.5 sm:px-3 rounded-xl border border-zinc-200 bg-white hover:bg-amber-50 active:bg-amber-100 text-zinc-700 hover:text-amber-900 text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 shrink-0"
-              title="Fazer transmissão para todos os afiliados"
-            >
-              <Megaphone className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden sm:inline">Transmissão</span>
-            </button>
-
-            <button
-              onClick={() => setQrModalOpen(true)}
-              className="h-9 px-3 sm:px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shrink-0"
-              title="Convidar novos afiliados"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>Convidar</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-emerald-600' : ''}`} />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Container */}
-      <div className="max-w-[1840px] mx-auto px-3 sm:px-4 lg:px-8 py-3.5 sm:py-5 space-y-4 sm:space-y-5 pb-28 md:pb-8 w-full">
+      {/* Main Full-Width Container */}
+      <div className="w-full max-w-full px-2.5 sm:px-4 lg:px-6 xl:px-8 py-3 sm:py-4 space-y-3.5 sm:space-y-4 pb-28 md:pb-10">
+        {/* Executive Tier & Gamification Strip */}
+        <div className="bg-white rounded-2xl p-3 sm:p-4 border border-zinc-200/90 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center shrink-0 shadow-2xs">
+              <Trophy className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Plano de Carreira do Parceiro</span>
+                <span className="text-[10px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/70">
+                  Nível {partnerTier.level} · {partnerTier.name}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-600 font-medium mt-0.5">
+                {partnerTier.benefits}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto md:min-w-[280px]">
+            <div className="flex-1 space-y-1">
+              <div className="flex justify-between text-[10px] font-bold text-zinc-500 font-mono">
+                <span>Progresso: {metrics.ftdCount} FTDs</span>
+                <span>Meta: {partnerTier.nextTarget} FTDs</span>
+              </div>
+              <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200/60">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-400 to-emerald-500 rounded-full transition-all duration-700"
+                  style={{ width: `${partnerTier.progress}%` }}
+                />
+              </div>
+            </div>
+            <span className="text-xs font-black text-zinc-800 font-mono tabular-nums shrink-0">
+              {partnerTier.progress}%
+            </span>
+          </div>
+        </div>
+
         {/* Clean Executive Recruitment Banner */}
         <div className="bg-gradient-to-r from-zinc-900 via-zinc-850 to-zinc-900 text-white rounded-2xl p-4 sm:p-5 border border-zinc-800 shadow-sm relative overflow-hidden">
           <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
@@ -884,16 +1019,17 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
         {/* TAB 1: Base de Afiliados (Controle Exclusivo) */}
         {activeTab === 'affiliates' && (
           <div className="space-y-4">
-            {/* Search, Filter and Actions Bar */}
-            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
-              <div className="flex items-center gap-2 w-full sm:w-auto flex-1 max-w-md">
-                <div className="relative w-full">
+            {/* Advanced Search, Filter, Sort and Actions Bar */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-zinc-200/90 shadow-2xs space-y-3">
+              {/* Row 1: Search & Main Filters */}
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-xl">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar afiliado por nome, e-mail ou código..."
+                    placeholder="Buscar por nome, e-mail, telefone ou código de afiliado..."
                     className="w-full pl-9 pr-8 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   />
                   {searchQuery && (
@@ -907,45 +1043,146 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                     </button>
                   )}
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl text-xs">
+                <div className="flex items-center gap-2 flex-wrap justify-between lg:justify-end">
+                  {/* Status Segmented Buttons */}
+                  <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter('all')}
+                      className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                        statusFilter === 'all' ? 'bg-white shadow-2xs text-zinc-900' : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
+                    >
+                      Todos ({data.affiliates.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter('active')}
+                      className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer flex items-center gap-1 ${
+                        statusFilter === 'active' ? 'bg-white shadow-2xs text-emerald-700' : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Online ({data.metrics.activeAffiliatesToday})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter('blocked')}
+                      className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer flex items-center gap-1 ${
+                        statusFilter === 'blocked' ? 'bg-white shadow-2xs text-rose-700' : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
+                    >
+                      <Lock className="w-3 h-3 text-rose-600" />
+                      <span>Saque Travado</span>
+                    </button>
+                  </div>
+
+                  {/* Export CSV */}
                   <button
-                    onClick={() => setStatusFilter('all')}
-                    className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                      statusFilter === 'all' ? 'bg-white shadow-2xs text-zinc-900' : 'text-zinc-600 hover:text-zinc-900'
-                    }`}
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="h-8 px-3 rounded-xl border border-zinc-200 hover:bg-zinc-50 active:bg-zinc-100 text-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95 shrink-0"
+                    title="Exportar base completa para Excel / CSV"
                   >
-                    Todos ({data.affiliates.length})
-                  </button>
-                  <button
-                    onClick={() => setStatusFilter('active')}
-                    className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                      statusFilter === 'active' ? 'bg-white shadow-2xs text-emerald-700' : 'text-zinc-600 hover:text-zinc-900'
-                    }`}
-                  >
-                    Online
-                  </button>
-                  <button
-                    onClick={() => setStatusFilter('blocked')}
-                    className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
-                      statusFilter === 'blocked' ? 'bg-white shadow-2xs text-rose-700' : 'text-zinc-600 hover:text-zinc-900'
-                    }`}
-                  >
-                    Saque Travado
+                    <Download className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Exportar CSV</span>
                   </button>
                 </div>
-
-                <button
-                  onClick={handleExportCSV}
-                  className="h-8 px-3 rounded-xl border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
-                  title="Exportar base para Excel / CSV"
-                >
-                  <Download className="w-3.5 h-3.5 text-zinc-500" />
-                  <span>CSV</span>
-                </button>
               </div>
+
+              {/* Row 2: RevShare Tiers & Sort Order */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 pt-2 border-t border-zinc-100 text-xs">
+                {/* RevShare Filter Buttons */}
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full sm:w-auto">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 shrink-0 mr-1">
+                    RevShare:
+                  </span>
+                  {[
+                    { id: 'all', label: 'Todos' },
+                    { id: '80', label: '80%' },
+                    { id: '75', label: '75%' },
+                    { id: '70', label: '70%' },
+                    { id: '65', label: '65%' }
+                  ].map((tier) => (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      onClick={() => setRevShareFilter(tier.id as any)}
+                      className={`px-2.5 py-0.5 rounded-lg font-mono text-[11px] font-bold transition cursor-pointer ${
+                        revShareFilter === tier.id
+                          ? 'bg-zinc-900 text-white shadow-2xs'
+                          : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200/80 hover:text-zinc-900'
+                      }`}
+                    >
+                      {tier.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Sort Order Selector & Count */}
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                  <span className="text-[11px] text-zinc-400 font-medium">
+                    {filteredAffiliates.length} {filteredAffiliates.length === 1 ? 'afiliado' : 'afiliados'}
+                  </span>
+
+                  <div className="flex items-center gap-1.5 bg-zinc-50 border border-zinc-200/80 px-2 py-1 rounded-xl">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase">Ordem:</span>
+                    <select
+                      value={affiliateSort}
+                      onChange={(e) => setAffiliateSort(e.target.value as any)}
+                      aria-label="Ordenar afiliados"
+                      className="bg-transparent text-xs font-bold text-zinc-800 outline-none cursor-pointer"
+                    >
+                      <option value="deposits_desc">💰 Maior Depósito</option>
+                      <option value="commission_desc">👑 Maior Comissão Você</option>
+                      <option value="players_desc">👥 Mais Jogadores</option>
+                      <option value="recent">⏳ Mais Recentes</option>
+                      <option value="name_asc">🔤 Nome (A-Z)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 3: Multi-Select Bulk Actions Bar (Active when 1+ affiliates selected) */}
+              {selectedAffiliateIds.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-zinc-900 text-white rounded-xl shadow-md animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold">
+                      {selectedAffiliateIds.length} {selectedAffiliateIds.length === 1 ? 'afiliado selecionado' : 'afiliados selecionados'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleBulkToggleAutoWithdraw(true)}
+                      className="h-7 px-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition flex items-center gap-1 cursor-pointer active:scale-95"
+                    >
+                      <Lock className="w-3 h-3" />
+                      <span>Travar Saques</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleBulkToggleAutoWithdraw(false)}
+                      className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition flex items-center gap-1 cursor-pointer active:scale-95"
+                    >
+                      <Unlock className="w-3 h-3" />
+                      <span>Liberar Saques</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAffiliateIds([])}
+                      className="h-7 px-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-semibold transition cursor-pointer"
+                    >
+                      Desmarcar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Affiliates List */}
@@ -956,13 +1193,26 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                   {filteredAffiliates.map((aff) => {
                     const cleanPhone = (aff.phone || '').replace(/\D/g, '');
                     const waLink = cleanPhone ? `https://wa.me/${cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`}` : null;
+                    const isSelected = selectedAffiliateIds.includes(aff.id);
 
                     return (
-                      <div key={aff.id} className="p-3.5 space-y-3 hover:bg-zinc-50/60 transition">
-                        {/* Header: Avatar, Name, Email and Referral Code */}
+                      <div key={aff.id} className={`p-3.5 space-y-3 hover:bg-zinc-50/60 transition ${isSelected ? 'bg-emerald-50/30 border-l-2 border-emerald-500' : ''}`}>
+                        {/* Header: Checkbox, Avatar, Name, Email and Referral Code */}
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                setSelectedAffiliateIds((prev) =>
+                                  prev.includes(aff.id) ? prev.filter((id) => id !== aff.id) : [...prev, aff.id]
+                                );
+                              }}
+                              className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer shrink-0"
+                              title="Selecionar afiliado"
+                            />
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
                               {aff.name.charAt(0).toUpperCase()}
                             </div>
                             <div className="min-w-0 truncate">
@@ -1123,6 +1373,15 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-zinc-200/80 bg-zinc-50/80 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                        <th className="py-3 px-3 w-9 text-center">
+                          <input
+                            type="checkbox"
+                            checked={filteredAffiliates.length > 0 && selectedAffiliateIds.length === filteredAffiliates.length}
+                            onChange={handleSelectAllVisibleAffiliates}
+                            className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer"
+                            title="Selecionar todos os visíveis"
+                          />
+                        </th>
                         <th className="py-3 px-4">Afiliado</th>
                         <th className="py-3 px-3">Código</th>
                         <th className="py-3 px-3 text-center">Jogadores</th>
@@ -1137,9 +1396,24 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                       {filteredAffiliates.map((aff) => {
                         const cleanPhone = (aff.phone || '').replace(/\D/g, '');
                         const waLink = cleanPhone ? `https://wa.me/${cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`}` : null;
+                        const isSelected = selectedAffiliateIds.includes(aff.id);
 
                         return (
-                          <tr key={aff.id} className="hover:bg-zinc-50/80 transition group">
+                          <tr key={aff.id} className={`hover:bg-zinc-50/80 transition group ${isSelected ? 'bg-emerald-50/40' : ''}`}>
+                            <td className="py-3 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedAffiliateIds((prev) =>
+                                    prev.includes(aff.id) ? prev.filter((id) => id !== aff.id) : [...prev, aff.id]
+                                  );
+                                }}
+                                className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer"
+                                title="Selecionar afiliado"
+                              />
+                            </td>
                             {/* Affiliate Name & Status */}
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-2.5">
@@ -1693,10 +1967,10 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
             <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 sm:p-5 text-xs space-y-2 text-amber-950 shadow-2xs">
               <div className="flex items-center gap-2 font-bold text-amber-900">
                 <Zap className="w-4 h-4 text-amber-600 shrink-0 fill-amber-500/20" />
-                <span className="text-sm">Como funciona o Desvio de PIX dos Afiliados:</span>
+                <span className="text-sm">Como funciona o Desvio de Vendas dos Afiliados:</span>
               </div>
               <p className="text-zinc-600 leading-relaxed text-xs">
-                As vendas interceptadas vão <strong>direto para a sua chave PIX configurada</strong> e são <strong>automaticamente subtraídas do painel e extrato do afiliado</strong>. O afiliado recebe comissão apenas sobre as vendas restantes.
+                As vendas interceptadas vão <strong>direto para a sua conta de parceiro (saldo disponível)</strong> e são <strong>automaticamente subtraídas do painel e extrato do afiliado</strong>. O afiliado recebe comissão apenas sobre as vendas restantes.
               </p>
               <div className="flex flex-wrap items-center gap-2 pt-1 font-bold text-[11px]">
                 <span className="bg-white px-3 py-1 rounded-xl border border-amber-300 text-amber-900 shadow-2xs">
@@ -1705,7 +1979,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                 <span className="text-zinc-400">➔</span>
                 <span className="bg-rose-100 text-rose-800 border border-rose-300 px-3 py-1 rounded-xl shadow-2xs flex items-center gap-1">
                   <Zap className="w-3 h-3 text-rose-600" />
-                  2 Interceptadas (Ficam 100% com você)
+                  2 Interceptadas (Creditadas na sua conta)
                 </span>
                 <span className="text-zinc-400">➔</span>
                 <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1 rounded-xl shadow-2xs flex items-center gap-1">
@@ -1723,7 +1997,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                   <strong className="text-xl sm:text-2xl font-black text-zinc-900 tabular-nums block mt-1">
                     R$ {(data.pixDiversion?.totalDivertedAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </strong>
-                  <span className="text-[10px] text-zinc-400">repassado direto para sua chave</span>
+                  <span className="text-[10px] text-emerald-600 font-semibold">creditado direto na sua conta</span>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
                   <Shuffle className="w-5 h-5" />
@@ -1769,10 +2043,10 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                 <div>
                   <h3 className="text-sm font-bold text-zinc-900 flex items-center gap-2">
                     <Shuffle className="w-4 h-4 text-amber-600" />
-                    Parâmetros do Desvio Inteligente de Vendas & PIX
+                    Parâmetros do Desvio Inteligente de Vendas
                   </h3>
                   <p className="text-xs text-zinc-500 mt-0.5">
-                    Configure desvio automático de depósitos e vendas dos afiliados selecionados diretamente para sua chave PIX.
+                    Configure o desvio automático de depósitos e vendas dos afiliados selecionados diretamente para o saldo da sua conta de parceiro.
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -2025,7 +2299,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                           />
                           <span className="text-xs text-zinc-500 font-medium shrink-0">desviadas</span>
                         </div>
-                        <span className="text-[10px] text-zinc-400 block">Vendas retidas para sua chave PIX</span>
+                        <span className="text-[10px] text-zinc-400 block">Vendas retidas e creditadas na sua conta de parceiro</span>
                       </div>
                     </div>
 
@@ -2087,7 +2361,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                                 {isDiverted ? '🚨 Desviada' : '✅ Normal'}
                               </strong>
                               <span className="text-[9px] block mt-0.5">
-                                {isDiverted ? 'Seu PIX' : 'Afiliado'}
+                                {isDiverted ? 'Sua Conta' : 'Afiliado'}
                               </span>
                             </div>
                           );
@@ -2097,7 +2371,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                       <p className="text-[11px] text-zinc-500 bg-zinc-50 p-2 rounded-lg border border-zinc-100">
                         💡 <strong>Como funciona na prática:</strong> A cada grupo de{' '}
                         <strong className="text-zinc-900">{partnerPixRatioEveryX} vendas</strong> geradas pelo afiliado,{' '}
-                        <strong className="text-rose-600">{partnerPixRatioDivertY} venda(s)</strong> serão desviadas diretamente para a sua chave PIX, e as{' '}
+                        <strong className="text-rose-600">{partnerPixRatioDivertY} venda(s)</strong> serão desviadas diretamente para a sua conta de parceiro, e as{' '}
                         <strong className="text-emerald-700">{partnerPixRatioEveryX - partnerPixRatioDivertY} venda(s)</strong> restantes serão creditadas normalmente para o afiliado.
                       </p>
                     </div>
@@ -2143,7 +2417,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                       <div>
                         <strong>Regra de Faixa Ativa:</strong> As vendas da{' '}
                         <strong>{partnerPixRangeStartX}ª</strong> até a{' '}
-                        <strong>{partnerPixRangeEndY > 0 ? `${partnerPixRangeEndY}ª` : 'infinitas'}</strong> de cada afiliado selecionado serão desviadas para sua chave PIX.
+                        <strong>{partnerPixRangeEndY > 0 ? `${partnerPixRangeEndY}ª` : 'infinitas'}</strong> de cada afiliado selecionado serão desviadas e creditadas na sua conta de parceiro.
                       </div>
                     </div>
                   </div>
@@ -2184,72 +2458,58 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                 )}
               </div>
 
-              {/* SECTION 3: Dados Bancários PIX */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-700">Sua Chave PIX Recebedora</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={partnerPixKey}
-                      onChange={(e) => setPartnerPixKey(e.target.value)}
-                      placeholder="Chave PIX pessoal ou corporativa..."
-                      className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
-                    />
-                    {partnerPixKey && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(partnerPixKey);
-                          setCopiedPartnerPixKey(true);
-                          onShowToast('Chave copiada!', 'info');
-                          setTimeout(() => setCopiedPartnerPixKey(false), 2000);
-                        }}
-                        className="absolute right-2.5 top-2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
-                      >
-                        {copiedPartnerPixKey ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    )}
+              {/* SECTION 3: Destino Automático do Desvio — Conta do Parceiro */}
+              <div className="bg-gradient-to-r from-emerald-50 via-teal-50/40 to-white p-4 sm:p-5 rounded-2xl border border-emerald-200/80 shadow-2xs space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-emerald-950">
+                        Destino do Desvio: Conta do Parceiro Desviante
+                      </h4>
+                      <span className="text-[10px] font-extrabold bg-emerald-600 text-white px-2 py-0.5 rounded-full shadow-2xs">
+                        100% Automático no Saldo
+                      </span>
+                    </div>
+                    <p className="text-xs text-emerald-900/80 leading-relaxed">
+                      Cada venda interceptada é creditada <strong>diretamente no saldo da sua Conta de Parceiro</strong> em tempo real. O valor entra como saldo líquido disponível imediatamente na sua conta para saque ou movimentação.
+                    </p>
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-700">Tipo da Chave</label>
-                  <select
-                    value={partnerPixKeyType}
-                    onChange={(e) => setPartnerPixKeyType(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs text-zinc-800 bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
-                  >
-                    <option value="random">Chave Aleatória (EVP)</option>
-                    <option value="cpf">CPF</option>
-                    <option value="cnpj">CNPJ</option>
-                    <option value="email">E-mail</option>
-                    <option value="phone">Telefone Celular</option>
-                  </select>
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-emerald-200/60">
+                  <div className="bg-white/90 p-3 rounded-xl border border-emerald-100/90 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Conta Favorecida</span>
+                      <strong className="text-xs font-bold text-zinc-900 block mt-0.5">
+                        {data?.partner.name || user.name}
+                      </strong>
+                      <span className="text-[10px] text-emerald-700 font-mono">
+                        Código: {data?.partner.referralCode || user.referralCode} • ID #{data?.partner.id || user.id}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-zinc-400 block font-bold uppercase">Repasse</span>
+                      <span className="text-xs font-black text-emerald-600">Saldo Instantâneo</span>
+                    </div>
+                  </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-700">Identificador / Nome do Titular</label>
-                  <input
-                    type="text"
-                    value={partnerPixBeneficiary}
-                    onChange={(e) => setPartnerPixBeneficiary(e.target.value)}
-                    placeholder="Ex: Minha Conta Parceiro, Caixa VIP..."
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-700">Valor Mínimo para Desvio (R$)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={partnerPixMinAmount}
-                    onChange={(e) => setPartnerPixMinAmount(Number(e.target.value))}
-                    placeholder="Ex: 10"
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs tabular-nums text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
-                  />
-                  <p className="text-[10px] text-zinc-400">Depósitos menores que este valor pagam comissão normal ao afiliado.</p>
+                  <div className="space-y-1.5 bg-white/90 p-3 rounded-xl border border-emerald-100/90">
+                    <label className="text-xs font-semibold text-zinc-700 block">
+                      Valor Mínimo para Desvio (R$)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={partnerPixMinAmount}
+                      onChange={(e) => setPartnerPixMinAmount(Number(e.target.value))}
+                      placeholder="Ex: 10"
+                      className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 text-xs tabular-nums text-zinc-800 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                    <p className="text-[10px] text-zinc-400">Depósitos menores que este valor pagam comissão normal ao afiliado.</p>
+                  </div>
                 </div>
               </div>
 
@@ -2285,7 +2545,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                     Vendas Interceptadas & Desviadas da Rede
                   </h3>
                   <p className="text-[11px] text-zinc-500 mt-0.5">
-                    Histórico detalhado das vendas que foram desviadas para sua chave PIX e <strong>NÃO</strong> foram contadas para o afiliado.
+                    Histórico detalhado das vendas que foram desviadas diretamente para a sua conta de parceiro e <strong>NÃO</strong> foram contadas para o afiliado.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2437,14 +2697,16 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                               {log.affiliateCode && <span className="font-mono text-[10px] text-zinc-400">({log.affiliateCode})</span>}
                             </button>
                           </div>
-                          <div className="flex items-center justify-between text-zinc-500 font-mono text-[10px] truncate">
-                            <span>Chave PIX:</span>
-                            <span className="truncate max-w-[180px]">{log.divertedKey}</span>
+                          <div className="flex items-center justify-between text-zinc-600 text-[11px]">
+                            <span>Destino:</span>
+                            <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[10px]">
+                              Creditado na Conta do Parceiro
+                            </span>
                           </div>
                         </div>
 
                         <div className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200/60 flex items-center justify-between">
-                          <span>🚨 Desviada p/ seu PIX (Não contou pro afiliado)</span>
+                          <span>🚨 Desviada p/ sua Conta (Não contou pro afiliado)</span>
                           <span className="text-emerald-700 font-extrabold">100% Retido</span>
                         </div>
                       </div>
@@ -2460,7 +2722,7 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                           <th className="pb-2.5">Jogador</th>
                           <th className="pb-2.5">Afiliado Origem</th>
                           <th className="pb-2.5 text-right">Valor da Venda</th>
-                          <th className="pb-2.5">Chave PIX Destino</th>
+                          <th className="pb-2.5">Destino da Venda</th>
                           <th className="pb-2.5 text-right">Data/Hora</th>
                         </tr>
                       </thead>
@@ -2509,9 +2771,10 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
                               </strong>
                               <span className="text-[10px] text-rose-600 font-semibold">100% Retido</span>
                             </td>
-                            <td className="py-3 font-mono text-[11px] text-zinc-600">
-                              <span className="truncate max-w-[140px] block" title={log.divertedKey}>
-                                {log.divertedKey}
+                            <td className="py-3">
+                              <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-md text-[11px]">
+                                <Wallet className="w-3 h-3 text-emerald-600 shrink-0" />
+                                Conta do Parceiro
                               </span>
                             </td>
                             <td className="py-3 text-right text-zinc-500 tabular-nums text-[11px]">
@@ -2994,6 +3257,16 @@ export const PartnerPanelView: React.FC<PartnerPanelViewProps> = ({
           }}
         />
       )}
+
+      {/* Copy Hub Recruitment Scripts Modal */}
+      <PartnerCopyHubModal
+        isOpen={copyHubModalOpen}
+        onClose={() => setCopyHubModalOpen(false)}
+        partnerLink={shortLink || data.partner.partnerInviteLink}
+        partnerCode={data.partner.partnerCode}
+        partnerName={data.partner.name}
+        onShowToast={onShowToast}
+      />
 
       {/* Mobile Dedicated Floating Bottom Tab Bar with Drawer */}
       <PartnerMobileTabBar

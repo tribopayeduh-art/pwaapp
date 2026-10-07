@@ -19,10 +19,6 @@ export const GAME_ASSETS = {
     app: publicAsset('subwaypay/index.html?v=1'),
     runner: publicAsset('subwaypay/jogar/index.html?v=1'),
   },
-  zumbla: {
-    cover: publicAsset('assets/games/zumbla/cover.webp'),
-    app: publicAsset('subwaypay/index.html?v=1'),
-  },
   genDino: {
     cover: publicAsset('assets/games/gen-dino/cover.webp'),
     app: publicAsset('gen-dino/index.html?embedded=1&v=16'),
@@ -32,18 +28,18 @@ export const GAME_ASSETS = {
     app: publicAsset('raspafortuna/index.html?embedded=1&v=2'),
   },
   bubbleBlast: {
+    domain: 'https://jogarbubble.online',
     cover: publicAsset('bubbleblast.png'),
-    app: publicAsset('bubbleblast/demo-game.html'),
-    lobby: publicAsset('bubbleblast/index.html'),
+    app: publicAsset('bubbleblast/index.html?v=1'),
+    game: publicAsset('bubbleblast/demo-game.html?v=1'),
   },
 } as const;
 
 export function getGameCover(gameId: string): string {
   const id = String(gameId || '').toLowerCase();
+  if (id.includes('bubble')) return GAME_ASSETS.bubbleBlast.cover;
   if (id.includes('subway')) return GAME_ASSETS.subwayPay.cover;
   if (id.includes('raspa') || id.includes('fortuna')) return GAME_ASSETS.raspaFortuna.cover;
   if (id.includes('dino')) return GAME_ASSETS.genDino.cover;
-  if (id.includes('zumbla')) return GAME_ASSETS.zumbla.cover;
-  if (id.includes('bubble')) return GAME_ASSETS.bubbleBlast.cover;
   return GAME_ASSETS.blockWin.cover;
 }

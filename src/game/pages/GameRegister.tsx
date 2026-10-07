@@ -154,7 +154,7 @@ export const GameRegister: React.FC<GameRegisterProps> = ({
         {refCode && (
           <div className="p-3 bg-gradient-to-r from-amber-500/20 via-cyan-500/20 to-emerald-500/20 border border-cyan-400/50 rounded-2xl text-xs text-white space-y-1 shadow-lg shadow-cyan-500/10">
             <div className="flex items-center justify-between font-mono font-extrabold text-[#FFE600]">
-              <span>✨ BÔNUS DE INDICAÇÃO ATIVO</span>
+              <span>🎁 BÔNUS DE INDICAÇÃO ATIVO</span>
               <span className="bg-amber-400 text-black text-[9px] px-1.5 py-0.5 rounded font-black">50% BÔNUS</span>
             </div>
             <p className="text-[11px] text-slate-200 font-mono">

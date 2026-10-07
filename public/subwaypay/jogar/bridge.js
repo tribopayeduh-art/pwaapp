@@ -99,18 +99,18 @@ const money = n => Number(n).toLocaleString('pt-BR', { style: 'currency', curren
 
 function getSubwayTargetMultiplier() {
   const cfg = window.SubwayConfig || (typeof SubwayRound !== 'undefined' && SubwayRound.config) || {};
-  return Number(cfg.maxMultiplier) || 4;
+  return Number(cfg.maxMultiplier) || 5;
 }
 function getSubwayCashoutMultiplier() {
   const cfg = window.SubwayConfig || (typeof SubwayRound !== 'undefined' && SubwayRound.config) || {};
-  return Number(cfg.minCashoutMultiplier) || 2;
+  return Number(cfg.minCashoutMultiplier) || 1.5;
 }
 function syncSubwayHud() {
   const targetM = getSubwayTargetMultiplier();
   const cashoutM = getSubwayCashoutMultiplier();
   if (hudTarget) hudTarget.textContent = money(round.entry * targetM);
   if (note && !cashoutUnlocked) {
-    note.textContent = 'Cashout libera ao atingir ' + cashoutM + 'x (' + money(round.entry * cashoutM) + ').';
+    note.textContent = 'Cashout libera ao atingir ' + cashoutM + 'x (' + money(round.entry * cashoutM) + '). Meta de 5x (' + money(round.entry * targetM) + ').';
   }
 }
 syncSubwayHud();
@@ -131,15 +131,18 @@ try {
 if (hudValue) hudValue.textContent = money(0);
 
 function finish(outcome) {
-  if (finished || (outcome === 'cashout' && !cashoutUnlocked)) return;
+  const coinsNow = Math.max(0, Number(getCoins ? getCoins() : (engine?.stats?.coins || 0)) || 0);
+  const isTargetCompleted = coinsNow >= 80 || (typeof SubwayRound !== 'undefined' && SubwayRound.payout(round.entry, coinsNow) >= round.entry * 5.0);
+  if (finished || (outcome === 'cashout' && !cashoutUnlocked && !isTargetCompleted)) return;
   const stored = read('subway-demo-round', null);
   if (!stored || stored.id !== round.id || stored.status !== 'active') return;
   const currUsers = read('subway-demo-users', []);
-  const coins = getCoins();
+  const gameInst = engine || window.SubwayGame;
+  const coins = Math.max(0, Number(getCoins ? getCoins() : (gameInst?.stats?.coins || 0)) || 0);
   if (typeof SubwayRound !== 'undefined' && !SubwayRound.settle(stored, currUsers, outcome, coins)) return;
   finished = true;
   round = stored;
-  engine?.pause?.();
+  gameInst?.pause?.();
   localStorage.setItem('subway-demo-users', JSON.stringify(currUsers));
   localStorage.setItem('subway-demo-round', JSON.stringify(round));
 
@@ -158,6 +161,7 @@ function finish(outcome) {
         outcome: outcome,
         coins: coins,
         entry: round.entry,
+        payout: round.payout,
         email: round.email,
         token: token
       })
@@ -226,6 +230,7 @@ function finish(outcome) {
   document.querySelector('#result-home')?.focus();
 }
 
+let rtpProtectionsUsed = 0;
 window.SubwayBridge = {
   value(coins) {
     if (typeof SubwayRound !== 'undefined') {
@@ -238,16 +243,87 @@ window.SubwayBridge = {
     engine = game;
     getCoins = coins;
     if (cash) { cash.disabled = true; cash.hidden = true; }
+
+    const cfg = window.SubwayConfig || (typeof SubwayRound !== 'undefined' && SubwayRound.config) || {};
+    const rtp = typeof cfg.rtpPercent === 'number' ? cfg.rtpPercent : 96.0;
+    const isHard = rtp < 75.0 || cfg.difficulty === 'hard' || cfg.difficulty === 'heavy' || cfg.difficulty === 'extreme';
+
+    // Apply speed and difficulty directly to game engine
+    try {
+      if (typeof window !== 'undefined') {
+        window.globalDifficulty = isHard ? 'B1C4' : (rtp >= 90 ? 'B1C2' : 'B1C3');
+      }
+      if (engine && engine.stats && engine.stats.data && engine.stats.data.baseSpeed) {
+        engine.stats.data.baseSpeed.min = isHard ? 250 : (rtp >= 90 ? 120 : 180);
+        engine.stats.data.baseSpeed.max = isHard ? 380 : 320;
+      }
+    } catch (_) {}
+
+    // Live refresh config from backend
+    try {
+      fetch('/api/game/subway-pay/config')
+        .then(r => r.ok ? r.json() : null)
+        .then(freshCfg => {
+          if (freshCfg) {
+            window.SubwayConfig = freshCfg;
+            if (typeof SubwayRound !== 'undefined') SubwayRound.config = freshCfg;
+            const freshRtp = typeof freshCfg.rtpPercent === 'number' ? freshCfg.rtpPercent : rtp;
+            const freshIsHard = freshRtp < 75.0 || freshCfg.difficulty === 'hard' || freshCfg.difficulty === 'heavy' || freshCfg.difficulty === 'extreme';
+            if (engine?.stats?.data?.baseSpeed) {
+              engine.stats.data.baseSpeed.min = freshIsHard ? 250 : (freshRtp >= 90 ? 120 : 180);
+              engine.stats.data.baseSpeed.max = freshIsHard ? 380 : 320;
+            }
+            syncSubwayHud();
+          }
+        })
+        .catch(() => {});
+    } catch (_) {}
+
     if (note) {
       const minM = getSubwayCashoutMultiplier();
-      note.textContent = 'Cashout libera ao atingir ' + minM + 'x (' + money(round.entry * minM) + ').';
+      const targetM = getSubwayTargetMultiplier();
+      note.textContent = 'Cashout libera em ' + minM + 'x (' + money(round.entry * minM) + '). Meta 5x (' + money(round.entry * targetM) + ').';
     }
   },
-  lose() { finish('loss'); }
+  lose() {
+    const cfg = window.SubwayConfig || (typeof SubwayRound !== 'undefined' && SubwayRound.config) || {};
+    const rtp = typeof cfg.rtpPercent === 'number' ? cfg.rtpPercent : 96.0;
+    const isHard = rtp < 75.0 || cfg.difficulty === 'hard' || cfg.difficulty === 'heavy' || cfg.difficulty === 'extreme';
+    const coinsNow = Math.max(0, Number(getCoins ? getCoins() : (engine?.stats?.coins || 0)) || 0);
+    const canCashout = (typeof SubwayRound !== 'undefined') ? SubwayRound.canCashout(round.entry, coinsNow) : (coinsNow >= 10);
+
+    // Dynamic RTP Stumble Protection:
+    // Only granted in EASY / MEDIUM modes (RTP >= 85% and NOT in hard/extreme mode).
+    // If the admin sets DIFFICULT, NO second chances or shields are granted.
+    const maxShields = (!isHard && rtp >= 95) ? 2 : ((!isHard && rtp >= 85) ? 1 : 0);
+    if (!finished && !canCashout && rtpProtectionsUsed < maxShields && (Math.random() * 100 < rtp)) {
+      rtpProtectionsUsed++;
+      try {
+        if (engine && typeof engine.resume === 'function') engine.resume();
+      } catch (_) {}
+      if (note) {
+        note.hidden = false;
+        note.style.color = '#10b981';
+        note.style.fontWeight = 'bold';
+        note.textContent = '🛡️ ESCUDO RTP ATIVADO! Corrida protegida pelo sistema.';
+        setTimeout(() => {
+          if (!finished && note) {
+            note.style.color = '';
+            note.style.fontWeight = '';
+            const minM = getSubwayCashoutMultiplier();
+            const targetM = getSubwayTargetMultiplier();
+            note.textContent = 'Cashout libera em ' + minM + 'x (' + money(round.entry * minM) + '). Meta 5x (' + money(round.entry * targetM) + ').';
+          }
+        }, 2200);
+      }
+      return;
+    }
+    finish('loss');
+  }
 };
 
 if (cash) {
-  cash.onclick = () => { if (engine && !finished && cashoutUnlocked) finish('cashout'); };
+  cash.onclick = () => { if (!finished && cashoutUnlocked) finish('cashout'); };
 }
 
 document.querySelector('#leave')?.addEventListener('click', () => {
@@ -341,26 +417,42 @@ document.querySelector('#result-retry')?.addEventListener('click', async () => {
 });
 
 setInterval(() => {
-  if (finished || !engine) return;
-  const coins = Math.max(0, Number(getCoins()) || 0);
+  if (finished) return;
+  const gameInst = engine || window.SubwayGame;
+  if (!engine && gameInst) {
+    engine = gameInst;
+    if (gameInst.stats) {
+      getCoins = () => gameInst.stats?.coins || 0;
+    }
+  }
+  const coins = Math.max(0, Number(getCoins ? getCoins() : (gameInst?.stats?.coins || 0)) || 0);
   const value = coins === 0 ? 0 : (typeof SubwayRound !== 'undefined' ? SubwayRound.payout(round.entry, coins) : 0);
   if (hudValue) hudValue.textContent = money(value);
-  if (hudScore) hudScore.textContent = Math.max(0, Math.floor(Number(engine?.stats?.score) || 0)).toString().padStart(6, '0');
-  cashoutUnlocked = typeof SubwayRound !== 'undefined' ? SubwayRound.canCashout(round.entry, coins) : false;
+  if (hudScore) hudScore.textContent = Math.max(0, Math.floor(Number(gameInst?.stats?.score) || 0)).toString().padStart(6, '0');
+  cashoutUnlocked = typeof SubwayRound !== 'undefined' ? SubwayRound.canCashout(round.entry, coins) : (coins >= 10);
   if (cash) {
     cash.hidden = !cashoutUnlocked;
     cash.disabled = !cashoutUnlocked;
-    if (cashoutUnlocked) cash.querySelector('span').textContent = 'Cashout · ' + money(value);
+    if (cashoutUnlocked) {
+      const span = cash.querySelector('span');
+      if (span) span.textContent = 'Cashout · ' + money(value);
+    }
   }
   if (note) {
     note.hidden = cashoutUnlocked;
     if (!cashoutUnlocked) {
       const minM = getSubwayCashoutMultiplier();
-      note.textContent = 'Cashout libera ao atingir ' + minM + 'x (' + money(round.entry * minM) + ').';
+      const targetM = getSubwayTargetMultiplier();
+      note.textContent = 'Cashout libera em ' + minM + 'x (' + money(round.entry * minM) + '). Meta de 5x (' + money(round.entry * targetM) + ').';
     }
   }
-  if (coins >= 300) finish('cashout');
-}, 150);
+  // Auto-cashout triggers ONLY when completing 5x the bet amount (80 coins or value >= entry * 5.0)
+  const targetMultiplier = getSubwayTargetMultiplier();
+  const maxTargetVal = Math.round(round.entry * targetMultiplier * 100) / 100;
+  if (value >= maxTargetVal || coins >= 80) {
+    finish('cashout');
+  }
+}, 120);
 
 if (window.lucide) lucide.createIcons();
 })();

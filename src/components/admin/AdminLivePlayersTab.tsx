@@ -170,7 +170,7 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
         s.gameId === selectedGameFilter ||
         (selectedGameFilter === 'g_block_puzzle' && (s.gameId === 'block_puzzle' || s.gameId === 'g_block_puzzle')) ||
         (selectedGameFilter === 'g_gen_dino' && (s.gameId === 'gen_dino' || s.gameId === 'dino' || s.gameId === 'g_gen_dino')) ||
-        (selectedGameFilter === 'g_zumbla' && (s.gameId === 'zumbla' || s.gameId === 'g_zumbla')) ||
+        (selectedGameFilter === 'g_bubble_blast' && (s.gameId === 'bubbleblast' || s.gameId === 'g_bubble_blast' || s.gameId === 'bubble_blast')) ||
         (selectedGameFilter === 'g_raspa_fortuna' && (s.gameId === 'raspa_fortuna' || s.gameId === 'g_raspa_fortuna')) ||
         (selectedGameFilter === 'g_subway_pay' && (s.gameId === 'subway_pay' || s.gameId === 'subway' || s.gameId === 'g_subway_pay'));
 
@@ -208,12 +208,13 @@ export const AdminLivePlayersTab: React.FC<AdminLivePlayersTabProps> = ({
           dot: 'bg-amber-500',
           name: 'GEN DINO'
         };
-      case 'g_zumbla':
-      case 'zumbla':
+      case 'g_bubble_blast':
+      case 'bubbleblast':
+      case 'bubble_blast':
         return {
           color: 'bg-purple-500/10 text-purple-600 border-purple-500/20',
           dot: 'bg-purple-500',
-          name: 'Zumbla Win'
+          name: 'Bubble Blast'
         };
       case 'g_raspa_fortuna':
       case 'raspa_fortuna':

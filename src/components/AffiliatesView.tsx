@@ -41,7 +41,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
   const [networkSort, setNetworkSort] = useState<'recent' | 'deposits' | 'name'>('recent');
   const [internalAffiliateInfo, setInternalAffiliateInfo] = useState<AffiliateInfo | null>(null);
   const [loadingInternal, setLoadingInternal] = useState<boolean>(false);
-  const [gameFilter, setGameFilter] = useState<'all' | 'g_block_puzzle' | 'g_zumbla' | 'g_gen_dino' | 'g_raspa_fortuna' | 'g_subway_pay'>('all');
+  const [gameFilter, setGameFilter] = useState<'all' | 'g_block_puzzle' | 'g_bubble_blast' | 'g_gen_dino' | 'g_raspa_fortuna' | 'g_subway_pay'>('all');
   const [affiliateTheme, setAffiliateTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('affiliate_hub_theme') as 'light' | 'dark') || 'light');
   const [notificationMode, setNotificationMode] = useState<'simple' | 'detailed'>(() => (localStorage.getItem('affiliate_notification_mode') as 'simple' | 'detailed') || 'detailed');
   const [notificationPrefs, setNotificationPrefs] = useState(() => {
@@ -473,7 +473,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
     : 0;
 
   return (
-    <div className={`affiliate-hub-view affiliate-ops-theme space-y-6 pb-24 px-4 pt-4 lg:px-8 lg:pt-7 lg:pb-28 ${affiliateTheme === 'dark' ? 'is-dark' : ''}`}>
+    <div className={`affiliate-hub-view affiliate-ops-theme space-y-4 pb-24 px-2 sm:px-3 lg:px-4 pt-2 sm:pt-3.5 lg:pb-28 ${affiliateTheme === 'dark' ? 'is-dark' : ''}`}>
       {/* Top Bar with back if rendered as subview */}
       <div className="affiliate-hub-heading flex items-center gap-3">
         {onBack && (
@@ -623,7 +623,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
               <select value={gameFilter} onChange={e => setGameFilter(e.target.value as typeof gameFilter)}>
                 <option value="all">Todos os jogos</option>
                 <option value="g_subway_pay">🏃 Subway Pay</option>
-                <option value="g_zumbla">🐸 Zumbla Win</option>
+                <option value="g_bubble_blast">🫧 Bubble Blast</option>
                 <option value="g_block_puzzle">🧩 Block Win</option>
                 <option value="g_gen_dino">🦖 GEN DINO</option>
                 <option value="g_raspa_fortuna">🍀 Raspa Fortuna</option>
@@ -1511,7 +1511,7 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
             <select value={gameFilter} onChange={(e) => setGameFilter(e.target.value as typeof gameFilter)} className="bg-[#F5F5F5] border border-[#E5E5E5] text-[11px] font-semibold text-[#111111] px-2.5 py-1.5 rounded-xl outline-none">
               <option value="all">🎮 Todos os Jogos</option>
               <option value="g_subway_pay">🏃 Subway Pay</option>
-              <option value="g_zumbla">🐸 Zumbla Win</option>
+              <option value="g_bubble_blast">🫧 Bubble Blast</option>
               <option value="g_block_puzzle">🧩 Block Win</option>
               <option value="g_gen_dino">🦖 GEN DINO</option>
               <option value="g_raspa_fortuna">🍀 Raspa Fortuna</option>
@@ -1591,10 +1591,10 @@ export const AffiliatesView: React.FC<AffiliatesViewProps> = ({
                             </span>
                           );
                         }
-                        if (gid === 'g_zumbla') {
+                        if (gid === 'g_bubble_blast' || gid.includes('bubble')) {
                           return (
-                            <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5 shrink-0 shadow-2xs">
-                              <span>🐸</span> Zumbla
+                            <span className="bg-purple-100 text-purple-900 border border-purple-300 text-[8px] px-1.5 py-0.5 rounded-md font-extrabold flex items-center gap-0.5 shrink-0 shadow-2xs">
+                              <span>🫧</span> Bubble Blast
                             </span>
                           );
                         }

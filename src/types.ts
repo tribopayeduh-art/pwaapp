@@ -134,6 +134,8 @@ export interface IndicationItem {
   partnerRequested?: boolean;
   withdrawBlocked?: boolean;
   hasAffiliateDemoBalance?: boolean;
+  referralCode?: string;
+  referralLink?: string;
   createdAt: string;
 }
 

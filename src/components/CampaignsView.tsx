@@ -21,7 +21,7 @@ import {
   DollarSign,
   SmartphoneNfc,
   Search,
-  Sparkles,
+  Megaphone,
   SendHorizontal
 } from 'lucide-react';
 import { CampaignSettings, WhatsAppSessionStatus, WhatsAppLog } from '../types';
@@ -1029,7 +1029,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({ onBack, onShowToas
             <div className="bg-gradient-to-br from-[#111827] to-[#1F2937] text-white rounded-3xl p-5 sm:p-6 shadow-md border border-[#374151] space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
                 <div className="flex items-center gap-2.5">
-                  <Sparkles className="w-5 h-5 text-amber-400" />
+                  <Megaphone className="w-5 h-5 text-amber-400" />
                   <div>
                     <h3 className="text-sm font-black text-white">Disparo em Massa Inteligente (Broadcast)</h3>
                     <p className="text-xs text-gray-400">Envie campanhas segmentadas com Spintax e anti-ban automático</p>

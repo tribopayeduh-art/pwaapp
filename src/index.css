@@ -167,7 +167,8 @@ h1, h2, h3, h4, h5, h6, .font-heading {
     background:
       radial-gradient(circle at 82% 4%, rgba(99, 102, 241, .09), transparent 31%),
       linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-    padding: 24px 32px 110px !important;
+    padding: 14px 14px 110px !important;
+    max-width: 100% !important;
   }
 
   .affiliate-hub-heading {
@@ -300,7 +301,7 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 }
 
 @media (min-width: 1280px) {
-  .affiliate-hub-view { max-width: 1440px; margin-inline: auto; }
+  .affiliate-hub-view { max-width: 100% !important; width: 100%; margin-inline: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -455,10 +456,10 @@ h1, h2, h3, h4, h5, h6, .font-heading {
     width: 100%;
     max-width: 100%;
     margin: 0;
-    padding: 12px 12px 104px !important;
+    padding: 8px 6px 104px !important;
     display: flex;
     flex-direction: column;
-    gap: 12px !important;
+    gap: 10px !important;
     overflow-x: hidden;
   }
   .affiliate-hub-view.affiliate-ops-theme > * {
@@ -825,57 +826,84 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 
 /* Full desktop workspace for every Alliance Hub section. */
 @media (min-width:1024px) {
-  .alliance-app-shell { height:calc(100vh - 20px); min-height:760px; width:calc(100vw - 32px); }
-  .alliance-app-shell > header { min-height:72px; padding-inline:36px; }
-  .alliance-main-content { background:#f7f8fa; }
-  .home-view,.finance-view,.more-view { width:100%; max-width:1720px; margin:0 auto; padding:24px 32px 110px!important; }
-  .home-view { display:grid; grid-template-columns:minmax(0,.82fr) minmax(520px,1.18fr); align-items:start; gap:24px!important; }
-  .home-view > div:first-child { grid-column:1/-1; padding:3px 2px 0; }
-  .home-view > div:nth-child(2) { grid-column:1; grid-row:2; height:100%; min-height:300px; }
-  .home-view > div:nth-child(3) { grid-column:2; grid-row:2; margin:0; padding:24px; border:1px solid #e5e7eb; border-radius:24px; background:white; box-shadow:0 18px 50px rgba(15,23,42,.055); }
-  .home-activity-list { display:grid; grid-template-columns:1fr 1fr; gap:9px!important; }
-  .home-activity-card { min-height:82px; }
+  .alliance-app-shell { height:calc(100vh - 10px); min-height:760px; width:100%; max-width:100%; }
+  .alliance-app-shell > header { min-height:60px; padding-inline:16px; }
+  .alliance-main-content { background:#f7f8fa; width:100%; display:flex; flex-direction:column; }
+  .home-view,
+  .finance-view {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 1880px !important;
+    margin-inline: auto !important;
+    padding: 24px 32px 140px !important;
+  }
+  .home-view > div,
+  .finance-view > div {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .more-view { width: 100%; max-width: 100%; margin: 0; padding: 14px 14px 104px !important; }
 
-  .finance-view { display:grid; grid-template-columns:minmax(380px,.75fr) minmax(0,1.25fr); gap:24px!important; align-items:start; }
-  .finance-view > div:first-child { grid-column:1/-1; }
-  .finance-view > div:nth-child(2) { grid-column:1; }
-  .finance-view > div:nth-child(n+3) { grid-column:2; }
-  .finance-view > div { min-width:0; }
+  .games-view { padding:12px 14px 84px!important; width:100%!important; height:100%!important; min-height:calc(100vh - 84px)!important; display:flex; flex-direction:column; }
+  .games-view > div.relative.mx-auto { max-width:100%!important; width:100%!important; flex:1; display:flex; flex-direction:column; }
+  .games-view section[aria-label="Jogos em destaque"] { padding:24px 32px 20px; flex:1; display:flex; flex-direction:column; justify-content:space-between; min-height:calc(100vh - 170px); }
+  .games-view section[aria-label="Jogos em destaque"] > div:nth-child(2) { height:auto!important; flex:1; min-height:520px; max-width:100%; margin-inline:auto; }
+  .games-view section article { max-width:480px!important; width:28%!important; }
 
-  .games-view { padding:24px 32px 110px!important; }
-  .games-view > div.relative.mx-auto { max-width:1720px!important; }
-  .games-view section[aria-label="Jogos em destaque"] { padding:24px; }
-  .games-view section[aria-label="Jogos em destaque"] > div:nth-child(2) { height:470px!important; max-width:1100px; margin-inline:auto; }
-  .games-view section article { max-width:330px!important; width:34%!important; }
-
-  .more-view { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px!important; align-items:start; }
+  .more-view { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px!important; align-items:start; }
   .more-view > div:first-child { grid-column:1/-1; }
   .more-view > div { min-width:0; }
 
-  .alliance-app-shell nav.fixed { bottom:16px; border:1px solid #e5e7eb; border-radius:18px; width:min(620px,calc(100% - 64px)); left:50%; right:auto; transform:translateX(-50%); box-shadow:0 18px 45px rgba(15,23,42,.13); overflow:hidden; }
-  .alliance-app-shell nav.fixed > div { height:62px; }
-  .alliance-app-shell nav.fixed button { flex-direction:row; gap:7px; }
-  .alliance-app-shell nav.fixed button span { margin:0; font-size:11px; }
-
-  .desktop-context-strip { width:calc(100% - 48px); max-width:1720px; min-height:72px; margin:18px auto 0; padding:12px 16px; display:grid; grid-template-columns:minmax(180px,1.4fr) repeat(3,minmax(135px,.8fr)) auto; align-items:center; gap:10px; border:1px solid #e5e7eb; border-radius:20px; background:rgba(255,255,255,.88); box-shadow:0 13px 36px rgba(15,23,42,.045); backdrop-filter:blur(18px); }
-  .desktop-context-strip > div { min-width:0; padding:0 12px; border-left:1px solid #eceff3; }
-  .desktop-context-strip > div:first-child { border:0; }
-  .desktop-context-strip > div:not(:first-child):not(.desktop-live-pill) { display:flex; align-items:center; gap:9px; }
-  .desktop-context-strip i { width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:10px; background:#f5f5f5; color:#111827; }
-  .desktop-context-strip i svg { width:15px; height:15px; }
-  .desktop-context-strip span { display:block; color:#8b93a1; font-size:8px; font-weight:800; letter-spacing:.04em; }
-  .desktop-context-strip strong { display:block; margin-top:3px; color:#111827; font-size:11px; font-weight:900; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .desktop-context-strip > div:first-child strong { font-size:14px; }
-  .desktop-live-pill { display:flex!important; align-items:center; gap:6px; padding:7px 10px!important; border:0!important; border-radius:999px; color:#166534; background:#f0fdf4; font-size:8px; font-weight:900; white-space:nowrap; }
-  .desktop-live-pill > span { width:6px; height:6px; border-radius:50%; background:#22c55e; animation:desktopLivePulse 1.8s ease infinite; }
+  .alliance-app-shell nav.fixed,
+  .alliance-bottom-nav,
+  nav.fixed {
+    position: fixed !important;
+    bottom: 24px !important;
+    left: 0 !important;
+    right: 0 !important;
+    margin-inline: auto !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    transform: none !important;
+    translate: none !important;
+    border: 1px solid rgba(226, 232, 240, 0.95) !important;
+    border-radius: 22px !important;
+    width: fit-content !important;
+    min-width: 820px !important;
+    max-width: min(940px, calc(100vw - 48px)) !important;
+    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+    backdrop-filter: blur(16px) !important;
+    overflow: hidden !important;
+    z-index: 9999 !important;
+  }
+  .alliance-app-shell nav.fixed > div,
+  .alliance-bottom-nav > div {
+    height: 70px !important;
+    padding-inline: 20px !important;
+    gap: 12px !important;
+    justify-content: center !important;
+  }
+  .alliance-app-shell nav.fixed button,
+  .alliance-bottom-nav button {
+    flex-direction: row !important;
+    gap: 10px !important;
+    padding: 12px 26px !important;
+    border-radius: 16px !important;
+  }
+  .alliance-app-shell nav.fixed button span,
+  .alliance-bottom-nav button span {
+    margin: 0 !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+  }
 }
 
-.desktop-context-strip { display:none; }
 .alliance-section-transition { min-height:100%; animation:allianceSectionIn .38s cubic-bezier(.22,.8,.22,1) both; transform-origin:50% 20%; }
 @keyframes allianceSectionIn { from{opacity:0;transform:translateY(12px) scale(.992);filter:blur(3px)} to{opacity:1;transform:none;filter:none} }
 @keyframes desktopLivePulse { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,.2)} 50%{opacity:.65;box-shadow:0 0 0 5px rgba(34,197,94,0)} }
-@media(prefers-reduced-motion:reduce){.alliance-section-transition,.desktop-live-pill>span{animation:none!important}}
-@media(min-width:1024px){.desktop-context-strip{display:grid}}
+@media(prefers-reduced-motion:reduce){.alliance-section-transition{animation:none!important}}
 @media(max-width:390px){.home-activity-card{grid-template-columns:36px minmax(0,1fr);gap:9px;padding:10px}.home-activity-icon{width:36px;height:36px}.home-activity-meta{grid-column:2;min-width:0;width:100%;flex-direction:row;align-items:center;justify-content:space-between}.home-activity-meta>strong{font-size:9px}}
 
 /* Admin mobile-first workspace: touch targets, safe areas and readable dense data. */
@@ -925,8 +953,10 @@ h1, h2, h3, h4, h5, h6, .font-heading {
    O viewport reserva essa altura mais a folga necessária para sombra e foco,
    evitando que as ações inferiores sejam recortadas em iPhone e Android. */
 .games-coverflow-viewport {
-  height: clamp(318px, calc(92vw + 22px), 394px);
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  position: relative;
+  width: 100%;
+  height: clamp(380px, 60vh, 740px);
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
   contain: layout paint;
 }
 

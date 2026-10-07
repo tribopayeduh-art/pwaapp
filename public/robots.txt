@@ -1,12 +1,13 @@
 User-agent: *
 Allow: /
 Allow: /blockwin
-Allow: /zumbla
 Allow: /gen-dino
 Allow: /raspa-fortuna
-Allow: /zumbla/app/
+Allow: /subwaypay
+Allow: /bubbleblast
 Allow: /gen-dino/
 Allow: /raspafortuna/
+Allow: /bubbleblast/
 Disallow: /api/
 
 Sitemap: https://goalliancehub.com/sitemap.xml

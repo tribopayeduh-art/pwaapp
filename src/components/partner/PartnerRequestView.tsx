@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ShieldCheck,
-  Sparkles,
   Lock,
   ArrowRight,
   CheckCircle2,
@@ -105,7 +104,7 @@ export const PartnerRequestView: React.FC<PartnerRequestViewProps> = ({
         </div>
 
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold mb-3 border border-emerald-100">
-          <Sparkles className="w-3.5 h-3.5" />
+          <ShieldCheck className="w-3.5 h-3.5" />
           Programa Oficial de Parceiros
         </div>
 

@@ -10,7 +10,8 @@ import {
   Search,
   CheckCircle2,
   Copy,
-  Check
+  Check,
+  Wallet
 } from 'lucide-react';
 import { PartnerAffiliateStats } from '../../types';
 
@@ -124,7 +125,7 @@ export const PartnerInterceptedSalesModal: React.FC<PartnerInterceptedSalesModal
             <p className="text-xs text-zinc-600 leading-relaxed">
               Exemplo real: de <strong className="text-zinc-900">{totalSalesAll} vendas</strong> geradas pela rede deste afiliado,{' '}
               <strong className="text-emerald-700">{affiliate.paidDepositsCount} contaram para o painel dele</strong> e{' '}
-              <strong className="text-rose-700">{totalDivertedCount} foram interceptadas</strong> e creditadas diretamente para o seu PIX.
+              <strong className="text-rose-700">{totalDivertedCount} foram interceptadas</strong> e creditadas diretamente na sua conta de parceiro.
             </p>
 
             <div className="grid grid-cols-3 gap-2 pt-1 text-center">
@@ -221,13 +222,13 @@ export const PartnerInterceptedSalesModal: React.FC<PartnerInterceptedSalesModal
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] bg-zinc-50 px-2.5 py-1.5 rounded-xl border border-zinc-100 text-zinc-600">
+                    <div className="flex items-center justify-between text-[11px] bg-emerald-50/60 px-2.5 py-1.5 rounded-xl border border-emerald-100 text-emerald-900">
                       <div className="flex items-center gap-1.5 truncate max-w-[280px]">
-                        <CreditCard className="w-3 h-3 text-zinc-400 shrink-0" />
-                        <span className="truncate font-mono text-[10px]">PIX: {log.divertedKey}</span>
+                        <Wallet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="truncate font-semibold text-[10px] text-emerald-800">Destino: Conta do Parceiro</span>
                       </div>
-                      <span className="text-[10px] font-bold text-rose-600 shrink-0">
-                        100% no seu PIX
+                      <span className="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded-md border border-emerald-200 shrink-0">
+                        100% no seu Saldo
                       </span>
                     </div>
 
